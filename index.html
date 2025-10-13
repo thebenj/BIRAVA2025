@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <style>
+        /* Modal styles for README popup */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 2% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%;
+            height: 90%;
+            overflow-y: auto;
+            border-radius: 5px;
+            position: relative;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute;
+            right: 15px;
+            top: 10px;
+        }
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .readme-content {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            margin-top: 20px;
+        }
+        .readme-content h1 { color: #2c3e50; }
+        .readme-content h2 { color: #34495e; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .readme-content h3 { color: #7f8c8d; }
+        .readme-content code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 3px; }
+        .readme-content pre { background-color: #f4f4f4; padding: 10px; border-radius: 5px; overflow-x: auto; }
+
+        /* Button organization styles */
+        .button-section {
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            margin: 10px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+        }
+        .button-section h3 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 5px;
+        }
+        .utility-buttons {
+            margin-top: 20px;
+        }
+        .utility-buttons button {
+            margin: 5px;
+        }
+
+        /* Entity Browser Styles */
+        .entity-browser-section {
+            background-color: #f8f9fa;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            margin: 20px 0;
+            padding: 20px;
+        }
+
+        .entity-browser-section h3 {
+            color: #007bff;
+            margin-top: 0;
+        }
+
+        .collection-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .collection-tab {
+            padding: 10px 20px;
+            border: 2px solid #007bff;
+            background-color: white;
+            color: #007bff;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .collection-tab.active {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .search-section {
+            background-color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+        }
+
+        .search-input {
+            width: 300px;
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .search-button {
+            padding: 8px 16px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .search-button:hover {
+            background-color: #218838;
+        }
+
+        .quick-filters {
+            margin-top: 10px;
+        }
+
+        .filter-button {
+            padding: 5px 10px;
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-right: 5px;
+            font-size: 12px;
+        }
+
+        .filter-button:hover {
+            background-color: #5a6268;
+        }
+
+        .results-section {
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .results-header {
+            background-color: #f8f9fa;
+            padding: 10px 15px;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+        }
+
+        .results-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .result-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+
+        .result-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .entity-key {
+            font-family: 'Courier New', monospace;
+            color: #6c757d;
+            font-size: 12px;
+        }
+
+        .entity-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .entity-details {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .action-buttons {
+            margin-top: 15px;
+        }
+
+        .action-button {
+            padding: 8px 16px;
+            background-color: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        .action-button:hover {
+            background-color: #138496;
+        }
+
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .status-loading {
+            background-color: #cce5ff;
+            border: 1px solid #007bff;
+            color: #004085;
+        }
+
+        .status-error {
+            background-color: #f8d7da;
+            border: 1px solid #dc3545;
+            color: #721c24;
+        }
+
+        .status-success {
+            background-color: #d4edda;
+            border: 1px solid #28a745;
+            color: #155724;
+        }
+    </style>
+</head>
+<body>
+    <div id="googleAuth">
+        <button id="authorize_button" class="authBut myButts" onclick="handleAuthClick()">Authorize</button>
+        <button id="signout_button" class="authBut myButts" onclick="handleSignoutClick()">Sign Out</button>
+    </div>
+    <div id="holder">
+        <div class="button-section">
+            <h3>VisionAppraisal Data Processing</h3>
+            <button id="firstButton" class="optBut" onclick="firstButterClick()">First Button</button>
+            <button id="secondButton" class="optBut" onclick="secondButterClick()">Second Button</button>
+            <button id="thirdButton" class="optBut" onclick="thirdButterClick()">Third Button</button>
+            <button id="fourthButton" class="optBut" onclick="fourthButterClick()">Fourth Button</button>
+            <button id="firstTwo" class="optBut" onclick="firstTwoClick()">First Two</button>
+            <button id="firstThree" class="optBut" onclick="firstThreeClick()">First Three</button>
+            <button id="AllButton" class="optBut" onclick="AllClick()">All Button</button>
+            <button id="Go Again" class="optBut" onclick="goAgain()">Go Again</button>
+            <button id="MandGo" class="optBut" onclick="mergeTheTwo()">Merge and Go Again</button>
+            <button id="oneToONe" class="optBut" onclick="makeOneToOneFile()">Make One To One File</button>
+            <button id="test" class="optBut" onclick="test()">Test</button>
+        </div>
+
+        <div class="button-section">
+            <h3>Other Data Sources</h3>
+            <button class="optBut" onclick="readBloomerang()">Process Bloomerang CSV</button>
+            <button class="optBut" onclick="analyzeBloomerangCSV()">Analyze CSV Quality</button>
+            <button class="optBut" onclick="readPhonebook()">Process Phonebook Data</button>
+        </div>
+
+        <div class="utility-buttons">
+            <button id="readmeButton" class="optBut" onclick="showReadme()">📖 README</button>
+        </div>
+
+        <!-- Entity Browser Section -->
+        <div class="entity-browser-section">
+            <h3>🔍 Entity Browser - Collection Explorer</h3>
+
+            <div class="collection-tabs">
+                <div class="collection-tab active" onclick="switchCollection('individuals')">Individuals</div>
+                <div class="collection-tab" onclick="switchCollection('households')">Households</div>
+                <div class="collection-tab" onclick="switchCollection('nonhuman')">NonHuman</div>
+            </div>
+
+            <div class="search-section">
+                <input type="text" id="searchInput" class="search-input" placeholder="Search by account number, fire number, name..." onkeypress="handleSearchKeyPress(event)">
+                <button class="search-button" onclick="performSearch()">🔍 Search</button>
+                <button class="search-button" onclick="clearSearch()" style="background-color: #6c757d;">Clear</button>
+
+                <div class="quick-filters">
+                    <strong>Quick Filters:</strong>
+                    <button class="filter-button" onclick="quickFilter('account')">By Account #</button>
+                    <button class="filter-button" onclick="quickFilter('fire')">By Fire #</button>
+                    <button class="filter-button" onclick="quickFilter('name')">By Name</button>
+                    <button class="filter-button" onclick="showAll()">Show All</button>
+                </div>
+            </div>
+
+            <div id="statusMessage" class="status-message" style="display: none;"></div>
+
+            <div class="results-section">
+                <div class="results-header">
+                    <span id="resultsCount">Click "Load Collections" to begin</span>
+                </div>
+                <div id="resultsList" class="results-list">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="action-button" onclick="loadCollections()">📁 Load Collections</button>
+                <button class="action-button" onclick="exportResults()">📄 Export Results</button>
+                <button class="action-button" onclick="showIndexStats()">📊 Index Stats</button>
+                <button class="action-button" onclick="viewSelectedEntity()">👁️ View Details</button>
+            </div>
+        </div>
+    </div>
+    <div id="ressieH">"dude"</div>
+    <div id="streeter">"dude"</div>
+    <p>first server</p>
+
+    <!-- README Modal -->
+    <div id="readmeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeReadme()">&times;</span>
+            <div id="readmeContent" class="readme-content">
+                Loading README...
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script type="text/javascript" src="./scripts/googleLinks.js"></script>
+    <script type="text/javascript" src="./scripts/fileLogistics.js"></script>
+    <script type="text/javascript" src="./scripts/baseCode.js"></script>
+    <script type="text/javascript" src="./scripts/oneToOneEntity.js"></script>
+    <script type="text/javascript" src="./scripts/utils.js"></script>
+    <script type="text/javascript" src="./scripts/postProcessing.js"></script>
+    <script type="text/javascript" src="./scripts/phonebook.js"></script>
+    <script type="text/javascript" src="./scripts/objectStructure/aliasClasses.js"></script>
+    <script type="text/javascript" src="./scripts/objectStructure/contactInfo.js"></script>
+    <script type="text/javascript" src="./scripts/objectStructure/entityClasses.js"></script>
+    <script type="text/javascript" src="./scripts/dataSources/visionAppraisal.js"></script>
+    <script type="text/javascript" src="./scripts/integration/matchingEngine.js"></script>
+    <script type="text/javascript" src="./scripts/integration/contactDiscovery.js"></script>
+    <script type="text/javascript" src="./scripts/integration/nameAnalysis.js"></script>
+    <script type="text/javascript" src="./scripts/integration/testPlugin.js"></script>
+    <script type="text/javascript" src="./scripts/testAttributedTermSubclasses.js"></script>
+    <script type="text/javascript" src="./scripts/bloomerang.js"></script>
+    <script type="text/javascript" src="./scripts/entityBrowser.js"></script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+
+    <script>
+        // README Modal functionality
+        async function showReadme() {
+            const modal = document.getElementById('readmeModal');
+            const content = document.getElementById('readmeContent');
+
+            try {
+                // Fetch README.md from the server
+                const response = await fetch('./README.md');
+                const readmeText = await response.text();
+
+                // Convert markdown to HTML (basic conversion)
+                const htmlContent = markdownToHtml(readmeText);
+                content.innerHTML = htmlContent;
+
+                modal.style.display = 'block';
+            } catch (error) {
+                console.error('Error loading README:', error);
+                content.innerHTML = '<h2>Error loading README</h2><p>Could not load the README file.</p>';
+                modal.style.display = 'block';
+            }
+        }
+
+        function closeReadme() {
+            document.getElementById('readmeModal').style.display = 'none';
+        }
+
+        // Basic markdown to HTML converter
+        function markdownToHtml(markdown) {
+            return markdown
+                // Headers
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                // Code blocks
+                .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+                // Inline code
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // Bold
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Italic
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Links
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+                // Lists
+                .replace(/^\- (.*$)/gim, '<li>$1</li>')
+                .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+                // Line breaks
+                .replace(/\n/g, '<br>');
+        }
+
+        // Close modal when clicking outside of it
+        window.onclick = function(event) {
+            const modal = document.getElementById('readmeModal');
+            if (event.target == modal) {
+                closeReadme();
+            }
+        }
+    </script>
+
+</body>
+</html>

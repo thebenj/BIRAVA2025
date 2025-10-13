@@ -1,0 +1,3 @@
+C:\Users\thebe\source\repos\BIRAVA2025\BIRAVA2025\obj\Debug\BIRAVA2025.njsproj.AssemblyReference.cache
+C:\Users\thebe\source\repos\BIRAVA2025\BIRAVA2025\obj\Debug\BIRAVA2025.njsproj.CoreCompileInputs.cache
+C:\Users\thebe\source\repos\BIRAVA2025\BIRAVA2025\bin\Microsoft.NodejsTools.WebRole.dll

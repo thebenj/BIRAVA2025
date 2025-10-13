@@ -1,0 +1,19 @@
+{
+  "name": "birava2025",
+  "version": "0.0.0",
+  "description": "BIRAVA2025",
+  "main": "servers/server.js",
+  "author": {
+    "name": ""
+  },
+  "devDependencies": {
+    "eslint": "^8.21.0"
+  },
+  "eslintConfig": {},
+  "dependencies": {
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0"
+  }
+}
