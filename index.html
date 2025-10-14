@@ -281,6 +281,20 @@
             <button class="optBut" onclick="readPhonebook()">Process Phonebook Data</button>
         </div>
 
+        <div class="button-section">
+            <h3>VisionAppraisal Data Processing</h3>
+            <button class="optBut" onclick="processAndSaveVisionAppraisal()" id="visionProcessBtn">
+                🔄 Process & Save VisionAppraisal Data
+            </button>
+            <p style="font-size: 12px; color: #666; margin: 10px 0;">
+                <strong>Enhanced Processing:</strong> Cleans name tags, parses MBLU fields,
+                extracts addresses, and saves all 1,576 processed records to Google Drive
+                (File ID: 1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf).
+                <br><strong>Use for matching:</strong> Creates processed dataset with
+                <code>processedOwnerName</code>, parsed addresses, and enhanced fields.
+            </p>
+        </div>
+
         <div class="utility-buttons">
             <button id="readmeButton" class="optBut" onclick="showReadme()">📖 README</button>
         </div>
@@ -354,6 +368,7 @@
     <script type="text/javascript" src="./scripts/objectStructure/aliasClasses.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/contactInfo.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/entityClasses.js"></script>
+    <script type="text/javascript" src="./scripts/visionAppraisalParser.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/visionAppraisal.js"></script>
     <script type="text/javascript" src="./scripts/integration/matchingEngine.js"></script>
     <script type="text/javascript" src="./scripts/integration/contactDiscovery.js"></script>
@@ -366,14 +381,14 @@
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
     <script>
-        // README Modal functionality
+        // README Modal functionality - now loads CLAUDE.md
         async function showReadme() {
             const modal = document.getElementById('readmeModal');
             const content = document.getElementById('readmeContent');
 
             try {
-                // Fetch README.md from the server
-                const response = await fetch('./README.md');
+                // Fetch CLAUDE.md from the server
+                const response = await fetch('./CLAUDE.md');
                 const readmeText = await response.text();
 
                 // Convert markdown to HTML (basic conversion)
@@ -382,8 +397,8 @@
 
                 modal.style.display = 'block';
             } catch (error) {
-                console.error('Error loading README:', error);
-                content.innerHTML = '<h2>Error loading README</h2><p>Could not load the README file.</p>';
+                console.error('Error loading CLAUDE.md:', error);
+                content.innerHTML = '<h2>Error loading CLAUDE.md</h2><p>Could not load the CLAUDE.md file.</p>';
                 modal.style.display = 'block';
             }
         }
@@ -414,6 +429,61 @@
                 .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
                 // Line breaks
                 .replace(/\n/g, '<br>');
+        }
+
+        // VisionAppraisal data processing function
+        async function processAndSaveVisionAppraisal() {
+            const btn = document.getElementById('visionProcessBtn');
+            const originalText = btn.innerHTML;
+
+            try {
+                // Update button to show processing
+                btn.innerHTML = '⏳ Processing VisionAppraisal Data...';
+                btn.disabled = true;
+
+                console.log("=== STARTING VISIONAPPRAISAL DATA PROCESSING ===");
+
+                // Call the VisionAppraisal processing function
+                const result = await VisionAppraisal.processAndSaveToGoogleDrive();
+
+                if (result.success) {
+                    console.log("✅ VisionAppraisal processing completed successfully!");
+                    console.log(`Records processed: ${result.recordCount}`);
+                    console.log(`Google Drive File ID: ${result.fileId}`);
+
+                    btn.innerHTML = '✅ Processing Complete!';
+
+                    // Show success message
+                    alert(`VisionAppraisal data processing completed successfully!\n\n` +
+                          `• Records processed: ${result.recordCount}\n` +
+                          `• File saved to Google Drive\n` +
+                          `• File ID: ${result.fileId}\n` +
+                          `• Enhanced fields: processedOwnerName, parsed addresses, MBLU components\n\n` +
+                          `The processed data is now ready for enhanced name matching!`);
+
+                    // Reset button after 3 seconds
+                    setTimeout(() => {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }, 3000);
+
+                } else {
+                    throw new Error(result.error || 'Processing failed');
+                }
+
+            } catch (error) {
+                console.error("❌ VisionAppraisal processing failed:", error);
+
+                btn.innerHTML = '❌ Processing Failed';
+
+                alert(`VisionAppraisal data processing failed:\n\n${error.message}\n\nCheck console for details.`);
+
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 3000);
+            }
         }
 
         // Close modal when clicking outside of it

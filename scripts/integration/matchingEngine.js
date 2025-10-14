@@ -340,9 +340,12 @@ const MatchingEngine = {
         return null;
     },
 
-    // Helper: Extract name from record (works with multiple formats)
+    // Helper: Extract name from record (prioritizes enhanced processed fields)
     extractName(record) {
-        // Common name fields
+        // Priority 1: Enhanced processed name field (cleaned and concatenated)
+        if (record.processedOwnerName) return record.processedOwnerName;
+
+        // Priority 2: Common name fields (fallback for non-processed records)
         if (record.name) return record.name;
         if (record.ownerName) return record.ownerName;
         if (record.firstName && record.lastName) {
@@ -820,41 +823,44 @@ const MatchingEngine = {
         };
     },
 
-    // Test function to run Fire Number → PID investigation with real VisionAppraisal data
-    testRealDataInvestigation() {
-        console.log("=== TESTING WITH REAL VISIONAPPRAISAL DATA ===");
-        console.log("Loading VisionAppraisal data and running Fire Number → PID investigation...");
+    // Test function to run Fire Number → PID investigation with processed VisionAppraisal data
+    async testRealDataInvestigation() {
+        console.log("=== TESTING WITH PROCESSED VISIONAPPRAISAL DATA ===");
+        console.log("Loading processed VisionAppraisal data and running Fire Number → PID investigation...");
 
         try {
-            // Check if VisionAppraisal data loading functions are available
-            if (typeof testVisionAppraisalPluginV2 === 'function') {
-                console.log("Using testVisionAppraisalPluginV2() to load data...");
-                const visionAppraisalData = testVisionAppraisalPluginV2();
+            // Load processed VisionAppraisal data from Google Drive
+            console.log("Loading processed VisionAppraisal data from Google Drive...");
+            const result = await VisionAppraisal.loadProcessedDataFromGoogleDrive();
 
-                if (visionAppraisalData && visionAppraisalData.records) {
-                    console.log(`Loaded ${visionAppraisalData.records.length} VisionAppraisal records`);
-                    return this.analyzeFireNumberToPIDRelationships(visionAppraisalData.records);
-                } else {
-                    console.log("VisionAppraisal data loading failed - trying alternative methods...");
+            if (result.success && result.data && result.data.length > 0) {
+                console.log(`✅ Loaded ${result.data.length} processed VisionAppraisal records`);
+                console.log(`✅ Data processed at: ${result.metadata.processedAt}`);
+                console.log(`✅ Enhanced fields available: processedOwnerName, parsed addresses, MBLU components`);
+
+                // Run the investigation with processed data
+                return this.analyzeFireNumberToPIDRelationships(result.data);
+            } else {
+                console.log("❌ Processed data loading failed - trying live data loading...");
+
+                // Fallback to live data loading
+                if (typeof testVisionAppraisalPluginV2 === 'function') {
+                    console.log("Falling back to testVisionAppraisalPluginV2()...");
+                    const visionAppraisalData = testVisionAppraisalPluginV2();
+
+                    if (visionAppraisalData && visionAppraisalData.records) {
+                        console.log(`Loaded ${visionAppraisalData.records.length} VisionAppraisal records (live processing)`);
+                        return this.analyzeFireNumberToPIDRelationships(visionAppraisalData.records);
+                    }
                 }
-            }
 
-            // Try alternative data loading approaches
-            if (typeof window !== 'undefined' && window.loadVisionAppraisalData) {
-                console.log("Using window.loadVisionAppraisalData()...");
-                const visionAppraisalData = window.loadVisionAppraisalData();
-                if (visionAppraisalData && visionAppraisalData.length > 0) {
-                    console.log(`Loaded ${visionAppraisalData.length} VisionAppraisal records`);
-                    return this.analyzeFireNumberToPIDRelationships(visionAppraisalData);
-                }
+                // Final fallback to sample data
+                console.log("All data loading failed - using realistic sample based on documented findings...");
+                return this.testWithRealisticSampleData();
             }
-
-            // If no real data available, use expanded sample data based on CLAUDE.md findings
-            console.log("Real data not available - using realistic sample based on documented findings...");
-            return this.testWithRealisticSampleData();
 
         } catch (error) {
-            console.error("Error loading VisionAppraisal data:", error);
+            console.error("Error loading processed VisionAppraisal data:", error);
             console.log("Falling back to realistic sample data...");
             return this.testWithRealisticSampleData();
         }

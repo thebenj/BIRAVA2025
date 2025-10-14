@@ -1,0 +1,102 @@
+I believe we can start by identifying the way we will handle each of these cases. Before documenting the direction we should take each of these cases, I want to emphasize that we may or may not use the code we have written to identify the cases in our final application. It may be that our matching algorithm eliminates or isolates some of these cases in different ways so we may not have follow the exact pattern of identifying these cases in our final code.
+
+Case 1) Description:
+Two words, without business terms, with commas, when the first word ends in the comma (note:  When assessing "one word" before the comma we will consider one word to be any string involving letters and "-",";" or"/")
+Handling: The first word with its comma removed will be assumed to be a last name. The other word will be assumed to be a first name. In our processing we will retain the last name and the first name, while also creating a full name in first name last name order. The names individually and the full name will all be consider in string comparisons to other names.
+Case 2) Description:
+Two words, without business terms, with commas, when the last word ends in the comma (note:  When assessing "one word" before the comma we will consider one word to be any string involving letters and "-",";" or"/")
+Handling: I think there should not be any of these cases, but we will need to review them if they exist. They will be compared to Bloomerang in when we are comparing addresses.
+Case 3) Description:
+Two words, without business terms, with no major punctuation.
+Handling:The first word will be assumed to be a first name and the seconds name will be assumed to be a last name. In our processing we will retain the last name and the first name, while also creating a full name in first name last name order. These three will all be consider in string comparisons to other names.
+Case 4) Description:
+Two words, with business terms, where one word contains the comma,
+Handling:These will be assumed to be businesses or nonhuman, however, we will also consider them when address matching and they will be compared to Bloomerang in when we are comparing addresses.
+Case 5) Description:
+Three words, without business terms, with commas only, where the first word ends in the comma (note:  When assessing "one word" before the comma we will consider one word to be any string involving letters and "-",";" or"/")
+Handling: The one word ending in the comma with its comma removed will be assumed to be a last name. The first word after the comma will be assumed to be a first name. The other word will be considered an other or middle name. In our processing we will retain the last name, the first name, and other name, while also creating a full name in first name other name last name order. The names individually and the full name will all be consider in string comparisons to other names.
+Case 6) Description:
+Three words, without business terms, with commas only, where the middle "word" is the comma
+Handling: The one word before the comma will be assumed to be a last name. The first word after the comma will be assumed to be a first name. The other word will be considered an other or middle name. In our processing we will retain the last name, the first name, and other name, while also creating a full name in first name other name last name order. The names individually and the full name will all be consider in string comparisons to other names.
+Case 7) Description:
+Three words, without business terms, with commas only, when there is more there is at least one word before the word containing the comma (note:  When assessing words before the comma we will consider one word to be any string involving letters and "-",";" or"/")
+Handling: I think there should not be any of these cases, but we will need to review them if they exist. They will be compared to Bloomerang in when we are comparing addresses.
+Case 8) Description:
+Three words, without business terms, with no major punctuation, where the last word is a single letter (note:  When assessing "one word" before the comma we will consider one word to be any string involving letters and "-",";" or"/").
+Handling: The first word will be assumed to be the last name. The second word will be assumed to be the first name. The terminal single letter will be assumed to be the other or middle initial. In our processing we will retain the last name, the first name, and other name, while also creating a full name in first name other name last name order. The names individually and the full name will all be consider in string comparisons to other names.
+Case 9) Description:
+Three words, without business terms, with no major punctuation, where the last word is a not single letter but the second word is. (note:  When assessing "one word" before the comma we will consider one word to be any string involving letters and "-",";" or"/").
+Handling: The first word will be assumed to be the first name. The second word will be assumed to be the middle initial or other name. The third word will be assumed to be the last name. In our processing we will retain the last name, the first name, and other name, while also creating a full name in first name other name last name order. The names individually and the full name will all be consider in string comparisons to other names.
+Case 10) Description:
+Three words, without business terms, with no major punctuation, where the last word is a not single letter and the second word is not a single letter. (note:  When assessing "one word" before the comma we will consider one word to be any string involving letters and "-",";" or"/").
+Handling: The first word will be assumed to be the first name. The second word will be assumed to be the middle name or other name. The third word will be assumed to be the last name. In our processing we will retain the last name, the first name, and other name, while also creating a full name in first name other name last name order. The names individually and the full name will all be consider in string comparisons to other names. (Note: The handling rules give us no reason to maintain a distinction between case 8 and case 9 but, I want to note the distinction, because in when comparing case 9 to other strings we may consider the alternative assumption that this is a name in last name, first name, other name order)
+Case 11) Description:
+Three words, without business terms, ampersand only and the ampersand is one of the words.
+Handling: There is only one of these. In this particular case the non-ampersand words are correctly assumed to be last names of two individuals.
+Case 12) Description:
+Three words, without business terms, slash only and the words surrounding the slash are in the business terms list.
+Handling: There is only one example of this case. The correct handling of this case is to throw out the word consisting of two business terms surrounding a slash and then to look at this name as Case 1
+Case 13) Description:
+Three words, with business terms, no major punctuation.
+Handling: These are to be taken as complete business names that contain no individual names in them. These would be compared to the complete business terms list using the string matching algorithms without any manipulation or assumptions.
+Case 14) Description:
+Three words, with business terms, commas only.
+Handling: These are to be taken as complete business names that contain no individual names in them. These would be compared to the complete business terms list using the string matching algorithms without any manipulation or assumptions.
+Case 15) Description:
+Four words, without business terms, with ampersand and comma, where the first word contains the comma.
+Handling: These will be considered the name of a household with two individuals that share a last name. The first word with the comma removed will be assumed to be the common last name, the two names separated by the ampersand would be the first names of the individuals. In our processing we will retain the last name and the first name of each individual, while also creating a full name in first name last name order for each individual. The names individually and their full names along with the original string will all be consider in string comparisons to other names.
+Case 15) Description:
+Four words, without business terms, with commas between ending the first three words or a comma ending the first and third word, where the first and third word match.
+Handling: These will be considered the name of a household with two individuals that share a last name. The name appearing as first and third word with its comma removed will be assumed to be the common last name, the second and fourth words will be assumed to be first names of the individuals. In our processing we will retain the last name and the first name of each individual, while also creating a full name in first name last name order for each individual. The names individually and their full names along with the original string will all be consider in string comparisons to other names.
+Case 16) Description:
+Four words, without business terms, with commas between ending the first three words or a comma ending the first and third word, where the first and third word do not match.
+Handling: These will be considered the name of a household with two individuals that do not share a last name. The name appearing as first and third word with its comma removed will be assumed to be the last name of each individual, the second and fourth words will be assumed to be first names of the individuals. In our processing we will retain the last name and the first name of each individual, while also creating a full name in first name last name order for each individual. The names individually and their full names along with the original string will all be consider in string comparisons to other names.
+Case 17) Description:
+Four words, without business terms, with ampersand only.
+Handling: These will be considered the name of a household with two individuals that share a last name. The first word will be assumed to be the common last name and the words surrounding the ampersand will be assumed to be the first names of the individuals. In our processing we will retain the last name and the first name of each individual, while also creating a full name in first name last name order for each individual. The names individually and their full names along with the original string will all be consider in string comparisons to other names.
+Case 18) Description:
+Four words, without business terms, no major punctuation.
+Handling: These are to be handled as individuals with no assumption about which name is which. They will compared to the full names of individuals using the string matching algorithms.
+Case 19) Description:
+Four words, with business terms, no major punctuation.
+Handling: These are to be taken as complete business names that contain no individual names in them. These would be compared to the complete business terms list using the string matching algorithms without any manipulation or assumptions.
+Case 20) Description:
+Four words, with business terms, with a comma only, where only the first word contains a comma and the last word is a business term or the last two words are business terms.
+Handling: These are to have the business terms removed and then their case is to be reassessed.
+Case 21) Description:
+Four words, with business terms, with a comma only, where only the comma is the second "word" and the last word is a business term.
+Handling: These are to have the business terms removed and then their case is to be reassessed.
+Case 22) Description:
+Four words, with business terms, with an ampersand only, where only the ampersand is the second "word"
+Handling: These are to be taken as complete business names that contain no individual names in them. These would be compared to the complete business terms list using the string matching algorithms without any manipulation or assumptions.
+Case 23) Description:
+Four words, with business terms, with an ampersand only and a comma.
+Handling: These are to be taken as complete business names that contain no individual names in them. These would be compared to the complete business terms list using the string matching algorithms without any manipulation or assumptions.
+Case 24) Description:
+Four words, with business terms, and a slash.
+Handling: These are to be taken as complete business names that contain no individual names in them. These would be compared to the complete business terms list using the string matching algorithms without any manipulation or assumptions.
+Case 25) Description:
+Five or more words, without business terms, where one "word" is an ampersand and the only comma contained in the first word.
+Handling: These will be considered the name of a household with two individuals that share a last name. The first word with its comma removed will be assumed to be the common last name and the words surrounding the ampersand will be assumed to be the names of the individuals. The words or words after the first word and before the ampersand are assumed to be the first name and other names, if any of the first individual, in that order. The words or words after the ampersand are assumed to be the first name and other names, if any of the second individual, in that order.  In our processing we will retain the last name, the first name, and any other names of each individual, while also creating a full name in first name, other name (if any), last name order for each individual. The names individually and their full names along with the original string will all be consider in string comparisons to other names.
+Case 26) Description:
+Five or more words, without business terms, where one "word" is an ampersand and one comma contained in the first word and one comma is contained in the first word after the ampersand.
+Handling: These will be considered the name of a household with two individuals that do not share a last name. The first word with its comma removed will be assumed to be the first name of the last individual and word or words after this word will be assumed to be their first name and other names, if any, in that order.  The first word after the ampersand with its comma removed will be assumed to be the last name of the second individual and word or words after this word will be assumed to be their first name and other names, if any, in that order. In our processing we will retain the last name and the first name each individual, while also creating a full name in first name last name order for each individual. The names individually and their full names along with the original string will all be consider in string comparisons to other names.
+Case 27) Description:
+Five or more words, without business terms, with commas only and more than one comma where one word containing a comma repeats.
+Handing: These will be considered the name of a household with two individuals that share a last name. The repeated word with a comma, but with that comma removed, will be assumed to be the common last name of the individuals. The word or words between the first instance of the repeated word and its second instance will be assumed to be the name or names of the first individual, in first name and other names order. The word or words after the second occurence of the repeated word will be considered to be the name or names of the second individual in first and other name order. In our processing we will retain the last name, the first name, and any other names of each individual, while also creating a full name in first name, other name (if any), last name order for each individual. The names individually and their full names along with the original string will all be consider in string comparisons to other names.
+Case 28) Description:
+Five or more words, without business terms, with commas only more than one comma where no word containing a comma repeats.
+Handling: These will be considered household hames. We will compare these household names against household names and against indvidual names with the string comparison algorithms.
+Case 29) Description:
+Five or words, without business terms, with ampersands only where the ampersand has only one word after it.
+Handing: These will be considered the name of a household with two individuals that share a last name. The first word will be assumed to be the common last name of the individuals. The word or words between the first word and the ampersand will be assumed to be their name or names of the first individual, in first name other name order. The word after the ampersand will be assumed to be the first name of the second indvidual. In our processing we will retain the last name, the first name, and any other names of each individual, while also creating a full name in first name, other name (if any), last name order for each individual. The names individually and their full names along with the original string will all be consider in string comparisons to other names.
+Case 30) Description:
+Five or words, without business terms, not fitting already identified cases.
+Handling: These will be considered household hames. We will compare these household names against household names and against indvidual names with the string comparison algorithms.
+Case 31) Description:
+Five or more words with business terms.
+Handling: These will be considered full business names and compared against full busines names. However, if they are found not to match full business names, they will have all business terms stripped out of them, with any punctuation immediately proceeding (where an immediately proceeding character is the character immediately before the term or a character proceeding the term that is only separated from the term by white space) or contained within or between business terms also being removed. These reduced strings will then have their case reassessed to see if they fit one of the other cases.
+
+
+
+

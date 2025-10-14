@@ -146,6 +146,139 @@ const VisionAppraisal = {
         return isValidFireNumber ? fireNumber : null;
     },
 
+    // Process and save enhanced VisionAppraisal data to Google Drive
+    async processAndSaveToGoogleDrive() {
+        const GOOGLE_FILE_ID = "1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf";
+        const FILE_NAME = "VisionAppraisal_ProcessedData.json";
+
+        try {
+            console.log("=== PROCESSING AND SAVING VISIONAPPRAISAL DATA ===");
+            console.log(`Target Google Drive File ID: ${GOOGLE_FILE_ID}`);
+            console.log(`File Name: ${FILE_NAME}`);
+
+            // Step 1: Load and process all VisionAppraisal data
+            console.log("Step 1: Loading and processing VisionAppraisal data...");
+            const processedData = await this.loadData();
+
+            // Step 2: Add processing metadata
+            const dataPackage = {
+                metadata: {
+                    processedAt: new Date().toISOString(),
+                    recordCount: processedData.length,
+                    withFireNumbers: processedData.filter(r => r.fireNumber).length,
+                    withoutFireNumbers: processedData.filter(r => !r.fireNumber).length,
+                    fields: this.fields,
+                    processingVersion: "1.0",
+                    description: "Enhanced VisionAppraisal data with parsed names, addresses, and MBLU fields"
+                },
+                records: processedData
+            };
+
+            console.log(`✓ Processed ${dataPackage.recordCount} records`);
+            console.log(`✓ ${dataPackage.metadata.withFireNumbers} with Fire Numbers, ${dataPackage.metadata.withoutFireNumbers} without`);
+
+            // Step 3: Save to Google Drive
+            console.log("Step 3: Saving to Google Drive...");
+
+            const dataString = JSON.stringify(dataPackage, null, 2);
+
+            // Use existing Google Drive save functionality
+            const result = await this.saveToGoogleDrive(GOOGLE_FILE_ID, FILE_NAME, dataString);
+
+            console.log("✅ VisionAppraisal processed data saved successfully!");
+            console.log(`Google Drive File ID: ${GOOGLE_FILE_ID}`);
+            console.log(`Records saved: ${dataPackage.recordCount}`);
+
+            return {
+                success: true,
+                fileId: GOOGLE_FILE_ID,
+                fileName: FILE_NAME,
+                recordCount: dataPackage.recordCount,
+                metadata: dataPackage.metadata,
+                message: "VisionAppraisal processed data saved to Google Drive"
+            };
+
+        } catch (error) {
+            console.error("Error processing and saving VisionAppraisal data:", error);
+            return {
+                success: false,
+                error: error.message,
+                message: "Failed to process and save VisionAppraisal data"
+            };
+        }
+    },
+
+    // Save data to Google Drive using the EXACT working pattern from bloomerang.js
+    async saveToGoogleDrive(fileId, fileName, dataString) {
+        try {
+            const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+                method: 'PATCH',
+                headers: new Headers({
+                    'Authorization': `Bearer ${gapi.client.getToken().access_token}`,
+                    'Content-Type': 'application/json'
+                }),
+                body: dataString
+            });
+
+            if (response.ok) {
+                console.log('VisionAppraisal processed data updated in Google Drive file ID:', fileId);
+
+                // Update file name if needed
+                await gapi.client.drive.files.update({
+                    fileId: fileId,
+                    resource: {
+                        name: fileName
+                    }
+                });
+
+                return response;
+            } else {
+                console.error('Error updating Google Drive file:', response.status, response.statusText);
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+        } catch (error) {
+            console.error("Google Drive save error:", error);
+            throw error;
+        }
+    },
+
+    // Load processed data from Google Drive
+    async loadProcessedDataFromGoogleDrive() {
+        const GOOGLE_FILE_ID = "1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf";
+
+        try {
+            console.log("=== LOADING PROCESSED VISIONAPPRAISAL DATA FROM GOOGLE DRIVE ===");
+            console.log(`Loading from File ID: ${GOOGLE_FILE_ID}`);
+
+            const response = await gapi.client.drive.files.get({
+                fileId: GOOGLE_FILE_ID,
+                alt: 'media'
+            });
+
+            const dataPackage = JSON.parse(response.body);
+
+            console.log(`✓ Loaded processed data from ${dataPackage.metadata.processedAt}`);
+            console.log(`✓ ${dataPackage.metadata.recordCount} records`);
+            console.log(`✓ ${dataPackage.metadata.withFireNumbers} with Fire Numbers`);
+
+            return {
+                success: true,
+                data: dataPackage.records,
+                metadata: dataPackage.metadata,
+                message: "Processed VisionAppraisal data loaded successfully"
+            };
+
+        } catch (error) {
+            console.error("Error loading processed VisionAppraisal data:", error);
+            return {
+                success: false,
+                error: error.message,
+                message: "Failed to load processed VisionAppraisal data from Google Drive"
+            };
+        }
+    },
+
     // Get records by Fire Number (for fast lookup)
     buildFireNumberIndex(data) {
         const index = {};

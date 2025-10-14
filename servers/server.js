@@ -11,7 +11,7 @@ require('dotenv').config();
 const accExt = {
     'css': 'text/css',
     'html': 'text/html',
-    'js': 'text/js',
+    'js': 'application/javascript',
     'md': 'text/plain'
 }
 const excExt = ['ico']
@@ -21,7 +21,7 @@ app.use(cors({
     origin: "*"
 }))
 
-app.use(express.json()); // Add JSON parsing middleware
+app.use(express.json({ limit: '10mb' })); // Add JSON parsing middleware with increased limit
 
 const fs = require('fs');
 const path = require('path');
@@ -38,22 +38,40 @@ if (!fs.existsSync(progressDir)) {
 
 // Route to serve CSV file for bloomerang.js - MUST be before /:dis catch-all route
 app.get('/csv-file', (req, res) => {
-    const filePath = path.join(__dirname, 'Results', 'All Data.csv');
+    // Default to 'All Data.csv' for backward compatibility, but allow file parameter
+    const requestedFile = req.query.file || 'All Data.csv';
+
+    // Security: prevent directory traversal attacks
+    const sanitizedFile = path.basename(requestedFile);
+
+    // Construct file path within Results directory
+    const filePath = path.join(__dirname, 'Results', sanitizedFile);
+
+    // Check if file exists and is within the Results directory
+    if (!filePath.startsWith(path.join(__dirname, 'Results'))) {
+        return res.status(403).json({ error: 'Access denied: file outside Results directory' });
+    }
+
     res.sendFile(filePath, (err) => {
         if (err) {
             console.error('Error sending CSV file:', err);
-            res.status(404).json({ error: 'CSV file not found' });
+            res.status(404).json({ error: `CSV file not found: ${sanitizedFile}` });
         }
     });
 });
 
 // Route to serve VisionAppraisal JSON file for integration testing - MUST be before /:dis catch-all route
 app.get('/visionappraisal-data', (req, res) => {
+    console.log('=== VISIONAPPRAISAL-DATA ROUTE HIT ===');
     const filePath = path.join(__dirname, 'Results', 'everyThingWithPid.json');
+    console.log('Attempting to serve file:', filePath);
+
     res.sendFile(filePath, (err) => {
         if (err) {
             console.error('Error sending VisionAppraisal JSON file:', err);
             res.status(404).json({ error: 'VisionAppraisal JSON file not found' });
+        } else {
+            console.log('VisionAppraisal JSON file sent successfully');
         }
     });
 });
@@ -79,6 +97,31 @@ app.get('/:dis', (req, res) => {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
 
 })
+
+// API endpoint to save fresh VisionAppraisal data
+app.post('/api/save-fresh-data', (req, res) => {
+    try {
+        const { data } = req.body;
+        if (!data) {
+            return res.status(400).json({ error: 'Missing data' });
+        }
+
+        const filePath = path.join(__dirname, 'Results', 'everyThingWithPid.json');
+        const jsonString = JSON.stringify(data, null, 0);
+
+        fs.writeFileSync(filePath, jsonString);
+
+        console.log(`Saved fresh everyThingWithPid.json: ${data.length} records (${Math.round(jsonString.length / 1024)}KB)`);
+        res.json({
+            success: true,
+            message: `Saved ${data.length} records to everyThingWithPid.json`,
+            size: `${Math.round(jsonString.length / 1024)}KB`
+        });
+    } catch (error) {
+        console.error('Error saving fresh data:', error);
+        res.status(500).json({ error: 'Failed to save fresh data' });
+    }
+});
 
 // API endpoint to save progress data
 app.post('/api/save-progress', (req, res) => {
