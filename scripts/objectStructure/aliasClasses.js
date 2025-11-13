@@ -26,9 +26,13 @@ const DATA_SOURCES = Object.freeze({
  * All terms require source attribution for data lineage and conflict resolution
  */
 class AttributedTerm {
-    constructor(term, source, index, identifier) {
+    constructor(term, source, index, identifier, fieldName = null) {
         // The term/identifier value
         this.term = term;
+
+        // Field name - specifies the entity property name where this term's data will be stored
+        // Example: "email", "fireNumber", "completeName", etc.
+        this.fieldName = fieldName;
 
         // Map where key is source (text) and value is an object with index and identifier properties
         this.sourceMap = new Map();
@@ -80,6 +84,22 @@ class AttributedTerm {
     }
 
     /**
+     * Set or update the field name for this term
+     * @param {string} fieldName - The entity property name where this term will be stored
+     */
+    setFieldName(fieldName) {
+        this.fieldName = fieldName;
+    }
+
+    /**
+     * Get the field name for this term
+     * @returns {string|null} The field name or null if not set
+     */
+    getFieldName() {
+        return this.fieldName;
+    }
+
+    /**
      * Serialize AttributedTerm to JSON-compatible object
      * @returns {Object} Serialized representation
      */
@@ -87,6 +107,7 @@ class AttributedTerm {
         return {
             type: 'AttributedTerm',
             term: this.term,
+            fieldName: this.fieldName,
             sourceMap: Array.from(this.sourceMap.entries()).map(([source, data]) => ({
                 source: source,
                 index: data.index,
@@ -107,7 +128,13 @@ class AttributedTerm {
 
         // Recreate with first source entry
         const firstSource = data.sourceMap[0];
-        const term = new AttributedTerm(data.term, firstSource.source, firstSource.index, firstSource.identifier);
+        const term = new AttributedTerm(
+            data.term,
+            firstSource.source,
+            firstSource.index,
+            firstSource.identifier,
+            data.fieldName || null  // Include fieldName in reconstruction
+        );
 
         // Add remaining source entries
         for (let i = 1; i < data.sourceMap.length; i++) {
@@ -159,9 +186,12 @@ class AttributedTerm {
 
     /**
      * Returns the string representation of this AttributedTerm
-     * @returns {string} The term value
+     * @returns {string} The term value with fieldName context if available
      */
     toString() {
+        if (this.fieldName) {
+            return `${this.term} (field: ${this.fieldName})`;
+        }
         return this.term;
     }
 }
@@ -482,6 +512,8 @@ class IndicativeData {
                 return IndividualName.deserialize(identifierData);
             case 'HouseholdName':
                 return HouseholdName.deserialize(identifierData);
+            case 'Address':
+                return Address.deserialize(identifierData);
             default:
                 throw new Error(`Unknown identifier type: ${identifierData.type}`);
         }
@@ -819,15 +851,15 @@ class IndividualName extends ComplexIdentifiers {
  * Used for compound names found in records and synthesized household names
  * This is a complex identifier that will be held within IdentifyingData
  * @param {AttributedTerm} primaryAlias - AttributedTerm containing the household name
- * @param {string} fullName - Full household name from Bloomerang Field 21
+ * @param {string} fullHouseholdName - Full household name from Bloomerang Field 21
  */
 class HouseholdName extends ComplexIdentifiers {
-    constructor(primaryAlias, fullName = "") {
+    constructor(primaryAlias, fullHouseholdName = "") {
         super(primaryAlias);
 
         // Household name properties
-        this.fullName = fullName;           // Field 21: Household Name from CSV
-        this.memberNames = [];              // Array of IndividualName objects - populated during processing
+        this.fullHouseholdName = fullHouseholdName;  // Field 21: Household Name from CSV
+        this.memberNames = [];                       // Array of IndividualName objects - populated during processing
     }
 
     /**
@@ -869,7 +901,7 @@ class HouseholdName extends ComplexIdentifiers {
      */
     getHouseholdSummary() {
         return {
-            fullName: this.fullName,
+            fullHouseholdName: this.fullHouseholdName,
             memberCount: this.memberNames.length,
             memberNames: this.getMemberNameStrings(),
             primaryAlias: this.primaryAlias.term
@@ -894,7 +926,7 @@ class HouseholdName extends ComplexIdentifiers {
             type: 'HouseholdName',
             primaryAlias: this.primaryAlias.serialize(),
             alternatives: this.alternatives.serialize(),
-            fullName: this.fullName,
+            fullHouseholdName: this.fullHouseholdName,
             memberNames: this.memberNames.map(member => member.serialize())
         };
     }
@@ -910,7 +942,7 @@ class HouseholdName extends ComplexIdentifiers {
         }
 
         const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
-        const householdName = new HouseholdName(primaryAlias, data.fullName);
+        const householdName = new HouseholdName(primaryAlias, data.fullHouseholdName || data.fullName);  // Support both old and new format
 
         householdName.alternatives = Aliases.deserialize(data.alternatives);
         householdName.memberNames = data.memberNames.map(memberData =>
@@ -1166,6 +1198,299 @@ class EmailTerm extends AttributedTerm {
     }
 }
 
+/**
+ * Address class - subclass of ComplexIdentifiers for address data
+ * Contains multiple properties, each holding AttributedTerm for different address components
+ * Supports Block Island specific functionality with fire number detection
+ */
+class Address extends ComplexIdentifiers {
+    constructor(primaryAlias) {
+        super(primaryAlias);
+
+        // Original data preservation
+        this.originalAddress = null;    // AttributedTerm for full unparsed address string
+
+        // Parsed components from parse-address library
+        this.streetNumber = null;       // AttributedTerm for "123"
+        this.streetName = null;         // AttributedTerm for "Main"
+        this.streetType = null;         // AttributedTerm for "St"
+        this.city = null;              // AttributedTerm for "Block Island"
+        this.state = null;             // AttributedTerm for "RI"
+        this.zipCode = null;           // AttributedTerm for "02807"
+
+        // Special address components (when applicable)
+        this.secUnitType = null;       // AttributedTerm for "PO Box", "Apt", etc.
+        this.secUnitNum = null;        // AttributedTerm for unit numbers
+
+        // Block Island specific metadata
+        this.isBlockIslandAddress = null; // AttributedTerm for boolean flag
+        this.cityNormalized = null;    // AttributedTerm for normalization flag
+
+        // Processing metadata
+        this.processingSource = null;   // AttributedTerm for "VisionAppraisal", "Bloomerang"
+        this.processingTimestamp = null; // AttributedTerm for when parsed
+    }
+
+    /**
+     * Get fire number if this is a Block Island address
+     * Block Island street numbers ARE fire numbers
+     * @returns {AttributedTerm|null} Fire number AttributedTerm or null if not BI address
+     */
+    getFireNumber() {
+        if (this.isBlockIslandAddress &&
+            this.isBlockIslandAddress.term === true &&
+            this.streetNumber) {
+            return this.streetNumber; // Same object reference
+        }
+        return null;
+    }
+
+    /**
+     * Check if this address has a valid fire number
+     * @returns {boolean} True if BI address with street number
+     */
+    hasFireNumber() {
+        return this.getFireNumber() !== null;
+    }
+
+    /**
+     * Get complete address summary for display and debugging
+     * @returns {Object} Summary of all address components
+     */
+    getAddressSummary() {
+        return {
+            original: this.originalAddress ? this.originalAddress.term : null,
+            street: this.getStreetDisplay(),
+            city: this.city ? this.city.term : null,
+            state: this.state ? this.state.term : null,
+            zip: this.zipCode ? this.zipCode.term : null,
+            isBlockIsland: this.isBlockIslandAddress ? this.isBlockIslandAddress.term : false,
+            hasFireNumber: this.hasFireNumber(),
+            fireNumber: this.hasFireNumber() ? this.getFireNumber().term : null,
+            processingSource: this.processingSource ? this.processingSource.term : null
+        };
+    }
+
+    /**
+     * Get formatted street display
+     * @returns {string} Formatted street address or null
+     */
+    getStreetDisplay() {
+        const parts = [];
+        if (this.streetNumber) parts.push(this.streetNumber.term);
+        if (this.streetName) parts.push(this.streetName.term);
+        if (this.streetType) parts.push(this.streetType.term);
+
+        // Handle special units (PO Box, Apt, etc.)
+        if (this.secUnitType) {
+            parts.push(this.secUnitType.term);
+            if (this.secUnitNum) parts.push(this.secUnitNum.term);
+        }
+
+        return parts.length > 0 ? parts.join(' ') : null;
+    }
+
+    /**
+     * Create Address from processed address data
+     * @param {Object} processedAddress - Output from processAddress() function
+     * @param {string} fieldName - Field name for data lineage
+     * @returns {Address} New Address instance
+     */
+    static fromProcessedAddress(processedAddress, fieldName) {
+        if (!processedAddress || !processedAddress.original) {
+            throw new Error('Invalid processed address data');
+        }
+
+        // Create primary alias from original address string
+        const primaryAlias = new AttributedTerm(
+            processedAddress.original,
+            processedAddress.sourceType,
+            fieldName,
+            'original_address'
+        );
+
+        const address = new Address(primaryAlias);
+
+        // Set original address (same as primaryAlias for consistency)
+        address.originalAddress = primaryAlias;
+
+        // Create AttributedTerms for each component with proper data lineage
+        if (processedAddress.number) {
+            address.streetNumber = new AttributedTerm(
+                processedAddress.number,
+                processedAddress.sourceType,
+                fieldName,
+                'street_number'
+            );
+        }
+
+        if (processedAddress.street) {
+            address.streetName = new AttributedTerm(
+                processedAddress.street,
+                processedAddress.sourceType,
+                fieldName,
+                'street_name'
+            );
+        }
+
+        if (processedAddress.type) {
+            address.streetType = new AttributedTerm(
+                processedAddress.type,
+                processedAddress.sourceType,
+                fieldName,
+                'street_type'
+            );
+        }
+
+        if (processedAddress.city) {
+            address.city = new AttributedTerm(
+                processedAddress.city,
+                processedAddress.sourceType,
+                fieldName,
+                'city'
+            );
+        }
+
+        if (processedAddress.state) {
+            address.state = new AttributedTerm(
+                processedAddress.state,
+                processedAddress.sourceType,
+                fieldName,
+                'state'
+            );
+        }
+
+        if (processedAddress.zip) {
+            address.zipCode = new AttributedTerm(
+                processedAddress.zip,
+                processedAddress.sourceType,
+                fieldName,
+                'zip_code'
+            );
+        }
+
+        if (processedAddress.secUnitType) {
+            address.secUnitType = new AttributedTerm(
+                processedAddress.secUnitType,
+                processedAddress.sourceType,
+                fieldName,
+                'unit_type'
+            );
+        }
+
+        if (processedAddress.secUnitNum) {
+            address.secUnitNum = new AttributedTerm(
+                processedAddress.secUnitNum,
+                processedAddress.sourceType,
+                fieldName,
+                'unit_number'
+            );
+        }
+
+        // Block Island metadata
+        address.isBlockIslandAddress = new AttributedTerm(
+            processedAddress.isBlockIslandAddress,
+            processedAddress.sourceType,
+            fieldName,
+            'is_block_island'
+        );
+
+        address.cityNormalized = new AttributedTerm(
+            processedAddress.cityNormalized || false,
+            processedAddress.sourceType,
+            fieldName,
+            'city_normalized'
+        );
+
+        // Processing metadata
+        address.processingSource = new AttributedTerm(
+            processedAddress.sourceType,
+            processedAddress.sourceType,
+            fieldName,
+            'processing_source'
+        );
+
+        address.processingTimestamp = new AttributedTerm(
+            processedAddress.processedAt || new Date().toISOString(),
+            processedAddress.sourceType,
+            fieldName,
+            'processing_timestamp'
+        );
+
+        return address;
+    }
+
+    /**
+     * Serialize Address to JSON-compatible object
+     * @returns {Object} Serialized representation
+     */
+    serialize() {
+        return {
+            type: 'Address',
+            primaryAlias: this.primaryAlias.serialize(),
+            alternatives: this.alternatives.serialize(),
+            originalAddress: this.originalAddress ? this.originalAddress.serialize() : null,
+            streetNumber: this.streetNumber ? this.streetNumber.serialize() : null,
+            streetName: this.streetName ? this.streetName.serialize() : null,
+            streetType: this.streetType ? this.streetType.serialize() : null,
+            city: this.city ? this.city.serialize() : null,
+            state: this.state ? this.state.serialize() : null,
+            zipCode: this.zipCode ? this.zipCode.serialize() : null,
+            secUnitType: this.secUnitType ? this.secUnitType.serialize() : null,
+            secUnitNum: this.secUnitNum ? this.secUnitNum.serialize() : null,
+            isBlockIslandAddress: this.isBlockIslandAddress ? this.isBlockIslandAddress.serialize() : null,
+            cityNormalized: this.cityNormalized ? this.cityNormalized.serialize() : null,
+            processingSource: this.processingSource ? this.processingSource.serialize() : null,
+            processingTimestamp: this.processingTimestamp ? this.processingTimestamp.serialize() : null
+        };
+    }
+
+    /**
+     * Deserialize Address from JSON object
+     * @param {Object} data - Serialized data
+     * @returns {Address} Reconstructed Address instance
+     */
+    static deserialize(data) {
+        if (data.type !== 'Address') {
+            throw new Error('Invalid Address serialization format');
+        }
+
+        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const address = new Address(primaryAlias);
+
+        address.alternatives = Aliases.deserialize(data.alternatives);
+
+        // Deserialize all components
+        if (data.originalAddress) address.originalAddress = AttributedTerm.deserialize(data.originalAddress);
+        if (data.streetNumber) address.streetNumber = AttributedTerm.deserialize(data.streetNumber);
+        if (data.streetName) address.streetName = AttributedTerm.deserialize(data.streetName);
+        if (data.streetType) address.streetType = AttributedTerm.deserialize(data.streetType);
+        if (data.city) address.city = AttributedTerm.deserialize(data.city);
+        if (data.state) address.state = AttributedTerm.deserialize(data.state);
+        if (data.zipCode) address.zipCode = AttributedTerm.deserialize(data.zipCode);
+        if (data.secUnitType) address.secUnitType = AttributedTerm.deserialize(data.secUnitType);
+        if (data.secUnitNum) address.secUnitNum = AttributedTerm.deserialize(data.secUnitNum);
+        if (data.isBlockIslandAddress) address.isBlockIslandAddress = AttributedTerm.deserialize(data.isBlockIslandAddress);
+        if (data.cityNormalized) address.cityNormalized = AttributedTerm.deserialize(data.cityNormalized);
+        if (data.processingSource) address.processingSource = AttributedTerm.deserialize(data.processingSource);
+        if (data.processingTimestamp) address.processingTimestamp = AttributedTerm.deserialize(data.processingTimestamp);
+
+        return address;
+    }
+
+    /**
+     * String representation for debugging
+     * @returns {string} Formatted address string
+     */
+    toString() {
+        const summary = this.getAddressSummary();
+        const street = summary.street || 'No street';
+        const location = [summary.city, summary.state, summary.zip].filter(Boolean).join(', ') || 'No location';
+        const fireNum = summary.hasFireNumber ? ` (Fire #${summary.fireNumber})` : '';
+        return `Address: ${street}, ${location}${fireNum}`;
+    }
+}
+
 // Export classes and constants for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -1184,6 +1509,28 @@ if (typeof module !== 'undefined' && module.exports) {
         PID,
         ComplexIdentifiers,
         IndividualName,
-        HouseholdName
+        HouseholdName,
+        Address
     };
+}
+
+// Also export to global scope for browser use
+if (typeof window !== 'undefined') {
+    window.DATA_SOURCES = DATA_SOURCES;
+    window.AttributedTerm = AttributedTerm;
+    window.FireNumberTerm = FireNumberTerm;
+    window.AccountNumberTerm = AccountNumberTerm;
+    window.EmailTerm = EmailTerm;
+    window.Aliases = Aliases;
+    window.Aliased = Aliased;
+    window.SimpleIdentifiers = SimpleIdentifiers;
+    window.IndicativeData = IndicativeData;
+    window.IdentifyingData = IdentifyingData;
+    window.FireNumber = FireNumber;
+    window.PoBox = PoBox;
+    window.PID = PID;
+    window.ComplexIdentifiers = ComplexIdentifiers;
+    window.IndividualName = IndividualName;
+    window.HouseholdName = HouseholdName;
+    window.Address = Address;
 }

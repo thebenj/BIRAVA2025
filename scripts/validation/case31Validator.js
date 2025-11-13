@@ -392,6 +392,77 @@ const Case31Validator = {
         }
     },
 
+    // COMMENTED OUT FOR CONFIGURATION-DRIVEN PARSER DEVELOPMENT
+    // detectCaseRetVal function removed to prevent syntax errors
+    // Preserved in separate reference file for configuration extraction
+
+    // Test method to compare detectCase and detectCaseRetVal results
+    compareDetectCaseMethods(testNames = null) {
+        console.log('🔍 Comparing detectCase vs detectCaseRetVal methods...');
+
+        // Use provided test names or default test cases
+        const namesToTest = testNames || [
+            'SMITH, JOHN',           // case1
+            'SMITH JOHN',            // case3
+            'SMITH, JOHN ROBERT',    // case5
+            'SMITH, JOHN & MARY',    // case15a
+            'SMITH JOHN & MARY',     // case17
+            'LLC',                   // case0
+            'TRUST',                 // case0
+            'SMITH FAMILY TRUST',    // case31
+            'SMITH, JOHN, TRUSTEE',  // case27/28
+            '',                      // error case
+            'A',                     // single word
+            'A B C D E F G'          // many words
+        ];
+
+        let matches = 0;
+        let mismatches = 0;
+        const mismatchDetails = [];
+
+        namesToTest.forEach((name, index) => {
+            try {
+                const originalResult = this.detectCase(name, index);
+                const retValResult = this.detectCaseRetVal(name, index);
+
+                if (originalResult === retValResult) {
+                    matches++;
+                    console.log(`✅ "${name}" -> ${originalResult}`);
+                } else {
+                    mismatches++;
+                    console.log(`❌ "${name}" -> Original: ${originalResult}, RetVal: ${retValResult}`);
+                    mismatchDetails.push({
+                        name: name,
+                        original: originalResult,
+                        retVal: retValResult
+                    });
+                }
+            } catch (error) {
+                console.log(`💥 Error testing "${name}": ${error.message}`);
+                mismatches++;
+            }
+        });
+
+        console.log(`\n📊 Comparison Results:`);
+        console.log(`✅ Matches: ${matches}`);
+        console.log(`❌ Mismatches: ${mismatches}`);
+        console.log(`📈 Success Rate: ${((matches / (matches + mismatches)) * 100).toFixed(1)}%`);
+
+        if (mismatchDetails.length > 0) {
+            console.log('\n🔍 Mismatch Details:');
+            mismatchDetails.forEach(detail => {
+                console.log(`  "${detail.name}": ${detail.original} vs ${detail.retVal}`);
+            });
+        }
+
+        return {
+            matches,
+            mismatches,
+            successRate: (matches / (matches + mismatches)) * 100,
+            details: mismatchDetails
+        };
+    },
+
     // Helper functions for case detection
 
     // Case 0: Check if name exactly matches Business Terms Master List

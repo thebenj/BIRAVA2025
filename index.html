@@ -341,6 +341,43 @@
                 <button class="action-button" onclick="viewSelectedEntity()">👁️ View Details</button>
             </div>
         </div>
+
+        <!-- VisionAppraisal Entity Browser Section -->
+        <div class="entity-browser-section" style="border-color: #dc3545;">
+            <h3 style="color: #dc3545;">🔍 VisionAppraisal Entity Browser - Property Data Explorer</h3>
+
+            <div class="search-section">
+                <input type="text" id="vaSearchInput" class="search-input" placeholder="Search by PID, Fire Number, owner name, address..." onkeypress="handleVASearchKeyPress(event)">
+                <button class="search-button" onclick="performVASearch()">🔍 Search</button>
+                <button class="search-button" onclick="clearVASearch()" style="background-color: #6c757d;">Clear</button>
+
+                <div class="quick-filters">
+                    <strong>Quick Filters:</strong>
+                    <button class="filter-button" onclick="quickVAFilter('pid')">By PID</button>
+                    <button class="filter-button" onclick="quickVAFilter('fire')">By Fire #</button>
+                    <button class="filter-button" onclick="quickVAFilter('owner')">By Owner</button>
+                    <button class="filter-button" onclick="showAllVA()">Show All</button>
+                </div>
+            </div>
+
+            <div id="vaStatusMessage" class="status-message" style="display: none;"></div>
+
+            <div class="results-section">
+                <div class="results-header">
+                    <span id="vaResultsCount">Click "Load VisionAppraisal Data" to begin</span>
+                </div>
+                <div id="vaResultsList" class="results-list">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="action-button" onclick="loadVisionAppraisalData()" style="background-color: #dc3545;">📁 Load VisionAppraisal Data</button>
+                <button class="action-button" onclick="exportVAResults()">📄 Export Results</button>
+                <button class="action-button" onclick="showVAStats()">📊 Data Stats</button>
+                <button class="action-button" onclick="viewSelectedVAEntity()">👁️ View Details</button>
+            </div>
+        </div>
     </div>
     <div id="ressieH">"dude"</div>
     <div id="streeter">"dude"</div>
@@ -358,11 +395,18 @@
 
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="https://unpkg.com/parse-address@latest/parse-address.min.js"></script>
     <script type="text/javascript" src="./scripts/googleLinks.js"></script>
     <script type="text/javascript" src="./scripts/fileLogistics.js"></script>
     <script type="text/javascript" src="./scripts/baseCode.js"></script>
     <script type="text/javascript" src="./scripts/oneToOneEntity.js"></script>
     <script type="text/javascript" src="./scripts/utils.js"></script>
+    <script type="text/javascript" src="./scripts/core/visionAppraisalProcessing.js"></script>
+    <script type="text/javascript" src="./scripts/core/googleDriveAPI.js"></script>
+    <script type="text/javascript" src="./scripts/performance/optimizedProcessing.js"></script>
+    <script type="text/javascript" src="./scripts/address/addressProcessing.js"></script>
+    <script type="text/javascript" src="./scripts/testing/addressTesting.js"></script>
+    <script type="text/javascript" src="./scripts/data/sampleDataLoader.js"></script>
     <script type="text/javascript" src="./scripts/postProcessing.js"></script>
     <script type="text/javascript" src="./scripts/phonebook.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/aliasClasses.js"></script>
@@ -370,6 +414,7 @@
     <script type="text/javascript" src="./scripts/objectStructure/entityClasses.js"></script>
     <script type="text/javascript" src="./scripts/visionAppraisalParser.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/visionAppraisal.js"></script>
+    <script type="text/javascript" src="./scripts/dataSources/processAllVisionAppraisalRecords.js"></script>
     <script type="text/javascript" src="./scripts/integration/matchingEngine.js"></script>
     <script type="text/javascript" src="./scripts/integration/contactDiscovery.js"></script>
     <script type="text/javascript" src="./scripts/integration/nameAnalysis.js"></script>
@@ -377,6 +422,7 @@
     <script type="text/javascript" src="./scripts/testAttributedTermSubclasses.js"></script>
     <script type="text/javascript" src="./scripts/bloomerang.js"></script>
     <script type="text/javascript" src="./scripts/entityBrowser.js"></script>
+    <script type="text/javascript" src="./scripts/visionAppraisalBrowser.js"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 

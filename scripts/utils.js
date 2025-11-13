@@ -1,243 +1,28 @@
-async function goAgain() {
-    console.log("Go Again clicked - checking local progress files");
+// ✅ VisionAppraisal processing function moved to scripts/core/visionAppraisalProcessing.js
+// goAgain() - Resume VisionAppraisal processing from where it left off
 
-    try {
-        // Load original parcel data and completed PIDs from disk files
-        const originalParcels = await loadFromDisk('original_parcels.json');
-        const completedPids = await loadFromDisk('completed_pids.json');
-
-        if (!originalParcels || !Array.isArray(originalParcels)) {
-            console.error("No original parcel data found. Please run buttons 1-3 first.");
-            alert("No parcel data found. Please run the First, Second, and Third buttons first to generate parcel data.");
-            return;
-        }
-
-        const completedList = completedPids || [];
-        console.log(`Found ${originalParcels.length} original parcels, ${completedList.length} completed`);
-
-        // Filter out completed parcels
-        const remainingParcels = originalParcels.filter(pid => !completedList.includes(pid));
-
-        if (remainingParcels.length === 0) {
-            console.log("All parcels have been processed!");
-            alert("All parcels have been processed! No remaining work to do.");
-            return;
-        }
-
-        console.log(`Resuming with ${remainingParcels.length} remaining parcels`);
-        alert(`Resuming processing with ${remainingParcels.length} remaining parcels out of ${originalParcels.length} total.`);
-
-        // Process remaining parcels with fourth button
-        let bigFile = await fourthButterClick(remainingParcels);
-
-    } catch (error) {
-        console.error("Error in goAgain:", error);
-        alert("Error resuming process. Check console for details.");
-    }
-}
-
-async function mergeTheTwo() {
-    let fc = await getFileContentsAPI(parameters.everyThingWithID)
-    let fcB = await getFileContentsAPI(parameters.everyThingWithIDB)
-    let fileToUpdate = JSON.parse(fc.body)  // Fixed: was .result, now .body
-    let fileToUpdateB = JSON.parse(fcB.body)  // Fixed: was .result, now .body
-    fileToUpdate = fileToUpdate.concat(fileToUpdateB)
-    let goneB = await updateFile(parameters.everyThingWithID, fileToUpdate, true)
-    goAgain()
-}
+// ✅ VisionAppraisal processing function moved to scripts/core/visionAppraisalProcessing.js
+// mergeTheTwo() - Merge two VisionAppraisal data files
 
 
-async function getFilesList(pDrive) {
-    // Use direct fetch like getFileContentsAPI and updateFile - no discovery docs needed
-    if (!gapi || !gapi.auth) {
-        throw new Error('Google API client not loaded. Please refresh the page.');
-    }
+// ✅ VisionAppraisal processing function moved to scripts/core/visionAppraisalProcessing.js
+// getFilesList() - Get list of files from a Google Drive folder
 
-    let accessToken = gapi.auth.getToken().access_token;
-    if (!accessToken) {
-        throw new Error('No access token available. Please authorize first.');
-    }
+// ✅ VisionAppraisal processing function moved to scripts/core/visionAppraisalProcessing.js
+// makeOneToOneFile() - Create one-to-one mapping file for PID files
 
-    let foundFiles = []
-    let nextPageToken = ""
-
-    do {
-        // Build URL with proper encoding for the parent query
-        const parentQuery = encodeURIComponent(`'${pDrive}' in parents`);
-        const url = `https://www.googleapis.com/drive/v3/files?pageSize=1000&fields=nextPageToken,files(id,name)&q=${parentQuery}${nextPageToken ? `&pageToken=${nextPageToken}` : ''}`;
-
-        try {
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: new Headers({ 'Authorization': 'Bearer ' + accessToken })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            const files = data.files;
-
-            if (files && files.length > 0) {
-                foundFiles = foundFiles.concat(files.map(file => [
-                    file.name.substring(0, file.name.indexOf(".")),
-                    file.id
-                ]));
-                nextPageToken = data.nextPageToken;
-            } else {
-                nextPageToken = null;
-            }
-        } catch (error) {
-            console.error('Error in getFilesList:', error);
-            throw error;
-        }
-    } while (nextPageToken);
-
-    return foundFiles;
-}
-
-async function makeOneToOneFile() {
-    //the original list of all parcels
-    let foundFiles = await getFilesList(parameters.pidFilesParents)
-    let pids = []
-    let ids = []
-    foundFiles.forEach(ite => {
-        pids.push(ite[0]);
-        ids.push(ite[1])
-    })
-    let onToOn = new oneToOne([fileNumberWord, "PID", ids, pids])
-    let makeOnToOne = await writeIndexOfFiles(parameters.listOfPIDFileDirFiles, onToOn, true)
-}
-
-// Test function to access Google Drive JSON file
-async function testGoogleDriveAccess() {
-    const testFileId = '1dOlGnHNDOdsXo1uWGXQWRINeuXOvtYtz';
-    console.log('Testing Google Drive access for file ID:', testFileId);
-
-    try {
-        console.log('Attempting to download file contents...');
-        const response = await getFileContentsAPI(testFileId);
-        console.log('Raw response:', response);
-
-        if (response && response.body) {
-            console.log('File contents retrieved successfully!');
-            console.log('Raw body content:', response.body);
-
-            try {
-                const jsonData = JSON.parse(response.body);
-                console.log('Parsed JSON data:', jsonData);
-                console.log('JSON data type:', typeof jsonData);
-                console.log('Is array:', Array.isArray(jsonData));
-                if (Array.isArray(jsonData)) {
-                    console.log('Array length:', jsonData.length);
-                    if (jsonData.length > 0) {
-                        console.log('First element:', jsonData[0]);
-                    }
-                }
-                return jsonData;
-            } catch (parseError) {
-                console.error('Error parsing JSON:', parseError);
-                console.log('Content that failed to parse:', response.body);
-                return response.body;
-            }
-        } else {
-            console.error('No body in response:', response);
-            return null;
-        }
-    } catch (error) {
-        console.error('Error accessing Google Drive file:', error);
-        console.error('Error details:', error.message);
-        if (error.status) {
-            console.error('HTTP Status:', error.status);
-        }
-        return null;
-    }
-}
+// ✅ VisionAppraisal test function moved to scripts/core/visionAppraisalProcessing.js
+// testGoogleDriveAccess() - Test Google Drive access functionality
 
 // Test function to verify getFilesList works (or fails with same 502 error)
-async function testGetFilesList() {
-    console.log('=== TESTING getFilesList() ===');
-    const testFolderId = parameters.pidFilesParents;
+// ✅ Google Drive API function moved to scripts/core/googleDriveAPI.js
+// testGetFilesList() - Test function to verify getFilesList works with Google Drive API
 
-    try {
-        console.log('Attempting to list files in folder:', testFolderId);
-        const filesList = await getFilesList(testFolderId);
-        console.log('✅ SUCCESS: Found', filesList.length, 'files');
-        console.log('Sample files (first 5):', filesList.slice(0, 5));
-        return filesList;
-    } catch (error) {
-        console.error('❌ getFilesList() FAILED:', error);
-        console.error('This means fixDiscrepancies() cannot work!');
-        return null;
-    }
-}
+// ✅ Google Drive API function moved to scripts/core/googleDriveAPI.js
+// testResponseFormats() - Test function to verify response format consistency
 
-// Test function to verify response format consistency
-async function testResponseFormats() {
-    console.log('=== TESTING RESPONSE FORMAT CONSISTENCY ===');
-    const testFileId = '1dOlGnHNDOdsXo1uWGXQWRINeuXOvtYtz';
-
-    try {
-        console.log('Testing getFileContentsAPI response format...');
-        const response = await getFileContentsAPI(testFileId);
-        console.log('getFileContentsAPI response keys:', Object.keys(response));
-        console.log('Has .body:', !!response.body);
-        console.log('Has .result:', !!response.result);
-
-        // This will show if mergeTheTwo() will break
-        if (response.body && !response.result) {
-            console.log('⚠️  WARNING: Response has .body but not .result');
-            console.log('⚠️  mergeTheTwo() expects .result - will fail!');
-        }
-
-        return response;
-    } catch (error) {
-        console.error('❌ testResponseFormats FAILED:', error);
-        return null;
-    }
-}
-
-// Test function to verify tracking mechanism
-async function testTrackingMechanism() {
-    console.log('=== TESTING TRACKING MECHANISM ===');
-
-    try {
-        // Check if disk files exist and are accessible
-        console.log('Loading original_parcels.json...');
-        const originalParcels = await loadFromDisk('original_parcels.json');
-        console.log('Original parcels:', originalParcels ? originalParcels.length : 'NOT FOUND');
-
-        console.log('Loading completed_pids.json...');
-        const completedPids = await loadFromDisk('completed_pids.json');
-        console.log('Completed PIDs:', completedPids ? completedPids.length : 'NOT FOUND');
-
-        if (originalParcels && completedPids) {
-            const remaining = originalParcels.filter(pid => !completedPids.includes(pid));
-            console.log('Remaining to process:', remaining.length);
-            console.log('First 10 remaining PIDs:', remaining.slice(0, 10));
-        }
-
-        // Test if fixDiscrepancies could work
-        console.log('Testing if fixDiscrepancies() can get actual uploaded files...');
-        const actualFiles = await testGetFilesList();
-        if (actualFiles) {
-            console.log('✅ fixDiscrepancies() could work - getFilesList() succeeded');
-        } else {
-            console.log('❌ fixDiscrepancies() CANNOT work - getFilesList() failed');
-        }
-
-        return {
-            originalParcels: originalParcels ? originalParcels.length : 0,
-            completedPids: completedPids ? completedPids.length : 0,
-            canVerifyUploads: !!actualFiles
-        };
-
-    } catch (error) {
-        console.error('❌ testTrackingMechanism FAILED:', error);
-        return null;
-    }
-}
+// ✅ Google Drive API function moved to scripts/core/googleDriveAPI.js
+// testTrackingMechanism() - Test function to verify tracking mechanism
 
 // Combined test function to run all tests
 async function testRetrySystemHealth() {
@@ -296,586 +81,366 @@ async function testFixedFunctions() {
 }
 
 // Simple function to get 500 random parcels from the 2317 list
-async function get500RandomParcels() {
-    console.log('📋 Getting 500 random parcels from the 2317 list...');
+// ✅ VisionAppraisal processing function moved to scripts/core/visionAppraisalProcessing.js
+// get500RandomParcels() - Get 500 random parcels for testing purposes
 
-    try {
-        const allParcels = await loadFromDisk('original_parcels.json');
-        console.log(`Loaded ${allParcels.length} total parcels`);
+// ✅ VisionAppraisal processing class moved to scripts/core/visionAppraisalProcessing.js
+// ParcelDataExtractor - High-performance HTML processing class for VisionAppraisal data
 
-        // Randomly shuffle and select 500
-        const shuffled = [...allParcels].sort(() => 0.5 - Math.random());
-        const random500 = shuffled.slice(0, 500);
+// ✅ VisionAppraisal processing class moved to scripts/core/visionAppraisalProcessing.js
+// ParcelDataExtractorV2 - Optimized version focused on batch processing
 
-        console.log('✅ Selected 500 random parcels');
-        console.log('First 10:', random500.slice(0, 10));
-        console.log('You can now run: fourthButterClick(' + JSON.stringify(random500) + ')');
+// ✅ VisionAppraisal test function moved to scripts/core/visionAppraisalProcessing.js
+// testBatchPerformance() - Test batch performance of parcel processing
 
-        return random500;
-
-    } catch (error) {
-        console.error('❌ Error getting random parcels:', error);
-        return null;
-    }
-}
-
-// Priority 1A: HTML Processing Module (for testing before full integration)
-class ParcelDataExtractor {
-    // Pre-compiled regex patterns for better performance
-    static IMAGE_CLEANUP_REGEX = /http:\/\/images\.vgsi\.com\/.+\.jpe?g/gi;
-
-    static extractFieldValue(doc, fieldId, sanitizeMode = 'full') {
-        const element = doc.getElementById(fieldId);
-        if (!element) return "";
-
-        let value = element.innerHTML;
-
-        switch (sanitizeMode) {
-            case 'full':
-                return this.sanitizeValueFull(value);
-            case 'basic':
-                return this.sanitizeValueBasic(value);
-            case 'none':
-                return value;
-            default:
-                return this.sanitizeValueFull(value);
-        }
-    }
-
-    static sanitizeValueFull(value) {
-        return value
-            .replaceAll("<br>", "::#^#::")
-            .replaceAll("&amp;", "&")
-            .replaceAll(",", ":^#^:");
-    }
-
-    static sanitizeValueBasic(value) {
-        return value
-            .replaceAll("<br>", "::#^#::");
-    }
-
-    static extractParcelData(htmlString) {
-        // Single regex operation to clean images
-        const cleanedHtml = htmlString.replaceAll(this.IMAGE_CLEANUP_REGEX, "");
-
-        // Single DOM parsing operation
-        const doc = new DOMParser().parseFromString(cleanedHtml, "text/html");
-
-        // Extract all fields in one pass
-        const fields = {
-            owner: this.extractFieldValue(doc, "MainContent_lblOwner", 'full'),
-            coOwner: this.extractFieldValue(doc, "MainContent_lblCoOwner", 'full'),
-            address: this.extractFieldValue(doc, "MainContent_lblAddr1", 'full'),
-            location: this.extractFieldValue(doc, "MainContent_lblLocation", 'basic'),
-            zone: this.extractFieldValue(doc, "MainContent_lblZone", 'none'),
-            use: this.extractFieldValue(doc, "MainContent_lblUseCode", 'basic'),
-            neighborhood: this.extractFieldValue(doc, "MainContent_lblNbhd", 'none'),
-            saleDate: this.extractFieldValue(doc, "MainContent_lblSaleDate", 'none'),
-            platNumber: this.extractFieldValue(doc, "MainContent_lblMblu", 'none'),
-            pid: this.extractFieldValue(doc, "MainContent_lblPid", 'none')
-        };
-
-        return fields;
-    }
-
-    static formatParcelDataAsCSV(fieldsObject) {
-        return [
-            fieldsObject.owner,
-            fieldsObject.coOwner,
-            fieldsObject.address,
-            fieldsObject.location,
-            fieldsObject.zone,
-            fieldsObject.use,
-            fieldsObject.neighborhood,
-            fieldsObject.saleDate,
-            fieldsObject.platNumber,
-            fieldsObject.pid
-        ].join(",");
-    }
-}
-
-// Optimized version focused on the real performance gain: batch processing
-class ParcelDataExtractorV2 {
-    static IMAGE_CLEANUP_REGEX = /http:\/\/images\.vgsi\.com\/.+\.jpe?g/gi;
-
-    // The key optimization: process clean HTML directly without re-parsing
-    static extractParcelDataFast(cleanedDoc) {
-        // Skip the DOM parsing since it's already done - this is where the real speed comes from
-        const getValue = (id, sanitize = true) => {
-            const element = cleanedDoc.getElementById(id);
-            if (!element) return "";
-            let value = element.innerHTML;
-            return sanitize ? value.replaceAll("<br>", "::#^#::").replaceAll("&amp;", "&").replaceAll(",", ":^#^:") : value;
-        };
-
-        return {
-            owner: getValue("MainContent_lblOwner"),
-            coOwner: getValue("MainContent_lblCoOwner"),
-            address: getValue("MainContent_lblAddr1"),
-            location: getValue("MainContent_lblLocation"),
-            zone: getValue("MainContent_lblZone", false),
-            use: getValue("MainContent_lblUseCode"),
-            neighborhood: getValue("MainContent_lblNbhd", false),
-            saleDate: getValue("MainContent_lblSaleDate", false),
-            platNumber: getValue("MainContent_lblMblu", false),
-            pid: getValue("MainContent_lblPid", false)
-        };
-    }
-
-    static formatAsCSVLine(fields) {
-        return Object.values(fields).join(",");
-    }
-
-    // For batch processing multiple parcels
-    static processBatch(htmlDataArray) {
-        return htmlDataArray.map(html => {
-            const cleaned = html.replaceAll(this.IMAGE_CLEANUP_REGEX, "");
-            const doc = new DOMParser().parseFromString(cleaned, "text/html");
-            const fields = this.extractParcelDataFast(doc);
-            return this.formatAsCSVLine(fields);
-        });
-    }
-}
-
-// Test the REAL performance scenario: processing multiple parcels
-async function testBatchPerformance() {
-    console.log('🏁 Testing BATCH performance (real-world scenario)...');
-
-    try {
-        // Simulate processing 10 parcels (like a batch in fourth button)
-        const testPids = ['1230', '626', '1217', '780', '348'];
-        console.log('Fetching', testPids.length, 'parcels for batch test...');
-
-        // Fetch multiple parcel pages
-        const htmlDataArray = await Promise.all(
-            testPids.map(pid =>
-                fetch(reqBase + '/Parcel.aspx?pid=' + pid).then(r => r.text())
-            )
-        );
-
-        console.log('Testing NEW batch processing...');
-        const startBatch = performance.now();
-        const batchResults = ParcelDataExtractorV2.processBatch(htmlDataArray);
-        const endBatch = performance.now();
-
-        console.log('Testing OLD individual processing...');
-        const startOld = performance.now();
-        const oldResults = [];
-        htmlDataArray.forEach(html => {
-            // Simulate old approach for each parcel
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, "text/html");
-            const owner = doc.getElementById("MainContent_lblOwner")?.innerHTML.replaceAll("<br>", "::#^#::").replaceAll("&amp;", "&").replaceAll(",", ":^#^:") || "";
-            const coOwner = doc.getElementById("MainContent_lblCoOwner")?.innerHTML.replaceAll("<br>", "::#^#::").replaceAll("&amp;", "&").replaceAll(",", ":^#^:") || "";
-            // ... simulate processing all fields
-            oldResults.push(owner + "," + coOwner + "...");
-        });
-        const endOld = performance.now();
-
-        const batchTime = endBatch - startBatch;
-        const oldTime = endOld - startOld;
-        const improvement = oldTime - batchTime;
-        const improvementPercent = (improvement / oldTime * 100).toFixed(1);
-
-        console.log('⚡ NEW batch method:', batchTime.toFixed(2), 'ms for', testPids.length, 'parcels');
-        console.log('🐌 OLD individual method:', oldTime.toFixed(2), 'ms for', testPids.length, 'parcels');
-        console.log('🏎️  Performance improvement:', improvement.toFixed(2), 'ms (' + improvementPercent + '% faster)');
-        console.log('📊 Sample batch results:', batchResults[0].substring(0, 100) + '...');
-
-        return {
-            success: true,
-            batchTime,
-            oldTime,
-            improvement,
-            improvementPercent: parseFloat(improvementPercent),
-            parcelsProcessed: testPids.length
-        };
-
-    } catch (error) {
-        console.error('❌ Batch test failed:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-// Test function to verify ParcelDataExtractor works with real data
-async function testParcelDataExtractor() {
-    console.log('🧪 Testing ParcelDataExtractor in isolation...');
-
-    try {
-        // Test with a real parcel ID
-        const testPid = '1230'; // Using a sample from your existing data
-        const testUrl = reqBase + '/Parcel.aspx?pid=' + testPid;
-
-        console.log('Fetching test data from:', testUrl);
-        const response = await fetch(testUrl);
-        const htmlData = await response.text();
-
-        console.log('Testing NEW ParcelDataExtractor approach...');
-        const startTime = performance.now();
-        const extractedData = ParcelDataExtractor.extractParcelData(htmlData);
-        const csvLine = ParcelDataExtractor.formatParcelDataAsCSV(extractedData);
-        const endTime = performance.now();
-
-        console.log('⚡ NEW method took:', (endTime - startTime).toFixed(2), 'ms');
-        console.log('📊 Extracted data:', extractedData);
-        console.log('📝 CSV format:', csvLine);
-
-        // Compare with OLD method
-        console.log('\nTesting OLD method for comparison...');
-        const startTimeOld = performance.now();
-
-        // Simulate old approach (abbreviated to key fields)
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(htmlData, "text/html");
-
-        const oldOwnerName = ((doc.getElementById("MainContent_lblOwner"))
-            ? doc.getElementById("MainContent_lblOwner").innerHTML.replaceAll("<br>", "::#^#::").replaceAll("&amp;", "&").replaceAll(",", ":^#^:")
-            : "");
-        const oldCoOwnerName = ((doc.getElementById("MainContent_lblCoOwner"))
-            ? doc.getElementById("MainContent_lblCoOwner").innerHTML.replaceAll("<br>", "::#^#::").replaceAll("&amp;", "&").replaceAll(",", ":^#^:")
-            : "");
-
-        const endTimeOld = performance.now();
-
-        console.log('🐌 OLD method took:', (endTimeOld - startTimeOld).toFixed(2), 'ms');
-
-        // Verify they produce same results
-        const newOwner = extractedData.owner;
-        const newCoOwner = extractedData.coOwner;
-        const resultsMatch = (newOwner === oldOwnerName && newCoOwner === oldCoOwnerName);
-        console.log('✅ Results match:', resultsMatch);
-
-        if (!resultsMatch) {
-            console.log('⚠️  Mismatch detected:');
-            console.log('NEW owner:', newOwner);
-            console.log('OLD owner:', oldOwnerName);
-            console.log('NEW coOwner:', newCoOwner);
-            console.log('OLD coOwner:', oldCoOwnerName);
-        }
-
-        const performanceGain = (endTimeOld - startTimeOld) - (endTime - startTime);
-        console.log('🏎️  Performance gain:', performanceGain.toFixed(2), 'ms per parcel');
-
-        return {
-            success: true,
-            performanceGain: performanceGain,
-            resultsMatch: resultsMatch,
-            extractedData: extractedData,
-            csvLine: csvLine
-        };
-
-    } catch (error) {
-        console.error('❌ Test failed:', error);
-        return { success: false, error: error.message };
-    }
-}
+// ✅ testParcelDataExtractor() function moved to scripts/core/visionAppraisalProcessing.js
+// Test function to verify ParcelDataExtractor works with real data - now available in VisionAppraisal module
 
 // Priority 1B: Google API Manager with token caching
-class GoogleAPIManager {
-    static cachedToken = null;
-    static tokenExpiry = 0;
-    static requestCount = 0;
+// ✅ Google Drive API class moved to scripts/core/googleDriveAPI.js
+// GoogleAPIManager - Advanced Google Drive API Manager with token caching and optimization
 
-    static getAccessToken() {
-        const now = Date.now();
+// ✅ Google Drive API function moved to scripts/core/googleDriveAPI.js
+// testGoogleAPIManager() - Test Google API Manager performance and token caching
 
-        // Return cached token if still valid (with 5 minute buffer)
-        if (this.cachedToken && now < this.tokenExpiry - 300000) {
-            console.log('🔄 Using cached token (expires in', Math.round((this.tokenExpiry - now) / 60000), 'minutes)');
-            return this.cachedToken;
-        }
+// ✅ Performance optimization class moved to scripts/performance/optimizedProcessing.js
+// OptimizedParcelProcessor - High-performance parcel processing with targeted optimizations
 
-        // Get fresh token
-        console.log('🔑 Getting fresh access token...');
-        const tokenData = gapi.auth.getToken();
-        if (!tokenData || !tokenData.access_token) {
-            throw new Error('No access token available. Please authorize first.');
-        }
+// ✅ Performance optimization function moved to scripts/performance/optimizedProcessing.js
+// testOptimizedProcessing() - Test optimized parcel processing system
 
-        this.cachedToken = tokenData.access_token;
-        // Google tokens typically expire in 1 hour, cache for 55 minutes
-        this.tokenExpiry = now + 3300000;
+/**
+ * Test structural enhancements for Requirements 1, 4, 6, 12, 20, 21
+ * Tests Info base class, AttributedTerm fieldName, OtherInfo/LegacyInfo systems, property updates
+ * Protocol 2: Test code with regression testing value
+ */
+async function testStructuralEnhancements() {
+    const results = {
+        total: 0,
+        passed: 0,
+        failed: 0,
+        tests: []
+    };
 
-        console.log('✅ Token cached until', new Date(this.tokenExpiry).toLocaleTimeString());
-        return this.cachedToken;
-    }
-
-    static async authenticatedFetch(url, options = {}) {
-        const token = this.getAccessToken();
-        this.requestCount++;
-
-        console.log(`📡 API Request #${this.requestCount}:`, url.substring(0, 60) + '...');
-
-        const response = await fetch(url, {
-            ...options,
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                ...options.headers
+    function runTest(name, testFunction) {
+        results.total++;
+        try {
+            const result = testFunction();
+            if (result) {
+                results.passed++;
+                results.tests.push(`✅ ${name}`);
+                console.log(`✅ ${name}`);
+            } else {
+                results.failed++;
+                results.tests.push(`❌ ${name}`);
+                console.log(`❌ ${name}`);
             }
-        });
-
-        if (!response.ok) {
-            if (response.status === 401) {
-                console.log('🔐 Token expired, clearing cache...');
-                this.clearTokenCache();
-                throw new Error('Token expired - please re-authorize');
-            }
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            return result;
+        } catch (error) {
+            results.failed++;
+            results.tests.push(`❌ ${name} - Error: ${error.message}`);
+            console.log(`❌ ${name} - Error: ${error.message}`);
+            return false;
         }
-
-        return response;
     }
 
-    static clearTokenCache() {
-        this.cachedToken = null;
-        this.tokenExpiry = 0;
-        console.log('🗑️ Token cache cleared');
+    console.log('🧪 Testing Structural Enhancements - Requirements 1, 4, 6, 12, 20, 21');
+    console.log('='.repeat(60));
+
+    // Phase 1: Info Base Class Testing (Requirement 20)
+    console.log('\n📋 Phase 1: Info Base Class (Requirement 20)');
+
+    runTest('Info base class exists and can be instantiated', () => {
+        const info = new Info();
+        return info instanceof Info;
+    });
+
+    runTest('ContactInfo extends Info', () => {
+        const contactInfo = new ContactInfo();
+        return contactInfo instanceof Info && contactInfo instanceof ContactInfo;
+    });
+
+    runTest('ContactInfo inherits Info methods', () => {
+        const contactInfo = new ContactInfo();
+        return typeof contactInfo.getPropertySummary === 'function' &&
+               typeof contactInfo.setProperty === 'function';
+    });
+
+    runTest('Info serialization includes correct type', () => {
+        const contactInfo = new ContactInfo();
+        const serialized = contactInfo.serialize();
+        return serialized.type === 'ContactInfo';
+    });
+
+    // Phase 2: AttributedTerm Enhancement Testing (Requirement 4)
+    console.log('\n📋 Phase 2: AttributedTerm Enhancement (Requirement 4)');
+
+    runTest('AttributedTerm accepts fieldName parameter', () => {
+        const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123', 'email');
+        return term.fieldName === 'email';
+    });
+
+    runTest('AttributedTerm fieldName defaults to null', () => {
+        const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123');
+        return term.fieldName === null;
+    });
+
+    runTest('AttributedTerm setFieldName/getFieldName work', () => {
+        const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123');
+        term.setFieldName('email');
+        return term.getFieldName() === 'email';
+    });
+
+    runTest('AttributedTerm serialization includes fieldName', () => {
+        const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123', 'email');
+        const serialized = term.serialize();
+        return serialized.fieldName === 'email';
+    });
+
+    runTest('AttributedTerm toString includes fieldName', () => {
+        const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123', 'email');
+        return term.toString().includes('field: email');
+    });
+
+    // Phase 3: OtherInfo System Testing (Requirement 1)
+    console.log('\n📋 Phase 3: OtherInfo System (Requirement 1)');
+
+    runTest('OtherInfo base class exists and extends Info', () => {
+        const otherInfo = new OtherInfo();
+        return otherInfo instanceof Info && otherInfo instanceof OtherInfo;
+    });
+
+    runTest('HouseholdOtherInfo extends OtherInfo', () => {
+        const householdOtherInfo = new HouseholdOtherInfo();
+        return householdOtherInfo instanceof Info &&
+               householdOtherInfo instanceof OtherInfo &&
+               householdOtherInfo instanceof HouseholdOtherInfo;
+    });
+
+    runTest('IndividualOtherInfo extends OtherInfo', () => {
+        const individualOtherInfo = new IndividualOtherInfo();
+        return individualOtherInfo instanceof Info &&
+               individualOtherInfo instanceof OtherInfo &&
+               individualOtherInfo instanceof IndividualOtherInfo;
+    });
+
+    runTest('Entity has otherInfo property', () => {
+        const entity = new Entity(null, null);
+        return entity.hasOwnProperty('otherInfo') && entity.otherInfo === null;
+    });
+
+    runTest('Entity addOtherInfo method works', () => {
+        const entity = new Entity(null, null);
+        const otherInfo = new OtherInfo();
+        entity.addOtherInfo(otherInfo);
+        return entity.otherInfo === otherInfo;
+    });
+
+    // Phase 4: LegacyInfo System Testing (Requirement 21)
+    console.log('\n📋 Phase 4: LegacyInfo System (Requirement 21)');
+
+    runTest('LegacyInfo class exists and extends Info', () => {
+        const legacyInfo = new LegacyInfo();
+        return legacyInfo instanceof Info && legacyInfo instanceof LegacyInfo;
+    });
+
+    runTest('LegacyInfo has all 6 VisionAppraisal properties', () => {
+        const legacyInfo = new LegacyInfo();
+        return legacyInfo.hasOwnProperty('ownerName') &&
+               legacyInfo.hasOwnProperty('ownerName2') &&
+               legacyInfo.hasOwnProperty('neighborhood') &&
+               legacyInfo.hasOwnProperty('userCode') &&
+               legacyInfo.hasOwnProperty('date') &&
+               legacyInfo.hasOwnProperty('sourceIndex');
+    });
+
+    runTest('LegacyInfo setter methods work', () => {
+        const legacyInfo = new LegacyInfo();
+        const testData = new IndicativeData(new SimpleIdentifiers(new AttributedTerm('TestOwner', 'VISION_APPRAISAL', 1, 'PID123')));
+        legacyInfo.setOwnerName(testData);
+        return legacyInfo.ownerName === testData;
+    });
+
+    runTest('Entity has legacyInfo property', () => {
+        const entity = new Entity(null, null);
+        return entity.hasOwnProperty('legacyInfo') && entity.legacyInfo === null;
+    });
+
+    runTest('Entity addLegacyInfo method works', () => {
+        const entity = new Entity(null, null);
+        const legacyInfo = new LegacyInfo();
+        entity.addLegacyInfo(legacyInfo);
+        return entity.legacyInfo === legacyInfo;
+    });
+
+    // Phase 5: Property Structure Updates Testing (Requirements 6, 12)
+    console.log('\n📋 Phase 5: Property Structure Updates (Requirements 6, 12)');
+
+    runTest('HouseholdName uses fullHouseholdName property', () => {
+        const primaryAlias = new AttributedTerm('Smith Household', 'BLOOMERANG_CSV', 1, 'ACC123');
+        const householdName = new HouseholdName(primaryAlias, 'The Smith Family');
+        return householdName.fullHouseholdName === 'The Smith Family';
+    });
+
+    runTest('HouseholdName serialization uses fullHouseholdName', () => {
+        const primaryAlias = new AttributedTerm('Smith Household', 'BLOOMERANG_CSV', 1, 'ACC123');
+        const householdName = new HouseholdName(primaryAlias, 'The Smith Family');
+        const serialized = householdName.serialize();
+        return serialized.fullHouseholdName === 'The Smith Family';
+    });
+
+    runTest('ContactInfo secondaryAddress is array', () => {
+        const contactInfo = new ContactInfo();
+        return Array.isArray(contactInfo.secondaryAddress) && contactInfo.secondaryAddress.length === 0;
+    });
+
+    runTest('ContactInfo addSecondaryAddress method works', () => {
+        const contactInfo = new ContactInfo();
+        const addressData = new IndicativeData(new ComplexIdentifiers(new AttributedTerm('123 Main St', 'BLOOMERANG_CSV', 1, 'ACC123')));
+        contactInfo.addSecondaryAddress(addressData);
+        return contactInfo.secondaryAddress.length === 1 && contactInfo.secondaryAddress[0] === addressData;
+    });
+
+    // Phase 6: Regression Testing
+    console.log('\n📋 Phase 6: Regression Testing - Existing Functionality');
+
+    runTest('Basic Entity creation still works', () => {
+        const locationId = new IdentifyingData(new SimpleIdentifiers(new AttributedTerm('1234', 'VISION_APPRAISAL', 1, 'PID123')));
+        const name = new IdentifyingData(new IndividualName(new AttributedTerm('John Doe', 'BLOOMERANG_CSV', 1, 'ACC123'), '', 'John', '', 'Doe', ''));
+        const entity = new Entity(locationId, name);
+        return entity instanceof Entity && entity.locationIdentifier === locationId && entity.name === name;
+    });
+
+    runTest('AttributedTerm basic functionality still works', () => {
+        const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123');
+        return term.term === 'test@email.com' && term.getSources().includes('BLOOMERANG_CSV');
+    });
+
+    runTest('SimpleIdentifiers still works with AttributedTerm', () => {
+        const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123');
+        const identifier = new SimpleIdentifiers(term);
+        return identifier.primaryAlias === term && identifier instanceof Aliased;
+    });
+
+    // Summary
+    console.log('\n' + '='.repeat(60));
+    console.log('📊 STRUCTURAL ENHANCEMENTS TEST SUMMARY');
+    console.log('='.repeat(60));
+    console.log(`Total Tests: ${results.total}`);
+    console.log(`Passed: ${results.passed}`);
+    console.log(`Failed: ${results.failed}`);
+    console.log(`Success Rate: ${(results.passed/results.total*100).toFixed(1)}%`);
+
+    if (results.failed === 0) {
+        console.log('\n🎉 ALL TESTS PASSED! Structural enhancements are working correctly.');
+        console.log('✅ Ready to proceed to Phase 4: Address/Name Parsing Research');
+    } else {
+        console.log(`\n❌ ${results.failed} TESTS FAILED. Issues detected that need attention:`);
+        results.tests.filter(test => test.startsWith('❌')).forEach(test => console.log(`   ${test}`));
     }
 
-    static getStats() {
-        return {
-            requestCount: this.requestCount,
-            hasValidToken: this.cachedToken && Date.now() < this.tokenExpiry,
-            tokenExpiresIn: Math.max(0, Math.round((this.tokenExpiry - Date.now()) / 60000))
-        };
-    }
-
-    // Optimized Google Drive operations using the cached approach
-    static async uploadFile(content, filename, parentId) {
-        const metadata = {
-            name: filename,
-            parents: [parentId],
-            mimeType: 'application/json'
-        };
-
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', new Blob([JSON.stringify(content)], { type: 'application/json' }));
-
-        const response = await this.authenticatedFetch(
-            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
-            {
-                method: 'POST',
-                body: form
-            }
-        );
-
-        return response.json();
-    }
-
-    static async downloadFile(fileId) {
-        const response = await this.authenticatedFetch(
-            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`
-        );
-
-        const content = await response.text();
-        return { body: content };
-    }
-
-    static async listFiles(parentId, pageSize = 1000) {
-        const query = encodeURIComponent(`'${parentId}' in parents`);
-        const url = `https://www.googleapis.com/drive/v3/files?pageSize=${pageSize}&fields=nextPageToken,files(id,name)&q=${query}`;
-
-        const response = await this.authenticatedFetch(url);
-        return response.json();
-    }
+    return results;
 }
 
-// Test Google API Manager performance and token caching
-async function testGoogleAPIManager() {
-    console.log('🔧 Testing Google API Manager with caching...');
+// Address Parsing Testing Functions
+function testAddressParsing() {
+    console.log('🚀 Testing parse-address library...');
 
-    try {
-        console.log('Initial stats:', GoogleAPIManager.getStats());
+    // Test addresses for Block Island
+    const testAddresses = [
+        '123 Main St, Block Island, RI 02807',
+        '456 Ocean Ave, New Shoreham, RI 02807',
+        '789 Spring Street Block Island RI',
+        'PO Box 100, Block Island, RI 02807',
+        '321 Harbor Rd, New Shoreham, Rhode Island 02807-1234'
+    ];
 
-        // Test 1: Token caching across multiple operations
-        console.log('\n=== Test 1: Token Caching ===');
+    const results = {
+        total: testAddresses.length,
+        passed: 0,
+        failed: 0,
+        tests: []
+    };
 
-        const start1 = performance.now();
-        await GoogleAPIManager.listFiles(parameters.pidFilesParents);
-        const end1 = performance.now();
-
-        const start2 = performance.now();
-        await GoogleAPIManager.listFiles(parameters.pidFilesParents);
-        const end2 = performance.now();
-
-        console.log('First request (fresh token):', (end1 - start1).toFixed(2), 'ms');
-        console.log('Second request (cached token):', (end2 - start2).toFixed(2), 'ms');
-        console.log('Token reuse saved:', ((end1 - start1) - (end2 - start2)).toFixed(2), 'ms');
-
-        // Test 2: Compare with old method
-        console.log('\n=== Test 2: API Manager vs Direct Calls ===');
-
-        const startNew = performance.now();
-        const newResult = await GoogleAPIManager.downloadFile('1dOlGnHNDOdsXo1uWGXQWRINeuXOvtYtz');
-        const endNew = performance.now();
-
-        const startOld = performance.now();
-        const oldToken = gapi.auth.getToken().access_token;
-        const oldResponse = await fetch('https://www.googleapis.com/drive/v3/files/1dOlGnHNDOdsXo1uWGXQWRINeuXOvtYtz?alt=media', {
-            headers: { 'Authorization': 'Bearer ' + oldToken }
-        });
-        const oldResult = await oldResponse.text();
-        const endOld = performance.now();
-
-        console.log('⚡ NEW (API Manager):', (endNew - startNew).toFixed(2), 'ms');
-        console.log('🐌 OLD (Direct calls):', (endOld - startOld).toFixed(2), 'ms');
-        console.log('✅ Results match:', newResult.body === oldResult);
-
-        console.log('\nFinal stats:', GoogleAPIManager.getStats());
-
-        return {
-            success: true,
-            tokenCachingWorks: true,
-            performanceGain: (endOld - startOld) - (endNew - startNew),
-            requestCount: GoogleAPIManager.getStats().requestCount
-        };
-
-    } catch (error) {
-        console.error('❌ API Manager test failed:', error);
-        return { success: false, error: error.message };
-    }
-}
-
-// FOCUSED INTEGRATION: Apply optimizations where they make the biggest impact
-class OptimizedParcelProcessor {
-    static async processParcelBatchOptimized(parcelIds, batchSize = 4) {
-        console.log('🚀 Processing', parcelIds.length, 'parcels with targeted optimizations...');
-
-        const results = [];
-
-        // Process in smaller batches to avoid throttling
-        for (let i = 0; i < parcelIds.length; i += batchSize) {
-            const batch = parcelIds.slice(i, i + batchSize);
-            console.log(`📦 Batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(parcelIds.length/batchSize)}: Processing ${batch.length} parcels`);
-
-            // Fetch all parcel pages in parallel (existing good pattern)
-            const startFetch = performance.now();
-            const htmlDataArray = await Promise.all(
-                batch.map(pid =>
-                    fetch(reqBase + '/Parcel.aspx?pid=' + pid).then(r => r.text())
-                )
-            );
-            const endFetch = performance.now();
-
-            // Process HTML with focused optimization (single DOM parse + streamlined extraction)
-            const startProcess = performance.now();
-            const processedData = htmlDataArray.map((html, idx) => {
-                const pid = batch[idx];
-
-                // Single DOM parse with minimal processing
-                const doc = new DOMParser().parseFromString(html, "text/html");
-
-                // Streamlined field extraction (skip complex sanitization for performance)
-                const fields = [
-                    "MainContent_lblOwner",
-                    "MainContent_lblCoOwner",
-                    "MainContent_lblAddr1",
-                    "MainContent_lblLocation",
-                    "MainContent_lblZone",
-                    "MainContent_lblUseCode",
-                    "MainContent_lblNbhd",
-                    "MainContent_lblSaleDate",
-                    "MainContent_lblMblu",
-                    "MainContent_lblPid"
-                ].map(id => {
-                    const el = doc.getElementById(id);
-                    if (!el) return "";
-                    // Apply sanitization only where needed (first 4 fields)
-                    const needsSanitization = id.includes('Owner') || id.includes('Addr') || id.includes('Location');
-                    let val = el.innerHTML;
-                    return needsSanitization ?
-                        val.replaceAll("<br>", "::#^#::").replaceAll("&amp;", "&").replaceAll(",", ":^#^:") :
-                        val;
-                }).join(",");
-
-                return { pid, csvLine: fields };
-            });
-            const endProcess = performance.now();
-
-            // Upload with existing saveAsJSON (proven to work)
-            const startUpload = performance.now();
-            const uploadResults = await Promise.all(
-                processedData.map(async (data) => {
-                    try {
-                        const uploadResult = await saveAsJSON(data.csvLine, data.pid, parameters.pidFilesParents, true);
-                        const success = uploadResult && uploadResult.id;
-
-                        if (success) {
-                            // Efficient tracking update
-                            const completed = await loadFromDisk('completed_pids.json') || [];
-                            if (!completed.includes(data.pid)) {
-                                completed.push(data.pid);
-                                await saveToDisk('completed_pids.json', completed);
-                            }
-                        }
-
-                        return { pid: data.pid, success, fileId: uploadResult?.id };
-                    } catch (error) {
-                        return { pid: data.pid, success: false, error: error.message };
-                    }
-                })
-            );
-            const endUpload = performance.now();
-
-            results.push(...uploadResults);
-
-            // Performance reporting
-            const fetchTime = endFetch - startFetch;
-            const processTime = endProcess - startProcess;
-            const uploadTime = endUpload - startUpload;
-
-            console.log(`⏱️  Batch timing: Fetch: ${fetchTime.toFixed(0)}ms, Process: ${processTime.toFixed(0)}ms, Upload: ${uploadTime.toFixed(0)}ms`);
-
-            const successful = uploadResults.filter(r => r.success).length;
-            console.log(`✅ Batch result: ${successful}/${batch.length} successful`);
-
-            // Brief pause between batches
-            if (i + batchSize < parcelIds.length) {
-                await new Promise(resolve => setTimeout(resolve, 1500));
-            }
-        }
-
-        const totalSuccess = results.filter(r => r.success).length;
-        console.log(`🎯 Overall: ${totalSuccess}/${parcelIds.length} successful (${(totalSuccess/parcelIds.length*100).toFixed(1)}%)`);
-
+    // Since we're in browser, we need to check if parse-address is available
+    if (typeof parseAddress === 'undefined') {
+        console.log('❌ parse-address library not loaded in browser');
+        console.log('💡 Need to include parse-address in HTML or load via script tag');
+        results.failed = results.total;
+        results.tests.push('❌ parse-address library not available in browser');
         return results;
     }
+
+    testAddresses.forEach((address, index) => {
+        try {
+            const parsed = parseAddress.parseLocation(address);
+            console.log(`\nTest ${index + 1}: "${address}"`);
+            console.log('Parsed result:', parsed);
+
+            // Check if we got reasonable parsing results
+            if (parsed && (parsed.city || parsed.zip)) {
+                results.passed++;
+                results.tests.push(`✅ Test ${index + 1}: Successfully parsed "${address}"`);
+
+                // Check for Block Island specific normalization needs
+                if (parsed.city === 'Block Island' || parsed.city === 'New Shoreham') {
+                    console.log(`   🏝️ Block Island city detected: ${parsed.city}`);
+                }
+                if (parsed.zip === '02807') {
+                    console.log(`   📮 Block Island ZIP detected: ${parsed.zip}`);
+                }
+            } else {
+                results.failed++;
+                results.tests.push(`❌ Test ${index + 1}: Failed to parse "${address}"`);
+            }
+        } catch (error) {
+            console.log(`❌ Error parsing "${address}":`, error);
+            results.failed++;
+            results.tests.push(`❌ Test ${index + 1}: Exception parsing "${address}"`);
+        }
+    });
+
+    console.log(`\n📊 Address Parsing Test Results:`);
+    console.log(`Total: ${results.total}`);
+    console.log(`Passed: ${results.passed}`);
+    console.log(`Failed: ${results.failed}`);
+    console.log(`Success Rate: ${(results.passed/results.total*100).toFixed(1)}%`);
+
+    return results;
 }
 
-// Test the targeted optimizations
-async function testOptimizedProcessing() {
-    console.log('🎯 Testing optimized parcel processing with real upload...');
+// ============================================================================
+// ADDRESS PROCESSING FUNCTIONS MOVED TO MODULAR ARCHITECTURE
+// ============================================================================
+// The following functions have been extracted to: scripts/address/addressProcessing.js
+// - normalizeBlockIslandCity()
+// - processAddress()
+// - loadBlockIslandStreetsFromDrive()
+// - enhanceAddressWithBlockIslandLogic()
+// - createAddressFromParsedData()
+//
+// To use these functions, include: <script src="./scripts/address/addressProcessing.js"></script>
+// ============================================================================
 
-    try {
-        // Use 3 test parcels for quick validation
-        const testParcels = ['1230', '626', '1217'];
+// ============================================================================
+// ADDRESS TESTING FUNCTIONS MOVED TO MODULAR ARCHITECTURE
+// ============================================================================
+// The following functions have been extracted to: scripts/testing/addressTesting.js
+// - validateAddressProcessing()
+// - addressProcessingTests()
+// - quickAddressTest()
+//
+// To use these functions, include: <script src="./scripts/testing/addressTesting.js"></script>
+// ============================================================================
 
-        console.log('Testing with parcels:', testParcels);
-
-        const startTime = performance.now();
-        const results = await OptimizedParcelProcessor.processParcelBatchOptimized(testParcels, 2);
-        const endTime = performance.now();
-
-        const totalTime = endTime - startTime;
-        const avgPerParcel = totalTime / testParcels.length;
-
-        console.log('📊 OPTIMIZATION RESULTS:');
-        console.log(`Total time: ${(totalTime/1000).toFixed(1)} seconds`);
-        console.log(`Average per parcel: ${(avgPerParcel/1000).toFixed(1)} seconds`);
-        console.log(`Success rate: ${results.filter(r => r.success).length}/${testParcels.length}`);
-
-        return {
-            success: true,
-            totalTime,
-            avgPerParcel,
-            successCount: results.filter(r => r.success).length,
-            results
-        };
-
-    } catch (error) {
-        console.error('❌ Optimized processing test failed:', error);
-        return { success: false, error: error.message };
-    }
-}
+// ============================================================================
+// PHASE 3 DATA LOADING FUNCTIONS MOVED TO MODULAR ARCHITECTURE
+// ============================================================================
+// The following functions have been extracted to: scripts/data/sampleDataLoader.js
+// - loadSampleData()
+// - loadGoogleDriveFile()
+// - extractAddressesFromSamples()
+//
+// To use these functions, include: <script src="./scripts/data/sampleDataLoader.js"></script>
+// ============================================================================
 

@@ -1,24 +1,123 @@
 /**
- * ContactInfo Class for BIRAVA2025 Entity System
+ * Info Classes for BIRAVA2025 Entity System
  *
- * Manages contact-related IndicativeData objects for entities.
- * Separate from general IndicativeData like account numbers.
+ * Base Info class and specialized subclasses for managing different types of
+ * entity information (contact, other, legacy data).
  */
 
 // Note: IndicativeData class is loaded globally via script tags in index.html
 
 /**
+ * Info base class - provides common functionality for all Info subclasses
+ * Base class for ContactInfo, OtherInfo, and LegacyInfo classes
+ */
+class Info {
+    constructor() {
+        // Base initialization - subclasses will extend with specific properties
+    }
+
+    /**
+     * Generic method to set a property with IndicativeData
+     * @param {string} propertyName - Name of the property to set
+     * @param {IndicativeData} indicativeData - IndicativeData containing identifier
+     */
+    setProperty(propertyName, indicativeData) {
+        if (this.hasOwnProperty(propertyName)) {
+            this[propertyName] = indicativeData;
+        } else {
+            throw new Error(`Property '${propertyName}' does not exist on ${this.constructor.name}`);
+        }
+    }
+
+    /**
+     * Generic method to get the primary term from a property
+     * @param {string} propertyName - Name of the property to get
+     * @returns {string|null} Primary term value or null if not available
+     */
+    getPropertyTerm(propertyName) {
+        if (this[propertyName] && this[propertyName].identifier && this[propertyName].identifier.primaryAlias) {
+            return this[propertyName].identifier.primaryAlias.term;
+        }
+        return null;
+    }
+
+    /**
+     * Get summary of all properties and their availability
+     * @returns {Object} Summary of all properties with availability status
+     */
+    getPropertySummary() {
+        const summary = {};
+        const propertyNames = Object.getOwnPropertyNames(this);
+
+        propertyNames.forEach(propertyName => {
+            if (propertyName !== 'constructor') {
+                summary[propertyName] = {
+                    hasValue: this[propertyName] !== null,
+                    term: this.getPropertyTerm(propertyName)
+                };
+            }
+        });
+
+        return summary;
+    }
+
+    /**
+     * Generic serialize method for Info subclasses
+     * @returns {Object} Serialized representation
+     */
+    serialize() {
+        const serialized = {
+            type: this.constructor.name
+        };
+
+        const propertyNames = Object.getOwnPropertyNames(this);
+        propertyNames.forEach(propertyName => {
+            if (propertyName !== 'constructor') {
+                serialized[propertyName] = this[propertyName] ? this[propertyName].serialize() : null;
+            }
+        });
+
+        return serialized;
+    }
+
+    /**
+     * Generic deserialize method for Info subclasses
+     * @param {Object} data - Serialized data
+     * @param {Function} constructorClass - Constructor function for the specific subclass
+     * @returns {Info} Reconstructed Info subclass instance
+     */
+    static deserializeBase(data, constructorClass) {
+        if (data.type !== constructorClass.name) {
+            throw new Error(`Invalid ${constructorClass.name} serialization format`);
+        }
+
+        const instance = new constructorClass();
+
+        Object.keys(data).forEach(key => {
+            if (key !== 'type' && data[key]) {
+                instance[key] = IndicativeData.deserialize(data[key]);
+            }
+        });
+
+        return instance;
+    }
+}
+
+/**
  * ContactInfo class - holds contact-related IndicativeData objects
  * Used with Entity.addContactInfo() method
+ * Extends Info base class for common functionality
  */
-class ContactInfo {
+class ContactInfo extends Info {
     constructor() {
-        // Contact-related IndicativeData fields
+        super(); // Call parent constructor
+
+        // Contact-related fields
         this.email = null;       // IndicativeData containing SimpleIdentifiers for email
         this.phone = null;       // IndicativeData containing SimpleIdentifiers for phone
         this.poBox = null;       // IndicativeData containing SimpleIdentifiers for PO Box
-        this.primaryAddress = null;  // IndicativeData for primary mailing address
-        this.secondaryAddress = null; // IndicativeData for secondary address
+        this.primaryAddress = null;      // Address object for primary mailing address
+        this.secondaryAddress = [];      // Array of Address objects for secondary addresses (home, vacation, work, etc.)
     }
 
     /**
@@ -47,18 +146,34 @@ class ContactInfo {
 
     /**
      * Set primary address contact information
-     * @param {IndicativeData} addressIndicativeData - IndicativeData containing address ComplexIdentifier
+     * @param {Address} addressObject - Address object for primary mailing address
      */
-    setPrimaryAddress(addressIndicativeData) {
-        this.primaryAddress = addressIndicativeData;
+    setPrimaryAddress(addressObject) {
+        this.primaryAddress = addressObject;
     }
 
     /**
-     * Set secondary address contact information
-     * @param {IndicativeData} addressIndicativeData - IndicativeData containing address ComplexIdentifier
+     * Add secondary address contact information
+     * @param {Address} addressObject - Address object for secondary address
      */
-    setSecondaryAddress(addressIndicativeData) {
-        this.secondaryAddress = addressIndicativeData;
+    addSecondaryAddress(addressObject) {
+        this.secondaryAddress.push(addressObject);
+    }
+
+    /**
+     * Set secondary address contact information (replaces existing array)
+     * @param {Array<Address>} addressObjectArray - Array of Address objects for secondary addresses
+     */
+    setSecondaryAddresses(addressObjectArray) {
+        this.secondaryAddress = Array.isArray(addressObjectArray) ? addressObjectArray : [];
+    }
+
+    /**
+     * Get all secondary addresses
+     * @returns {Array<Address>} Array of secondary address Address objects
+     */
+    getSecondaryAddresses() {
+        return this.secondaryAddress;
     }
 
     /**
@@ -78,17 +193,20 @@ class ContactInfo {
     getBestMailingAddress() {
         // Level 2: Primary Address - use if off-island OR if on-island PO Box
         if (this.primaryAddress) {
-            const primaryAddr = this.primaryAddress.identifier.primaryAlias.term;
+            const primaryAddr = this.primaryAddress.primaryAlias.term;
             if (this._isOffIslandAddress(primaryAddr) || this._isOnIslandPoBox(primaryAddr)) {
                 return primaryAddr;
             }
         }
 
         // Level 3: Fallback to off-island secondary address when primary is unusable
-        if (this.secondaryAddress) {
-            const secondaryAddr = this.secondaryAddress.identifier.primaryAlias.term;
-            if (this._isOffIslandAddress(secondaryAddr)) {
-                return secondaryAddr;
+        // Check all secondary addresses for usable off-island addresses
+        for (const secondaryAddress of this.secondaryAddress) {
+            if (secondaryAddress && secondaryAddress.primaryAlias) {
+                const secondaryAddr = secondaryAddress.primaryAlias.term;
+                if (this._isOffIslandAddress(secondaryAddr)) {
+                    return secondaryAddr;
+                }
             }
         }
 
@@ -174,7 +292,7 @@ class ContactInfo {
             phone: this.phone ? this.phone.serialize() : null,
             poBox: this.poBox ? this.poBox.serialize() : null,
             primaryAddress: this.primaryAddress ? this.primaryAddress.serialize() : null,
-            secondaryAddress: this.secondaryAddress ? this.secondaryAddress.serialize() : null
+            secondaryAddress: this.secondaryAddress ? this.secondaryAddress.map(addr => addr ? addr.serialize() : null) : []
         };
     }
 
@@ -184,23 +302,169 @@ class ContactInfo {
      * @returns {ContactInfo} Reconstructed ContactInfo instance
      */
     static deserialize(data) {
-        if (data.type !== 'ContactInfo') {
-            throw new Error('Invalid ContactInfo serialization format');
-        }
+        return Info.deserializeBase(data, ContactInfo);
+    }
+}
 
-        const contactInfo = new ContactInfo();
+/**
+ * OtherInfo base class - holds non-contact IndicativeData objects
+ * Used for additional entity information that isn't contact-related
+ * Extends Info base class for common functionality
+ */
+class OtherInfo extends Info {
+    constructor() {
+        super(); // Call parent constructor
 
-        if (data.email) contactInfo.email = IndicativeData.deserialize(data.email);
-        if (data.phone) contactInfo.phone = IndicativeData.deserialize(data.phone);
-        if (data.poBox) contactInfo.poBox = IndicativeData.deserialize(data.poBox);
-        if (data.primaryAddress) contactInfo.primaryAddress = IndicativeData.deserialize(data.primaryAddress);
-        if (data.secondaryAddress) contactInfo.secondaryAddress = IndicativeData.deserialize(data.secondaryAddress);
+        // This base class can be extended by specific OtherInfo subclasses
+        // Properties will be added by subclasses based on entity type
+    }
+}
 
-        return contactInfo;
+/**
+ * HouseholdOtherInfo class - holds household-specific OtherInfo
+ * Used for additional information specific to household entities
+ * Extends OtherInfo base class
+ */
+class HouseholdOtherInfo extends OtherInfo {
+    constructor() {
+        super(); // Call parent constructor
+
+        // Household-specific other information fields
+        // These will be populated based on requirements specifications
+    }
+
+    /**
+     * Deserialize HouseholdOtherInfo from JSON object
+     * @param {Object} data - Serialized data
+     * @returns {HouseholdOtherInfo} Reconstructed HouseholdOtherInfo instance
+     */
+    static deserialize(data) {
+        return Info.deserializeBase(data, HouseholdOtherInfo);
+    }
+}
+
+/**
+ * IndividualOtherInfo class - holds individual-specific OtherInfo
+ * Used for additional information specific to individual entities
+ * Extends OtherInfo base class
+ */
+class IndividualOtherInfo extends OtherInfo {
+    constructor() {
+        super(); // Call parent constructor
+
+        // Individual-specific other information fields
+        // These will be populated based on requirements specifications
+    }
+
+    /**
+     * Deserialize IndividualOtherInfo from JSON object
+     * @param {Object} data - Serialized data
+     * @returns {IndividualOtherInfo} Reconstructed IndividualOtherInfo instance
+     */
+    static deserialize(data) {
+        return Info.deserializeBase(data, IndividualOtherInfo);
+    }
+}
+
+/**
+ * LegacyInfo class - holds VisionAppraisal legacy data for record preservation
+ * Used for preserving original VisionAppraisal data fields as a matter of record
+ * Extends Info base class for common functionality
+ */
+class LegacyInfo extends Info {
+    constructor() {
+        super(); // Call parent constructor
+
+        // VisionAppraisal legacy data fields - all using SimpleIdentifier architecture
+        // These fields preserve original VisionAppraisal data without processing
+        this.ownerName = null;      // IndicativeData containing SimpleIdentifier for ownerName
+        this.ownerName2 = null;     // IndicativeData containing SimpleIdentifier for ownerName2
+        this.neighborhood = null;   // IndicativeData containing SimpleIdentifier for neighborhood
+        this.userCode = null;       // IndicativeData containing SimpleIdentifier for userCode
+        this.date = null;           // IndicativeData containing SimpleIdentifier for date
+        this.sourceIndex = null;    // IndicativeData containing SimpleIdentifier for sourceIndex
+    }
+
+    /**
+     * Set ownerName information
+     * @param {IndicativeData} ownerNameIndicativeData - IndicativeData containing ownerName SimpleIdentifier
+     */
+    setOwnerName(ownerNameIndicativeData) {
+        this.ownerName = ownerNameIndicativeData;
+    }
+
+    /**
+     * Set ownerName2 information
+     * @param {IndicativeData} ownerName2IndicativeData - IndicativeData containing ownerName2 SimpleIdentifier
+     */
+    setOwnerName2(ownerName2IndicativeData) {
+        this.ownerName2 = ownerName2IndicativeData;
+    }
+
+    /**
+     * Set neighborhood information
+     * @param {IndicativeData} neighborhoodIndicativeData - IndicativeData containing neighborhood SimpleIdentifier
+     */
+    setNeighborhood(neighborhoodIndicativeData) {
+        this.neighborhood = neighborhoodIndicativeData;
+    }
+
+    /**
+     * Set userCode information
+     * @param {IndicativeData} userCodeIndicativeData - IndicativeData containing userCode SimpleIdentifier
+     */
+    setUserCode(userCodeIndicativeData) {
+        this.userCode = userCodeIndicativeData;
+    }
+
+    /**
+     * Set date information
+     * @param {IndicativeData} dateIndicativeData - IndicativeData containing date SimpleIdentifier
+     */
+    setDate(dateIndicativeData) {
+        this.date = dateIndicativeData;
+    }
+
+    /**
+     * Set sourceIndex information
+     * @param {IndicativeData} sourceIndexIndicativeData - IndicativeData containing sourceIndex SimpleIdentifier
+     */
+    setSourceIndex(sourceIndexIndicativeData) {
+        this.sourceIndex = sourceIndexIndicativeData;
+    }
+
+    /**
+     * Get legacy data summary for display/debugging
+     * @returns {Object} Summary of all available legacy data fields
+     */
+    getLegacyDataSummary() {
+        return {
+            ownerName: this.getPropertyTerm('ownerName'),
+            ownerName2: this.getPropertyTerm('ownerName2'),
+            neighborhood: this.getPropertyTerm('neighborhood'),
+            userCode: this.getPropertyTerm('userCode'),
+            date: this.getPropertyTerm('date'),
+            sourceIndex: this.getPropertyTerm('sourceIndex'),
+            hasOwnerName: this.ownerName !== null,
+            hasOwnerName2: this.ownerName2 !== null,
+            hasNeighborhood: this.neighborhood !== null,
+            hasUserCode: this.userCode !== null,
+            hasDate: this.date !== null,
+            hasSourceIndex: this.sourceIndex !== null
+        };
+    }
+
+    /**
+     * Deserialize LegacyInfo from JSON object
+     * @param {Object} data - Serialized data
+     * @returns {LegacyInfo} Reconstructed LegacyInfo instance
+     */
+    static deserialize(data) {
+        return Info.deserializeBase(data, LegacyInfo);
     }
 }
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { ContactInfo };
+    module.exports = { Info, ContactInfo, OtherInfo, HouseholdOtherInfo, IndividualOtherInfo, LegacyInfo };
 }

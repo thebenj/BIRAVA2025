@@ -96,7 +96,24 @@ Handling: These will be considered household hames. We will compare these househ
 Case 31) Description:
 Five or more words with business terms.
 Handling: These will be considered full business names and compared against full busines names. However, if they are found not to match full business names, they will have all business terms stripped out of them, with any punctuation immediately proceeding (where an immediately proceeding character is the character immediately before the term or a character proceeding the term that is only separated from the term by white space) or contained within or between business terms also being removed. These reduced strings will then have their case reassessed to see if they fit one of the other cases.
+Case 21N) Description:
+Four words, with business terms, with multiple commas only.
+Handling: These will be considered full business names and compared against full business names. However, if they are found not to match full business names, they will have all business terms stripped out of them, with any punctuation immediately proceeding (where an immediately proceeding character is the character immediately before the term or a character proceeding the term that is only separated from the term by white space) or contained within or between business terms also being removed. These reduced strings will then have their case reassessed to see if they fit one of the other cases.
+Case 4N) Description:
+Two words, with business terms, with no major punctuation,
+Handling:These will be assumed to be businesses or nonhuman, however, we will also consider them when address matching and they will be compared to Bloomerang in when we are comparing addresses.
 
+Case 20N) Description:
+Four words, with business terms, comma only, where comma is NOT in first word and the last word before any business term contains a comma.
+Handling: These will be assumed to be businesses or nonhuman, however, we will also consider them when address matching and they will be compared to Bloomerang in when we are comparing addresses.
 
-
-
+New case:
+Case 32) Description:
+Any name that is not captured by an other case and does not contain as business term and does contain an ampersand.
+Handling: This will be considered to be a full household name and will compared to full household names
+Case 33) Description:
+Any name that is not captured by an other case and does not contain as business term and does not contain an ampersand.
+Handling: This will be assumed to be an individual's full name and will only be compared against individual fullnames.
+Case 34) Description:
+Any name that is not captured by an other case and does contain a business term.
+Handling: These will be assumed to be businesses or nonhuman, however, we will also consider them when address matching and they will be compared to Bloomerang in when we are comparing addresses.

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug VisionAppraisal Dependencies</title>
+</head>
+<body>
+    <h1>VisionAppraisal Dependency Debug</h1>
+    <div id="output"></div>
+
+    <script>
+        function log(message) {
+            const output = document.getElementById('output');
+            output.innerHTML += message + '<br>';
+            console.log(message);
+        }
+
+        async function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = () => {
+                    log(`✅ Loaded: ${src}`);
+                    resolve();
+                };
+                script.onerror = () => {
+                    log(`❌ Failed to load: ${src}`);
+                    reject(new Error(`Failed to load ${src}`));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        async function testDependencies() {
+            log('=== DEBUGGING VISIONAPPRAISAL DEPENDENCIES ===');
+
+            // Load dependencies in correct order
+            const scripts = [
+                './scripts/objectStructure/aliasClasses.js',        // AttributedTerm, IndividualName
+                './scripts/objectStructure/entityClasses.js',       // Individual, AggregateHousehold, etc.
+                './scripts/validation/case31Validator.js',          // Case31Validator
+                './scripts/dataSources/configurableVisionAppraisalNameParser.js'
+            ];
+
+            try {
+                // Load scripts sequentially
+                for (const script of scripts) {
+                    await loadScript(script);
+
+                    // Wait a moment for initialization
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                log('\n=== DEPENDENCY CHECK ===');
+
+                // Check if classes are available
+                const dependencies = {
+                    'Case31Validator': typeof window.Case31Validator !== 'undefined',
+                    'Individual': typeof window.Individual !== 'undefined',
+                    'AggregateHousehold': typeof window.AggregateHousehold !== 'undefined',
+                    'NonHuman': typeof window.NonHuman !== 'undefined',
+                    'IndividualName': typeof window.IndividualName !== 'undefined',
+                    'AttributedTerm': typeof window.AttributedTerm !== 'undefined',
+                    'ConfigurableVisionAppraisalNameParser': typeof window.ConfigurableVisionAppraisalNameParser !== 'undefined'
+                };
+
+                for (const [name, available] of Object.entries(dependencies)) {
+                    log(`${available ? '✅' : '❌'} ${name}: ${available}`);
+                }
+
+                // Test requireDependencies function
+                if (window.ConfigurableVisionAppraisalNameParser) {
+                    log('\n=== TESTING REQUIRE DEPENDENCIES ===');
+                    try {
+                        window.ConfigurableVisionAppraisalNameParser.requireDependencies();
+                        log('✅ requireDependencies() passed');
+                    } catch (error) {
+                        log(`❌ requireDependencies() failed: ${error.message}`);
+                    }
+                }
+
+                log('\n=== DEPENDENCY DEBUG COMPLETE ===');
+
+            } catch (error) {
+                log(`❌ Script loading failed: ${error.message}`);
+            }
+        }
+
+        // Start the test
+        testDependencies();
+    </script>
+</body>
+</html>

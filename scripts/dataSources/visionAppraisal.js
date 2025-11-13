@@ -58,7 +58,7 @@ const VisionAppraisal = {
             }
 
             // Extract raw fields with correct mapping
-            const ownerName = fields[0] || '';          // Field[0]: Owner Name (with tags)
+            const ownerName = (fields[0] || '').trim().replace(/^["']|["']$/g, '');          // Field[0]: Owner Name (clean quotes)
             const ownerName2 = fields[1] || '';         // Field[1]: Owner Name 2 (with tags)
             const ownerAddress = fields[2] || '';       // Field[2]: Owner Address (with tags)
             const propertyLocation = fields[3] || '';   // Field[3]: Property Location
@@ -89,8 +89,8 @@ const VisionAppraisal = {
                 sourceIndex: index,
 
                 // Original fields (cleaned up)
-                ownerName: ownerName.trim(),
-                ownerName2: ownerName2.trim(),
+                ownerName: ownerName.trim().replace(/^["']|["']$/g, ''),
+                ownerName2: ownerName2.trim().replace(/^["']|["']$/g, ''),
                 ownerAddress: ownerAddress.trim(),
                 propertyLocation: propertyLocation.trim(),
                 userCode: userCode.trim(),

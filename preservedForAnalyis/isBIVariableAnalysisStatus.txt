@@ -1,0 +1,116 @@
+## Research Findings: Block Island Address Identification Variables
+
+Based on comprehensive analysis of the active VisionAppraisal production code, here are all the variables and properties that identify addresses as Block Island addresses:
+
+### **1. Address Class Properties (Final State)**
+
+**`Address.isBlockIslandAddress`** - AttributedTerm property
+- **Purpose**: **Definitive identification** - this address IS a Block Island address
+- **Value**: Boolean (true/false) wrapped in AttributedTerm
+- **Usage**: Used by `getFireNumber()` and `hasFireNumber()` methods
+- **Expected Behavior**: Should always be `true` for Block Island addresses
+
+**`Address.cityNormalized`** - AttributedTerm property
+- **Purpose**: Indicates city name was normalized from variations
+- **Value**: Boolean flag (true when "New Shoreham" → "Block Island")
+- **Usage**: Metadata only, not used for identification logic
+
+### **2. Processing Variables (Intermediate State)**
+
+**`processedAddress.isBlockIslandAddress`** - Plain boolean
+- **Purpose**: **Identification + Force-fill trigger** - dual meaning variable
+- **Logic**: Set in `createProcessedAddressObject()` based on:
+  ```javascript
+  isBlockIslandAddress: (normalized.zip === '02807' ||
+                        normalized.city === 'Block Island' ||
+                        normalized.city === 'New Shoreham')
+  ```
+- **Problem**: Can be `false` for Block Island addresses that lack city/state/zip
+
+**`processedAddress.blockIslandReason`** - String
+- **Purpose**: **Diagnostic variable** - explains WHY it was identified as Block Island
+- **Values**:
+  - `'VisionAppraisal property location'` (Rule 1)
+  - `'BI PO Box generated address'` (BI PO Box field)
+  - `'BI Street generated address with Fire Number'` (BI Street field)
+  - `'Matched BI street: {street}'` (Rule 2)
+
+**`processedAddress.cityNormalized`** - Plain boolean
+- **Purpose**: Flag indicating city name normalization occurred
+- **Set**: When "New Shoreham" or "block island" → "Block Island"
+
+### **3. Critical Semantic Conflict Identified**
+
+**THE PROBLEM YOU SUSPECTED EXISTS:**
+
+**`processedAddress.isBlockIslandAddress`** has **conflicting semantics**:
+
+1. **Meaning 1**: "This IS a Block Island address" (identification)
+2. **Meaning 2**: "No force-fill needed" (completion status)
+
+**Example of the conflict:**
+- Address: `"640 OFF CORN NECK"` (VisionAppraisal source)
+- In `createProcessedAddressObject()`: `isBlockIslandAddress = false` (no city/state/zip)
+- In Rule 1 logic: Gets forced to Block Island because it's VisionAppraisal
+- **Result**: Same address has `isBlockIslandAddress = false` BUT gets Block Island completion
+
+### **4. The Two Logic Rules and Their Conditional Problems**
+
+**Rule 1** (VisionAppraisal Auto-completion):
+```javascript
+if (sourceType === 'VisionAppraisal' && (!processedAddress.city || !processedAddress.state))
+```
+- **Problem**: Only triggers if MISSING city OR state
+- **Issue**: VisionAppraisal addresses WITH city/state skip this rule entirely
+- **Result**: Some VisionAppraisal Block Island addresses don't get `isBlockIslandAddress = true`
+
+**Rule 2** (Street Database Matching):
+```javascript
+if (!processedAddress.city && window.blockIslandStreets && processedAddress.street)
+```
+- **Problem**: Only triggers if MISSING city
+- **Issue**: Block Island addresses WITH existing city skip street matching
+- **Result**: Street-matched addresses with existing city don't get `isBlockIslandAddress = true`
+
+### **5. Recommended Solution**
+
+**Create separate variables with distinct purposes:**
+
+**For Address Class (final state):**
+- Keep `isBlockIslandAddress` - pure identification (always true for BI addresses)
+
+**For Processing (intermediate state):**
+- `isIdentifiedBlockIsland` - identification only (true/false)
+- `needsCityStateCompletion` - force-fill flag (true/false)
+- `blockIslandReason` - diagnostic (keep existing)
+
+**Enhanced logic:**
+```javascript
+// Always identify Block Island addresses
+if (sourceType === 'VisionAppraisal' ||
+    zip === '02807' ||
+    city === 'Block Island' ||
+    city === 'New Shoreham' ||
+    (window.blockIslandStreets && streetMatchesDatabase)) {
+    processedAddress.isIdentifiedBlockIsland = true;
+}
+
+// Determine if completion needed
+if (isIdentifiedBlockIsland && (!city || !state || !zip)) {
+    processedAddress.needsCityStateCompletion = true;
+}
+```
+
+This separates the "IS Block Island" question from the "NEEDS completion" question, eliminating the semantic conflict.
+
+---
+
+**Analysis Date**: November 11, 2025
+**Files Analyzed**:
+- `/scripts/address/addressProcessing.js` - Main processing logic
+- `/scripts/objectStructure/aliasClasses.js` - Address class definition
+- `/tests/testRealVisionAppraisalAddresses.js` - Test usage patterns
+- `/tests/diagnosticBlockIslandStreets.js` - Diagnostic tools
+- Documentation files and reference materials
+
+**Key Finding**: Confirmed semantic conflict between identification and completion logic in `processedAddress.isBlockIslandAddress` variable, causing Block Island addresses to incorrectly show as non-Block Island in intermediate processing state.

@@ -56,13 +56,15 @@ async function loadCollections() {
     showStatus('Loading collections from Google Drive...', 'loading');
 
     try {
-        // Collection file IDs from aggregateEntitiesIntoCollections() uploads
-        // These contain all processed entities with enhanced 30-field data structure
-        const fileIds = {
-            individuals: '1PFPkHqc5aQmeJPmZwcsUVHgKMftiqS3e', // Individual entities with comprehensive data
-            households: '1f0RebTi4EqpO6fHTNYyZyTQ8Gthbkvmi',   // Household entities with member relationships
-            nonhuman: '1ze_s1AwwIuKHaVOK0cVbXN49mR0CS-ke'      // Business and legal entities
-        };
+        // Load current file IDs from configuration instead of hardcoded values
+        console.log('📄 Loading current file IDs from configuration...');
+        const fileIds = await loadCurrentBloomerangFileIds();
+
+        if (!fileIds) {
+            throw new Error('Could not load current collection file IDs from configuration');
+        }
+
+        console.log('✅ Current file IDs loaded:', fileIds);
 
         // Load each collection file and parse JSON data
         // Each collection contains: entities object, metadata, and search indexes
@@ -432,5 +434,53 @@ function showStatus(message, type) {
         setTimeout(() => {
             statusElement.style.display = 'none';
         }, 3000);
+    }
+}
+
+/**
+ * Load current Bloomerang collection file IDs from the latest configuration
+ * Searches for the most recent configuration file created by saveBloomerangEntityBrowserConfig()
+ *
+ * @returns {Promise<Object|null>} File IDs object or null if not found
+ */
+async function loadCurrentBloomerangFileIds() {
+    try {
+        // Search for the most recent Bloomerang config file in the batches folder
+        const batchesFolderId = '1hcI8ZNKw9zfN5UMr7-LOfUldxuGF2V9e'; // From bloomerangParameters
+
+        // Search for config files by name pattern
+        const response = await gapi.client.drive.files.list({
+            q: `'${batchesFolderId}' in parents and name contains 'BloomerangEntityBrowserConfig_' and trashed=false`,
+            orderBy: 'modifiedTime desc',
+            pageSize: 1,
+            fields: 'files(id,name,modifiedTime)'
+        });
+
+        if (!response.result.files || response.result.files.length === 0) {
+            console.warn('No Bloomerang Entity Browser config files found');
+            return null;
+        }
+
+        const latestConfigFile = response.result.files[0];
+        console.log(`📄 Loading config from: ${latestConfigFile.name} (${latestConfigFile.modifiedTime})`);
+
+        // Load the config file content
+        const configResponse = await gapi.client.drive.files.get({
+            fileId: latestConfigFile.id,
+            alt: 'media'
+        });
+
+        const configData = JSON.parse(configResponse.body);
+
+        // Return the file IDs in the format expected by loadCollections()
+        return {
+            individuals: configData.fileIds.individuals,
+            households: configData.fileIds.households,
+            nonhuman: configData.fileIds.nonhuman
+        };
+
+    } catch (error) {
+        console.error('❌ Failed to load current file IDs:', error);
+        return null;
     }
 }

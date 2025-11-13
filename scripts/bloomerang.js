@@ -379,6 +379,9 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
                 households: uploadResults.households ? `${uploadResults.households.entitiesUploaded} entities` : 'none',
                 nonHumans: uploadResults.nonHumans ? `${uploadResults.nonHumans.entitiesUploaded} entities` : 'none'
             });
+
+            // Save file IDs to persistent configuration for Entity Browser
+            await saveBloomerangEntityBrowserConfig(uploadResults, batchId);
         }
 
         // Step 7: Return results
@@ -400,6 +403,309 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
     } catch (error) {
         console.error('Error in readBloomerangWithEntities:', error);
         throw error;
+    }
+}
+
+/**
+ * Quiet version of readBloomerangWithEntities - TRUE COPY with minimal logging
+ * Identical functionality to original but with VisionAppraisal-style quiet output
+ *
+ * @param {boolean} saveToGoogleDrive - Whether to serialize and save entities to Google Drive (default: false)
+ * @param {string} batchId - Optional batch identifier for grouping serialized entities (auto-generated if null)
+ * @returns {Object} Processing results with entities, households, statistics, and error tracking
+ */
+async function readBloomerangWithEntitiesQuiet(saveToGoogleDrive = false, batchId = null) {
+    // Override console.log to block verbose messages
+    const originalConsoleLog = console.log;
+    const verboseMessagePatterns = [
+        /Row \d+: Primary household member found, updating household location/,
+        /Upgrading placeholder location for household member/,
+        /Row \d+: Created new household '.*' with (actual|placeholder) location/
+    ];
+
+    console.log = function(...args) {
+        const message = args.join(' ');
+        const isVerbose = verboseMessagePatterns.some(pattern => pattern.test(message));
+        if (!isVerbose) {
+            originalConsoleLog.apply(console, args);
+        }
+    };
+
+    try {
+
+        console.log('=== BLOOMERANG ENTITY CREATION (QUIET) ===');
+        console.log('Processing all Bloomerang records with minimal output...');
+
+        // Step 1: Fetch CSV data (same as original function)
+        const reqBase = "http://127.0.0.99:3000";
+        const fileUrl = `${reqBase}/csv-file`;
+
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const csvText = await response.text();
+
+        // Step 2: Parse CSV with 22 field structure (EXACT COPY)
+        const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
+
+        // Parse CSV rows (EXACT COPY)
+        const rows = lines.slice(1).map((line, index) => {
+            const fields = line.split(',').map(field => field.replace(/\^#C#\^/g, ',').trim());
+            return {
+                rowIndex: index + 1, // 1-based indexing for data rows
+                fields: fields,
+                accountNumber: fields[5] // Field 6: Account Number (0-based index 5)
+            };
+        });
+
+        console.log(`✅ Loaded ${rows.length} Bloomerang records`);
+
+        // Step 3: Initialize processing containers (EXACT COPY)
+        const entities = [];              // All created entities
+        const households = new Map();     // Household tracking by name
+        const errorStats = new Map();     // Error tracking with counts and row numbers
+        const dataSource = "BLOOMERANG_CSV";
+        let folderIds = null;
+
+        // Initialize serialization if requested (EXACT COPY)
+        if (saveToGoogleDrive) {
+            folderIds = getSerializationFolders();
+            if (!batchId) {
+                batchId = `Bloomerang_${new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19)}`;
+            }
+        }
+
+        // Step 4: Process each row to create entities (ONLY CHANGE: Remove verbose logging)
+        let processedCount = 0;
+        let skippedCount = 0;
+        let locationIdentifierCount = 0;
+
+        for (const row of rows) {
+            try {
+                const entity = await processRowToEntity(row, dataSource, households);
+                if (entity) {
+                    entities.push(entity);
+                    processedCount++;
+                    locationIdentifierCount++;
+
+                    // QUIET: Progress every 1000 records instead of every record
+                    if (processedCount % 1000 === 0) {
+                        console.log(`  Processed ${processedCount}/${rows.length} records (${Math.round(processedCount/rows.length*100).toFixed(1)}%)`);
+                    }
+                } else {
+                    skippedCount++;
+                }
+            } catch (error) {
+                // Track error statistics (EXACT COPY)
+                const errorType = error.message;
+                if (!errorStats.has(errorType)) {
+                    errorStats.set(errorType, {
+                        count: 0,
+                        rows: []
+                    });
+                }
+                const errorData = errorStats.get(errorType);
+                errorData.count++;
+                errorData.rows.push(row.rowIndex);
+
+                // QUIET: Only output error details when first encountered, no individual error logging
+                if (errorData.count === 1) {
+                    console.error(`NEW ERROR TYPE: ${errorType} (Row ${row.rowIndex})`);
+                }
+                // REMOVED: Individual error row logging for quiet mode
+            }
+        }
+
+        console.log(`  Processed ${processedCount}/${rows.length} records (100.0%)`);
+
+        // Step 5: Save batch results if serialization enabled (EXACT COPY)
+        if (saveToGoogleDrive && folderIds) {
+            const processingStats = {
+                totalRows: rows.length,
+                entitiesCreated: processedCount,
+                rowsSkipped: skippedCount,
+                locationIdentifiersCreated: locationIdentifierCount,
+                errorCount: Array.from(errorStats.values()).reduce((sum, data) => sum + data.count, 0),
+                householdsCreated: households.size
+            };
+            await saveBatchResults(entities, processingStats, folderIds, batchId);
+        }
+
+        console.log('\n=== SAVING ENTITIES TO GOOGLE DRIVE (QUIET) ===');
+
+        // Step 6: Collection-based serialization (if requested) (EXACT COPY)
+        let uploadResults = null;
+        if (saveToGoogleDrive) {
+            console.log(`📝 Saving quiet version results to Google Drive...`);
+
+            // Aggregate all entities into collections (EXACT COPY)
+            const collections = aggregateEntitiesIntoCollections(entities, households, []);
+
+            // Upload each collection type (EXACT COPY but quiet)
+            uploadResults = {};
+            const folderIds = getSerializationFolders();
+
+            // Upload Individuals collection
+            if (collections.individuals.size > 0) {
+                uploadResults.individuals = await uploadEntityCollection(
+                    collections.individuals, 'Individual', batchId, folderIds.individuals
+                );
+            }
+
+            // Upload Households collection
+            if (collections.households.size > 0) {
+                uploadResults.households = await uploadEntityCollection(
+                    collections.households, 'AggregateHousehold', batchId, folderIds.households
+                );
+            }
+
+            // Upload NonHuman collection
+            if (collections.nonHumans.size > 0) {
+                uploadResults.nonHumans = await uploadEntityCollection(
+                    collections.nonHumans, 'NonHuman', batchId, folderIds.nonHuman
+                );
+            }
+
+            console.log('✅ Quiet version saved successfully');
+
+            // Save file IDs to persistent configuration for Entity Browser
+            await saveBloomerangEntityBrowserConfig(uploadResults, batchId);
+        }
+
+        // Final summary (VisionAppraisal style)
+        console.log(`\n=== BLOOMERANG PROCESSING RESULTS ===`);
+        console.log(`Total Records: ${rows.length}`);
+        console.log(`Successful: ${processedCount}`);
+        console.log(`Failed: ${Array.from(errorStats.values()).reduce((sum, data) => sum + data.count, 0)}`);
+        console.log(`Success Rate: ${((processedCount - Array.from(errorStats.values()).reduce((sum, data) => sum + data.count, 0))/rows.length*100).toFixed(1)}%`);
+        console.log(`\n=== BLOOMERANG ENTITY TYPE DISTRIBUTION ===`);
+
+        const entityCounts = {};
+        entities.forEach(entity => {
+            const type = entity.constructor.name;
+            entityCounts[type] = (entityCounts[type] || 0) + 1;
+        });
+
+        Object.entries(entityCounts).forEach(([type, count]) => {
+            console.log(`${type}: ${count} (${(count/entities.length*100).toFixed(1)}%)`);
+        });
+
+        // Step 7: Return results (EXACT COPY)
+        return {
+            success: true,
+            stats: {
+                totalRows: rows.length,
+                entitiesCreated: processedCount,
+                rowsSkipped: skippedCount,
+                locationIdentifiersCreated: locationIdentifierCount,
+                errorCount: Array.from(errorStats.values()).reduce((sum, data) => sum + data.count, 0),
+                householdsCreated: households.size
+            },
+            entities: entities,
+            households: households, // Return the Map, not array
+            errorStats: Object.fromEntries(errorStats),
+            uploadResults: uploadResults,
+            fileId: uploadResults?.individuals?.fileId || null,
+            message: 'Bloomerang entity creation completed (quiet mode)'
+        };
+
+    } catch (error) {
+        console.error('Error in readBloomerangWithEntitiesQuiet:', error);
+        throw error;
+    } finally {
+        // Restore original console.log
+        if (originalConsoleLog) {
+            console.log = originalConsoleLog;
+        }
+    }
+}
+
+/**
+ * Test both VisionAppraisal and Bloomerang quiet versions in sequence
+ * Comprehensive test function that loads its own dependencies and tests both processes
+ */
+async function testBothQuietVersions(saveToGoogleDrive = true) {
+    console.log('=== COMPREHENSIVE QUIET ENTITY CREATION TEST ===');
+    console.log('Self-loading dependencies and testing both quiet versions...\n');
+
+    const results = {
+        visionAppraisal: null,
+        bloomerang: null,
+        totalTime: 0,
+        success: false
+    };
+
+    const startTime = Date.now();
+
+    try {
+        // Step 1: Load VisionAppraisal dependencies if not already loaded
+        if (typeof VisionAppraisalNameParserWithQuiet === 'undefined') {
+            console.log('🔄 Loading VisionAppraisal dependencies...');
+
+            await new Promise((resolve, reject) => {
+                const case31Script = document.createElement('script');
+                case31Script.src = './scripts/validation/case31Validator.js';
+                case31Script.onload = function() {
+                    console.log('✅ Case31Validator loaded');
+
+                    const parserScript = document.createElement('script');
+                    parserScript.src = './scripts/dataSources/visionAppraisalNameParser.js';
+                    parserScript.onload = function() {
+                        console.log('✅ VisionAppraisal parser loaded');
+                        resolve();
+                    };
+                    parserScript.onerror = () => reject(new Error('Failed to load VisionAppraisal parser'));
+                    document.head.appendChild(parserScript);
+                };
+                case31Script.onerror = () => reject(new Error('Failed to load Case31Validator'));
+                document.head.appendChild(case31Script);
+            });
+        } else {
+            console.log('✅ VisionAppraisal dependencies already loaded');
+        }
+
+        // Step 2: Test VisionAppraisal Quiet Version
+        console.log('\n🚀 TESTING: VisionAppraisal Quiet Version');
+        const visionStart = Date.now();
+
+        if (typeof VisionAppraisalNameParserWithQuiet?.processAllVisionAppraisalRecordsQuiet === 'function') {
+            results.visionAppraisal = await VisionAppraisalNameParserWithQuiet.processAllVisionAppraisalRecordsQuiet();
+            console.log(`✅ VisionAppraisal completed in ${((Date.now() - visionStart) / 1000).toFixed(1)}s\n`);
+        } else {
+            throw new Error('VisionAppraisal quiet function still not available after loading');
+        }
+
+        // Step 3: Test Bloomerang Quiet Version
+        console.log('🚀 TESTING: Bloomerang Quiet Version');
+        const bloomerangStart = Date.now();
+
+        if (typeof readBloomerangWithEntitiesQuiet === 'function') {
+            results.bloomerang = await readBloomerangWithEntitiesQuiet(saveToGoogleDrive, 'comprehensive-test');
+            console.log(`✅ Bloomerang completed in ${((Date.now() - bloomerangStart) / 1000).toFixed(1)}s\n`);
+        } else {
+            throw new Error('Bloomerang quiet function not available');
+        }
+
+        // Final Summary
+        results.totalTime = (Date.now() - startTime) / 1000;
+        results.success = true;
+
+        console.log('=== COMPREHENSIVE TEST RESULTS ===');
+        console.log(`VisionAppraisal: ${results.visionAppraisal.entities.length} entities created`);
+        console.log(`Bloomerang: ${results.bloomerang.entities.length} entities created`);
+        console.log(`Total Time: ${results.totalTime.toFixed(1)}s`);
+        console.log(`Overall Status: ✅ SUCCESS - Both quiet versions working perfectly`);
+
+        return results;
+
+    } catch (error) {
+        console.error('❌ COMPREHENSIVE TEST FAILED:', error.message);
+        results.success = false;
+        results.error = error.message;
+        results.totalTime = (Date.now() - startTime) / 1000;
+        return results;
     }
 }
 
@@ -468,12 +774,12 @@ async function processRowToEntity(row, dataSource, households) {
     if (entityType === 'Individual') {
         // Use placeholder location identifier if none available
         const finalLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
-        entity = new Individual(finalLocationIdentifier, nameObjects.individualName,
+        entity = new Individual(finalLocationIdentifier, nameObjects.individualName, null, null,
             createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource));
     } else if (entityType === 'NonHuman') {
         // Use placeholder location identifier if none available
         const finalLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
-        entity = new NonHuman(finalLocationIdentifier, nameObjects.individualName,
+        entity = new NonHuman(finalLocationIdentifier, nameObjects.individualName, null, null,
             createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource));
     } else if (entityType === 'AggregateHousehold') {
         // Handle household processing (locationIdentifier may be null - handled inside function)
@@ -857,13 +1163,13 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
         console.warn(`Row ${rowIndex}: Individual in household but no household name provided`);
         // Treat as individual if no household name
         return new Individual(locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber),
-                             nameObjects.individualName,
+                             nameObjects.individualName, null, null,
                              createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource));
     }
 
     // Create individual entity
     const individualLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
-    const individual = new Individual(individualLocationIdentifier, nameObjects.individualName,
+    const individual = new Individual(individualLocationIdentifier, nameObjects.individualName, null, null,
                                      createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource));
 
     // Check if household already exists
@@ -904,7 +1210,7 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
         // Create household entity
         const household = new AggregateHousehold(
             householdLocationIdentifier,
-            nameObjects.householdName,
+            nameObjects.householdName, null, null,
             createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource)
         );
 
@@ -2081,5 +2387,69 @@ async function inspectProcessedRecords(recordNumbers) {
     } catch (error) {
         console.error('❌ Inspection failed:', error);
         throw error;
+    }
+}
+
+/**
+ * Save Bloomerang Entity Browser configuration to Google Drive
+ * Persists the current collection file IDs so Entity Browser can always access the latest files
+ *
+ * @param {Object} uploadResults - Upload results from readBloomerangWithEntities
+ * @param {string} batchId - Batch identifier for this processing run
+ */
+async function saveBloomerangEntityBrowserConfig(uploadResults, batchId) {
+    try {
+        console.log('💾 Saving Entity Browser configuration...');
+
+        const configData = {
+            timestamp: new Date().toISOString(),
+            batchId: batchId,
+            fileIds: {
+                individuals: uploadResults.individuals?.fileId || null,
+                households: uploadResults.households?.fileId || null,
+                nonhuman: uploadResults.nonHumans?.fileId || null
+            },
+            fileDetails: {
+                individuals: uploadResults.individuals ? {
+                    filename: uploadResults.individuals.filename,
+                    entitiesUploaded: uploadResults.individuals.entitiesUploaded
+                } : null,
+                households: uploadResults.households ? {
+                    filename: uploadResults.households.filename,
+                    entitiesUploaded: uploadResults.households.entitiesUploaded
+                } : null,
+                nonhuman: uploadResults.nonHumans ? {
+                    filename: uploadResults.nonHumans.filename,
+                    entitiesUploaded: uploadResults.nonHumans.entitiesUploaded
+                } : null
+            },
+            configVersion: "1.0.0",
+            source: "readBloomerangWithEntities"
+        };
+
+        // Save config to a well-known file ID for Entity Browser to read
+        const configFileId = "1BloomerangEntityBrowserConfig"; // Replace with actual config file ID
+
+        // Upload config to Google Drive
+        const fileMetadata = {
+            name: `BloomerangEntityBrowserConfig_${batchId}.json`,
+            parents: [bloomerangParameters.serialization.folderIds.batches], // Save in batches folder
+            description: `Entity Browser configuration for Bloomerang batch ${batchId}`
+        };
+
+        const fileId = await uploadJsonToGoogleDrive(fileMetadata, configData);
+
+        console.log(`✅ Entity Browser config saved: ${fileMetadata.name} (ID: ${fileId})`);
+        console.log('📋 Current collection file IDs:', configData.fileIds);
+
+        return {
+            configFileId: fileId,
+            config: configData
+        };
+
+    } catch (error) {
+        console.error('❌ Failed to save Entity Browser config:', error);
+        // Don't throw - this is optional functionality
+        return null;
     }
 }

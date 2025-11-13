@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Structural Enhancements - Requirements Implementation</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ccc; margin: 10px 0; padding: 15px; }
+        .test-section h2 { margin-top: 0; color: #333; }
+        .test-result { margin: 5px 0; padding: 5px; }
+        .pass { background-color: #d4edda; color: #155724; }
+        .fail { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .summary { font-weight: bold; margin: 10px 0; padding: 10px; border: 2px solid #007bff; }
+        pre { background-color: #f8f9fa; padding: 10px; border: 1px solid #dee2e6; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Structural Enhancements Testing</h1>
+    <p><strong>Purpose:</strong> Verify Requirements 1, 4, 6, 12, 20, 21 implementations and check for regressions</p>
+
+    <div id="test-output"></div>
+
+    <!-- Load dependencies in correct order -->
+    <script src="./scripts/objectStructure/aliasClasses.js"></script>
+    <script src="./scripts/objectStructure/contactInfo.js"></script>
+    <script src="./scripts/objectStructure/entityClasses.js"></script>
+
+    <script>
+        let testResults = {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            sections: []
+        };
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('test-output');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            output.appendChild(div);
+            console.log(message);
+        }
+
+        function startSection(title) {
+            const output = document.getElementById('test-output');
+            const section = document.createElement('div');
+            section.className = 'test-section';
+            section.innerHTML = `<h2>${title}</h2>`;
+            output.appendChild(section);
+            return section;
+        }
+
+        function test(description, testFn, section) {
+            testResults.total++;
+            try {
+                const result = testFn();
+                if (result) {
+                    testResults.passed++;
+                    section.innerHTML += `<div class="test-result pass">✅ ${description}</div>`;
+                } else {
+                    testResults.failed++;
+                    section.innerHTML += `<div class="test-result fail">❌ ${description}</div>`;
+                }
+                return result;
+            } catch (error) {
+                testResults.failed++;
+                section.innerHTML += `<div class="test-result fail">❌ ${description} - Error: ${error.message}</div>`;
+                return false;
+            }
+        }
+
+        function runAllTests() {
+            // PHASE 1: Info Base Class Testing (Requirement 20)
+            const section1 = startSection('Phase 1: Info Base Class (Requirement 20)');
+
+            test('Info base class exists and can be instantiated', () => {
+                const info = new Info();
+                return info instanceof Info;
+            }, section1);
+
+            test('ContactInfo extends Info', () => {
+                const contactInfo = new ContactInfo();
+                return contactInfo instanceof Info && contactInfo instanceof ContactInfo;
+            }, section1);
+
+            test('ContactInfo inherits Info methods', () => {
+                const contactInfo = new ContactInfo();
+                return typeof contactInfo.getPropertySummary === 'function' &&
+                       typeof contactInfo.setProperty === 'function';
+            }, section1);
+
+            test('Info serialization includes correct type', () => {
+                const contactInfo = new ContactInfo();
+                const serialized = contactInfo.serialize();
+                return serialized.type === 'ContactInfo';
+            }, section1);
+
+            // PHASE 2: AttributedTerm Enhancement Testing (Requirement 4)
+            const section2 = startSection('Phase 2: AttributedTerm Enhancement (Requirement 4)');
+
+            test('AttributedTerm accepts fieldName parameter', () => {
+                const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123', 'email');
+                return term.fieldName === 'email';
+            }, section2);
+
+            test('AttributedTerm fieldName defaults to null', () => {
+                const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123');
+                return term.fieldName === null;
+            }, section2);
+
+            test('AttributedTerm setFieldName/getFieldName work', () => {
+                const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123');
+                term.setFieldName('email');
+                return term.getFieldName() === 'email';
+            }, section2);
+
+            test('AttributedTerm serialization includes fieldName', () => {
+                const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123', 'email');
+                const serialized = term.serialize();
+                return serialized.fieldName === 'email';
+            }, section2);
+
+            test('AttributedTerm deserialization preserves fieldName', () => {
+                const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123', 'email');
+                const serialized = term.serialize();
+                const deserialized = AttributedTerm.deserialize(serialized);
+                return deserialized.fieldName === 'email';
+            }, section2);
+
+            test('AttributedTerm toString includes fieldName', () => {
+                const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123', 'email');
+                return term.toString().includes('field: email');
+            }, section2);
+
+            // PHASE 3: OtherInfo System Testing (Requirement 1)
+            const section3 = startSection('Phase 3: OtherInfo System (Requirement 1)');
+
+            test('OtherInfo base class exists and extends Info', () => {
+                const otherInfo = new OtherInfo();
+                return otherInfo instanceof Info && otherInfo instanceof OtherInfo;
+            }, section3);
+
+            test('HouseholdOtherInfo extends OtherInfo', () => {
+                const householdOtherInfo = new HouseholdOtherInfo();
+                return householdOtherInfo instanceof Info &&
+                       householdOtherInfo instanceof OtherInfo &&
+                       householdOtherInfo instanceof HouseholdOtherInfo;
+            }, section3);
+
+            test('IndividualOtherInfo extends OtherInfo', () => {
+                const individualOtherInfo = new IndividualOtherInfo();
+                return individualOtherInfo instanceof Info &&
+                       individualOtherInfo instanceof OtherInfo &&
+                       individualOtherInfo instanceof IndividualOtherInfo;
+            }, section3);
+
+            test('Entity has otherInfo property', () => {
+                const entity = new Entity(null, null);
+                return entity.hasOwnProperty('otherInfo') && entity.otherInfo === null;
+            }, section3);
+
+            test('Entity addOtherInfo method works', () => {
+                const entity = new Entity(null, null);
+                const otherInfo = new OtherInfo();
+                entity.addOtherInfo(otherInfo);
+                return entity.otherInfo === otherInfo;
+            }, section3);
+
+            // PHASE 4: LegacyInfo System Testing (Requirement 21)
+            const section4 = startSection('Phase 4: LegacyInfo System (Requirement 21)');
+
+            test('LegacyInfo class exists and extends Info', () => {
+                const legacyInfo = new LegacyInfo();
+                return legacyInfo instanceof Info && legacyInfo instanceof LegacyInfo;
+            }, section4);
+
+            test('LegacyInfo has all 6 VisionAppraisal properties', () => {
+                const legacyInfo = new LegacyInfo();
+                return legacyInfo.hasOwnProperty('ownerName') &&
+                       legacyInfo.hasOwnProperty('ownerName2') &&
+                       legacyInfo.hasOwnProperty('neighborhood') &&
+                       legacyInfo.hasOwnProperty('userCode') &&
+                       legacyInfo.hasOwnProperty('date') &&
+                       legacyInfo.hasOwnProperty('sourceIndex');
+            }, section4);
+
+            test('LegacyInfo setter methods work', () => {
+                const legacyInfo = new LegacyInfo();
+                const testData = new IndicativeData(new SimpleIdentifiers(new AttributedTerm('TestOwner', 'VISION_APPRAISAL', 1, 'PID123')));
+                legacyInfo.setOwnerName(testData);
+                return legacyInfo.ownerName === testData;
+            }, section4);
+
+            test('Entity has legacyInfo property', () => {
+                const entity = new Entity(null, null);
+                return entity.hasOwnProperty('legacyInfo') && entity.legacyInfo === null;
+            }, section4);
+
+            test('Entity addLegacyInfo method works', () => {
+                const entity = new Entity(null, null);
+                const legacyInfo = new LegacyInfo();
+                entity.addLegacyInfo(legacyInfo);
+                return entity.legacyInfo === legacyInfo;
+            }, section4);
+
+            test('LegacyInfo getLegacyDataSummary works', () => {
+                const legacyInfo = new LegacyInfo();
+                const summary = legacyInfo.getLegacyDataSummary();
+                return summary.hasOwnProperty('hasOwnerName') && summary.hasOwnProperty('hasOwnerName2');
+            }, section4);
+
+            // PHASE 5: Property Structure Updates Testing (Requirements 6, 12)
+            const section5 = startSection('Phase 5: Property Structure Updates (Requirements 6, 12)');
+
+            test('HouseholdName uses fullHouseholdName property', () => {
+                const primaryAlias = new AttributedTerm('Smith Household', 'BLOOMERANG_CSV', 1, 'ACC123');
+                const householdName = new HouseholdName(primaryAlias, 'The Smith Family');
+                return householdName.fullHouseholdName === 'The Smith Family';
+            }, section5);
+
+            test('HouseholdName serialization uses fullHouseholdName', () => {
+                const primaryAlias = new AttributedTerm('Smith Household', 'BLOOMERANG_CSV', 1, 'ACC123');
+                const householdName = new HouseholdName(primaryAlias, 'The Smith Family');
+                const serialized = householdName.serialize();
+                return serialized.fullHouseholdName === 'The Smith Family';
+            }, section5);
+
+            test('HouseholdName backward compatibility in deserialization', () => {
+                const mockOldData = {
+                    type: 'HouseholdName',
+                    primaryAlias: { type: 'AttributedTerm', term: 'Smith Household', sourceMap: [{ source: 'BLOOMERANG_CSV', index: 1, identifier: 'ACC123' }] },
+                    alternatives: { type: 'Aliases', aliases: [] },
+                    fullName: 'The Smith Family',  // Old format
+                    memberNames: []
+                };
+                const deserialized = HouseholdName.deserialize(mockOldData);
+                return deserialized.fullHouseholdName === 'The Smith Family';
+            }, section5);
+
+            test('ContactInfo secondaryAddress is array', () => {
+                const contactInfo = new ContactInfo();
+                return Array.isArray(contactInfo.secondaryAddress) && contactInfo.secondaryAddress.length === 0;
+            }, section5);
+
+            test('ContactInfo addSecondaryAddress method works', () => {
+                const contactInfo = new ContactInfo();
+                const addressData = new IndicativeData(new ComplexIdentifiers(new AttributedTerm('123 Main St', 'BLOOMERANG_CSV', 1, 'ACC123')));
+                contactInfo.addSecondaryAddress(addressData);
+                return contactInfo.secondaryAddress.length === 1 && contactInfo.secondaryAddress[0] === addressData;
+            }, section5);
+
+            test('ContactInfo setSecondaryAddresses method works', () => {
+                const contactInfo = new ContactInfo();
+                const addressData1 = new IndicativeData(new ComplexIdentifiers(new AttributedTerm('123 Main St', 'BLOOMERANG_CSV', 1, 'ACC123')));
+                const addressData2 = new IndicativeData(new ComplexIdentifiers(new AttributedTerm('456 Oak Ave', 'BLOOMERANG_CSV', 1, 'ACC123')));
+                contactInfo.setSecondaryAddresses([addressData1, addressData2]);
+                return contactInfo.secondaryAddress.length === 2;
+            }, section5);
+
+            // PHASE 6: Regression Testing
+            const section6 = startSection('Phase 6: Regression Testing - Existing Functionality');
+
+            test('Basic Entity creation still works', () => {
+                const locationId = new IdentifyingData(new SimpleIdentifiers(new AttributedTerm('1234', 'VISION_APPRAISAL', 1, 'PID123')));
+                const name = new IdentifyingData(new IndividualName(new AttributedTerm('John Doe', 'BLOOMERANG_CSV', 1, 'ACC123'), '', 'John', '', 'Doe', ''));
+                const entity = new Entity(locationId, name);
+                return entity instanceof Entity && entity.locationIdentifier === locationId && entity.name === name;
+            }, section6);
+
+            test('AttributedTerm basic functionality still works', () => {
+                const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123');
+                return term.term === 'test@email.com' && term.getSources().includes('BLOOMERANG_CSV');
+            }, section6);
+
+            test('SimpleIdentifiers still works with AttributedTerm', () => {
+                const term = new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123');
+                const identifier = new SimpleIdentifiers(term);
+                return identifier.primaryAlias === term && identifier instanceof Aliased;
+            }, section6);
+
+            test('IndividualName creation still works', () => {
+                const primaryAlias = new AttributedTerm('John Doe', 'BLOOMERANG_CSV', 1, 'ACC123');
+                const individualName = new IndividualName(primaryAlias, '', 'John', '', 'Doe', '');
+                return individualName.firstName === 'John' && individualName.lastName === 'Doe';
+            }, section6);
+
+            test('ContactInfo basic methods still work', () => {
+                const contactInfo = new ContactInfo();
+                const emailData = new IndicativeData(new SimpleIdentifiers(new AttributedTerm('test@email.com', 'BLOOMERANG_CSV', 1, 'ACC123')));
+                contactInfo.setEmail(emailData);
+                return contactInfo.email === emailData && contactInfo.getBestEmail() === 'test@email.com';
+            }, section6);
+
+            // Summary
+            const summarySection = startSection('Test Summary');
+            summarySection.innerHTML += `
+                <div class="summary">
+                    <strong>Total Tests:</strong> ${testResults.total}<br>
+                    <strong>Passed:</strong> ${testResults.passed}<br>
+                    <strong>Failed:</strong> ${testResults.failed}<br>
+                    <strong>Success Rate:</strong> ${(testResults.passed/testResults.total*100).toFixed(1)}%
+                </div>
+            `;
+
+            if (testResults.failed === 0) {
+                summarySection.innerHTML += '<div class="test-result pass"><strong>🎉 ALL TESTS PASSED! Structural enhancements are working correctly.</strong></div>';
+            } else {
+                summarySection.innerHTML += `<div class="test-result fail"><strong>❌ ${testResults.failed} TESTS FAILED. Issues detected that need attention.</strong></div>`;
+            }
+
+            // Additional information
+            summarySection.innerHTML += `
+                <div class="info">
+                    <strong>Requirements Tested:</strong><br>
+                    ✅ Requirement 20: Info base class architecture<br>
+                    ✅ Requirement 4: AttributedTerm fieldName enhancement<br>
+                    ✅ Requirement 1: OtherInfo system implementation<br>
+                    ✅ Requirement 21: LegacyInfo for VisionAppraisal data preservation<br>
+                    ✅ Requirement 6: HouseholdName.fullName → fullHouseholdName<br>
+                    ✅ Requirement 12: ContactInfo.secondaryAddress → array structure<br>
+                    ✅ Regression testing for existing functionality
+                </div>
+            `;
+
+            console.log('Testing complete. Results:', testResults);
+        }
+
+        // Run tests when page loads
+        window.onload = function() {
+            try {
+                runAllTests();
+            } catch (error) {
+                log(`Critical error during testing: ${error.message}`, 'fail');
+                console.error('Testing failed with error:', error);
+            }
+        };
+    </script>
+</body>
+</html>

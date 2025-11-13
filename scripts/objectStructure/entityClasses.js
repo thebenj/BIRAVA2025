@@ -16,7 +16,7 @@
  * Base class for all entity types in the system
  */
 class Entity {
-    constructor(locationIdentifier, name, accountNumber = null) {
+    constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
         // Location identifier: Fire Number (primary), PID (secondary), or Street Address (fallback)
         // Type: IdentifyingData containing Fire Number, PID, or ComplexIdentifiers for street address
         // Fire Numbers: integer 4 digits or less <3500, definitive for Block Island locations
@@ -30,12 +30,140 @@ class Entity {
         // Account Number (IndicativeData - not contact info but available for every Bloomerang record)
         this.accountNumber = accountNumber;
 
-        // Contact information (ContactInfo object added separately)
+        // Contact information - will be instantiated if address processing occurs
         this.contactInfo = null;
+
+        // Other information (OtherInfo object added separately)
+        // Holds non-contact IndicativeData objects (account numbers, transaction data, etc.)
+        this.otherInfo = null;
+
+        // Legacy information (LegacyInfo object added separately)
+        // Holds legacy data fields for historical/reference purposes
+        this.legacyInfo = null;
+
+        // Process address parameters if provided
+        this._processAddressParameters(propertyLocation, ownerAddress);
 
         // Legacy properties - kept for backwards compatibility during transition
         this.label = null;    // Will be deprecated
         this.number = null;   // Will be deprecated
+    }
+
+    /**
+     * Process propertyLocation and ownerAddress parameters
+     * Handles four cases: a) text b) Address object c) complex identifier d) other
+     * @param {*} propertyLocation - Property location parameter (various types)
+     * @param {*} ownerAddress - Owner address parameter (various types)
+     * @private
+     */
+    _processAddressParameters(propertyLocation, ownerAddress) {
+        let propertyAddressObject = null;
+        let ownerAddressObject = null;
+
+        // Process propertyLocation parameter
+        if (propertyLocation !== null) {
+            const propertyType = this._detectParameterType(propertyLocation);
+
+            if (propertyType === 'text') {
+                // Case a) Text - pass through address parser
+                propertyAddressObject = this._processTextToAddress(propertyLocation, 'propertyLocation');
+            } else if (propertyType === 'address') {
+                // Case b) Address object - direct use
+                propertyAddressObject = propertyLocation;
+            } else if (propertyType === 'complexIdentifier') {
+                // Case c) Complex identifier - identification setup, no action yet
+                console.log('Complex identifier detected for propertyLocation - no processing implemented yet');
+            } else {
+                // Case d) Other - identification setup, no action yet
+                console.log(`Other type detected for propertyLocation: ${propertyType} - no processing implemented yet`);
+            }
+        }
+
+        // Process ownerAddress parameter
+        if (ownerAddress !== null) {
+            const ownerType = this._detectParameterType(ownerAddress);
+
+            if (ownerType === 'text') {
+                // Case a) Text - pass through address parser
+                ownerAddressObject = this._processTextToAddress(ownerAddress, 'ownerAddress');
+            } else if (ownerType === 'address') {
+                // Case b) Address object - direct use
+                ownerAddressObject = ownerAddress;
+            } else if (ownerType === 'complexIdentifier') {
+                // Case c) Complex identifier - identification setup, no action yet
+                console.log('Complex identifier detected for ownerAddress - no processing implemented yet');
+            } else {
+                // Case d) Other - identification setup, no action yet
+                console.log(`Other type detected for ownerAddress: ${ownerType} - no processing implemented yet`);
+            }
+        }
+
+        // If we have valid Address objects, instantiate ContactInfo and assign them
+        if (propertyAddressObject || ownerAddressObject) {
+            if (!this.contactInfo) {
+                this.contactInfo = new ContactInfo();
+            }
+
+            if (propertyAddressObject) {
+                this.contactInfo.setPrimaryAddress(propertyAddressObject);
+            }
+
+            if (ownerAddressObject) {
+                this.contactInfo.addSecondaryAddress(ownerAddressObject);
+            }
+        }
+    }
+
+    /**
+     * Detect the type of a parameter
+     * @param {*} parameter - Parameter to analyze
+     * @returns {string} Type identifier: 'text', 'address', 'complexIdentifier', 'other'
+     * @private
+     */
+    _detectParameterType(parameter) {
+        if (typeof parameter === 'string') {
+            return 'text';
+        } else if (parameter && typeof parameter === 'object') {
+            // Check if it's an Address object
+            if (parameter.constructor && parameter.constructor.name === 'Address') {
+                return 'address';
+            }
+            // Check if it's a ComplexIdentifier (would have primaryAlias property)
+            else if (parameter.primaryAlias !== undefined) {
+                return 'complexIdentifier';
+            }
+            // Check if it's any other ComplexIdentifier subclass
+            else if (parameter.constructor &&
+                     typeof parameter.constructor.name === 'string' &&
+                     parameter.constructor.name.includes('Identifiers')) {
+                return 'complexIdentifier';
+            }
+        }
+        return 'other';
+    }
+
+    /**
+     * Process text string through address parser to create Address object
+     * @param {string} addressText - Address text to parse
+     * @param {string} fieldName - Field name for data lineage
+     * @returns {Address|null} Address object or null if parsing failed
+     * @private
+     */
+    _processTextToAddress(addressText, fieldName) {
+        try {
+            // Use the address processing functions from addressProcessing.js
+            if (typeof processAddress === 'function' && typeof createAddressFromParsedData === 'function') {
+                const processedAddress = processAddress(addressText, 'VisionAppraisal', fieldName);
+                if (processedAddress) {
+                    return createAddressFromParsedData(processedAddress, fieldName);
+                }
+            } else {
+                console.warn('Address processing functions not available - processAddress or createAddressFromParsedData not found');
+            }
+        } catch (error) {
+            console.error('Error processing text address:', error);
+        }
+        return null;
     }
 
     /**
@@ -44,6 +172,22 @@ class Entity {
      */
     addContactInfo(contactInfoObject) {
         this.contactInfo = contactInfoObject;
+    }
+
+    /**
+     * Add other information to this entity
+     * @param {OtherInfo} otherInfoObject - OtherInfo instance containing non-contact IndicativeData
+     */
+    addOtherInfo(otherInfoObject) {
+        this.otherInfo = otherInfoObject;
+    }
+
+    /**
+     * Add legacy information to this entity
+     * @param {LegacyInfo} legacyInfoObject - LegacyInfo instance containing legacy data fields
+     */
+    addLegacyInfo(legacyInfoObject) {
+        this.legacyInfo = legacyInfoObject;
     }
 
     /**
@@ -155,8 +299,8 @@ class Entity {
  * name property should contain IdentifyingData with IndividualName ComplexIdentifiers
  */
 class Individual extends Entity {
-    constructor(locationIdentifier, name, accountNumber = null) {
-        super(locationIdentifier, name, accountNumber);
+    constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
+        super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
         // Inherited this.name should contain IdentifyingData(IndividualName)
     }
 
@@ -184,7 +328,7 @@ class Individual extends Entity {
         const entityData = { ...data, type: 'Entity' };
         const baseEntity = Entity.deserialize(entityData);
 
-        const individual = new Individual(baseEntity.locationIdentifier, baseEntity.name, baseEntity.accountNumber);
+        const individual = new Individual(baseEntity.locationIdentifier, baseEntity.name, null, null, baseEntity.accountNumber);
         individual.contactInfo = baseEntity.contactInfo;
         individual.label = baseEntity.label;
         individual.number = baseEntity.number;
@@ -199,8 +343,8 @@ class Individual extends Entity {
  * name property should contain IdentifyingData with HouseholdName ComplexIdentifiers
  */
 class CompositeHousehold extends Entity {
-    constructor(locationIdentifier, name, accountNumber = null) {
-        super(locationIdentifier, name, accountNumber);
+    constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
+        super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
         // Inherited this.name should contain IdentifyingData(HouseholdName)
     }
 
@@ -228,7 +372,7 @@ class CompositeHousehold extends Entity {
         const entityData = { ...data, type: 'Entity' };
         const baseEntity = Entity.deserialize(entityData);
 
-        const household = new CompositeHousehold(baseEntity.locationIdentifier, baseEntity.name, baseEntity.accountNumber);
+        const household = new CompositeHousehold(baseEntity.locationIdentifier, baseEntity.name, null, null, baseEntity.accountNumber);
         household.contactInfo = baseEntity.contactInfo;
         household.label = baseEntity.label;
         household.number = baseEntity.number;
@@ -244,8 +388,8 @@ class CompositeHousehold extends Entity {
  * name property should contain IdentifyingData with HouseholdName ComplexIdentifiers (synthesized)
  */
 class AggregateHousehold extends Entity {
-    constructor(locationIdentifier, name, accountNumber = null) {
-        super(locationIdentifier, name, accountNumber);
+    constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
+        super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
         this.individuals = []; // Array of Individual objects
         // Inherited this.name should contain IdentifyingData(HouseholdName) - typically synthesized
     }
@@ -275,7 +419,7 @@ class AggregateHousehold extends Entity {
         const entityData = { ...data, type: 'Entity' };
         const baseEntity = Entity.deserialize(entityData);
 
-        const household = new AggregateHousehold(baseEntity.locationIdentifier, baseEntity.name, baseEntity.accountNumber);
+        const household = new AggregateHousehold(baseEntity.locationIdentifier, baseEntity.name, null, null, baseEntity.accountNumber);
         household.contactInfo = baseEntity.contactInfo;
         household.label = baseEntity.label;
         household.number = baseEntity.number;
@@ -302,8 +446,8 @@ class AggregateHousehold extends Entity {
  * Base class for non-human entities
  */
 class NonHuman extends Entity {
-    constructor(locationIdentifier, name, accountNumber = null) {
-        super(locationIdentifier, name, accountNumber);
+    constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
+        super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
     }
 
     /**
@@ -330,7 +474,7 @@ class NonHuman extends Entity {
         const entityData = { ...data, type: 'Entity' };
         const baseEntity = Entity.deserialize(entityData);
 
-        const nonHuman = new NonHuman(baseEntity.locationIdentifier, baseEntity.name, baseEntity.accountNumber);
+        const nonHuman = new NonHuman(baseEntity.locationIdentifier, baseEntity.name, null, null, baseEntity.accountNumber);
         nonHuman.contactInfo = baseEntity.contactInfo;
         nonHuman.label = baseEntity.label;
         nonHuman.number = baseEntity.number;
@@ -344,8 +488,8 @@ class NonHuman extends Entity {
  * Represents business entities
  */
 class Business extends NonHuman {
-    constructor(locationIdentifier, name, accountNumber = null) {
-        super(locationIdentifier, name, accountNumber);
+    constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
+        super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
     }
 
     /**
@@ -372,7 +516,7 @@ class Business extends NonHuman {
         const entityData = { ...data, type: 'Entity' };
         const baseEntity = Entity.deserialize(entityData);
 
-        const business = new Business(baseEntity.locationIdentifier, baseEntity.name, baseEntity.accountNumber);
+        const business = new Business(baseEntity.locationIdentifier, baseEntity.name, null, null, baseEntity.accountNumber);
         business.contactInfo = baseEntity.contactInfo;
         business.label = baseEntity.label;
         business.number = baseEntity.number;
@@ -386,8 +530,8 @@ class Business extends NonHuman {
  * Represents legal constructs (trusts, LLCs, etc.)
  */
 class LegalConstruct extends NonHuman {
-    constructor(locationIdentifier, name, accountNumber = null) {
-        super(locationIdentifier, name, accountNumber);
+    constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
+        super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
     }
 
     /**
@@ -414,7 +558,7 @@ class LegalConstruct extends NonHuman {
         const entityData = { ...data, type: 'Entity' };
         const baseEntity = Entity.deserialize(entityData);
 
-        const legalConstruct = new LegalConstruct(baseEntity.locationIdentifier, baseEntity.name, baseEntity.accountNumber);
+        const legalConstruct = new LegalConstruct(baseEntity.locationIdentifier, baseEntity.name, null, null, baseEntity.accountNumber);
         legalConstruct.contactInfo = baseEntity.contactInfo;
         legalConstruct.label = baseEntity.label;
         legalConstruct.number = baseEntity.number;
@@ -434,4 +578,15 @@ if (typeof module !== 'undefined' && module.exports) {
         Business,
         LegalConstruct
     };
+}
+
+// Also export to global scope for browser use
+if (typeof window !== 'undefined') {
+    window.Entity = Entity;
+    window.Individual = Individual;
+    window.CompositeHousehold = CompositeHousehold;
+    window.AggregateHousehold = AggregateHousehold;
+    window.NonHuman = NonHuman;
+    window.Business = Business;
+    window.LegalConstruct = LegalConstruct;
 }
