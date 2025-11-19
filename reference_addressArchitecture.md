@@ -1,5 +1,8 @@
 # Address Architecture Implementation Reference
 
+**⚠️ DEPRECATED**: 2025-11-18 - Use reference_sessionTechnicalKnowledge.md instead
+**⚠️ OUTDATED**: Information may not reflect current implementation with recipient details extraction
+
 **Purpose**: Technical implementation details for Address ComplexIdentifier subclass and address processing system
 
 **Status**: ✅ **IMPLEMENTATION COMPLETE** - Address class and test infrastructure ready, awaiting function integration

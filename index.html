@@ -275,8 +275,18 @@
         </div>
 
         <div class="button-section">
+            <h3>Entity Reconstruction</h3>
+            <button class="optBut" onclick="loadAllEntitiesIntoMemory()" style="background-color: #28a745; color: white;">
+                🚀 Load All Entities Into Memory
+            </button>
+            <p style="font-size: 12px; color: #666; margin: 10px 0;">
+                Loads all VisionAppraisal + Bloomerang entities from Google Drive into memory for analysis
+            </p>
+        </div>
+
+        <div class="button-section">
             <h3>Other Data Sources</h3>
-            <button class="optBut" onclick="readBloomerang()">Process Bloomerang CSV</button>
+            <button class="optBut" onclick="readBloomerangWithEntities(true)">Process Bloomerang CSV</button>
             <button class="optBut" onclick="analyzeBloomerangCSV()">Analyze CSV Quality</button>
             <button class="optBut" onclick="readPhonebook()">Process Phonebook Data</button>
         </div>
@@ -287,11 +297,40 @@
                 🔄 Process & Save VisionAppraisal Data
             </button>
             <p style="font-size: 12px; color: #666; margin: 10px 0;">
-                <strong>Enhanced Processing:</strong> Cleans name tags, parses MBLU fields,
+                <strong>Step 1:</strong> Cleans name tags, parses MBLU fields,
                 extracts addresses, and saves all 1,576 processed records to Google Drive
                 (File ID: 1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf).
                 <br><strong>Use for matching:</strong> Creates processed dataset with
                 <code>processedOwnerName</code>, parsed addresses, and enhanced fields.
+            </p>
+        </div>
+
+        <div class="button-section">
+            <h3>VisionAppraisal Entity Creation</h3>
+            <div style="margin-bottom: 15px;">
+                <label for="showDetailedResults" style="display: block; margin-bottom: 5px; font-weight: bold;">Show Detailed Results:</label>
+                <select id="showDetailedResults" style="margin-bottom: 10px; padding: 5px;">
+                    <option value="false">false - Normal output only</option>
+                    <option value="true">true - Show detailed address processing by case</option>
+                </select>
+                <p style="font-size: 11px; color: #666; margin: 5px 0;">Controls whether to display detailed address processing information for each parser case.</p>
+
+                <label for="quietMode" style="display: block; margin-bottom: 5px; font-weight: bold;">Quiet Mode:</label>
+                <select id="quietMode" style="margin-bottom: 10px; padding: 5px;">
+                    <option value="true">true - Suppress parser messages</option>
+                    <option value="false">false - Show all parser output</option>
+                </select>
+                <p style="font-size: 11px; color: #666; margin: 5px 0;">Controls whether to suppress individual parser case messages during processing.</p>
+            </div>
+
+            <button class="optBut" onclick="runEntityProcessing()" id="entityProcessBtn">
+                🏗️ Create Entities from Processed Data
+            </button>
+            <p style="font-size: 12px; color: #666; margin: 10px 0;">
+                <strong>Step 2:</strong> Loads processed VisionAppraisal data and creates entity objects
+                using the production parser. Saves 2,317 entities to Google Drive
+                (File ID: 19cgccMYNBboL07CmMP-5hNNGwEUBXgCI).
+                <br><strong>Prerequisites:</strong> Step 1 must complete first.
             </p>
         </div>
 
@@ -532,6 +571,57 @@
             }
         }
 
+        // VisionAppraisal entity processing function
+        async function runEntityProcessing() {
+            const btn = document.getElementById('entityProcessBtn');
+            const originalText = btn.innerHTML;
+
+            try {
+                // Get parameters from form inputs
+                const showDetailedResults = document.getElementById('showDetailedResults').value === 'true';
+                const quietMode = document.getElementById('quietMode').value === 'true';
+
+                // Update button to show processing
+                btn.innerHTML = '⏳ Creating Entities...';
+                btn.disabled = true;
+
+                console.log("=== STARTING VISIONAPPRAISAL ENTITY CREATION ===");
+                console.log(`Parameters: showDetailedResults=${showDetailedResults}, quietMode=${quietMode}`);
+
+                // Call the entity creation function with parameters
+                const result = await processAllVisionAppraisalRecordsWithAddresses(showDetailedResults, quietMode);
+
+                console.log("✅ VisionAppraisal entity creation completed successfully!");
+                btn.innerHTML = '✅ Entity Creation Complete!';
+
+                // Show success message
+                alert(`VisionAppraisal entity creation completed successfully!\n\n` +
+                      `• Entities created from processed data\n` +
+                      `• Saved to Google Drive (File ID: 19cgccMYNBboL07CmMP-5hNNGwEUBXgCI)\n` +
+                      `• Parameters: Detailed Results = ${showDetailedResults}, Quiet Mode = ${quietMode}\n\n` +
+                      `Entities are now ready for analysis and matching!`);
+
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 3000);
+
+            } catch (error) {
+                console.error("❌ VisionAppraisal entity creation failed:", error);
+
+                btn.innerHTML = '❌ Entity Creation Failed';
+
+                alert(`VisionAppraisal entity creation failed:\n\n${error.message}\n\nCheck console for details.`);
+
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 3000);
+            }
+        }
+
         // Close modal when clicking outside of it
         window.onclick = function(event) {
             const modal = document.getElementById('readmeModal');
@@ -540,6 +630,9 @@
             }
         }
     </script>
+
+    <!-- Load All Entities Button Functionality -->
+    <script src="./scripts/loadAllEntitiesButton.js"></script>
 
 </body>
 </html>

@@ -43,8 +43,15 @@
 
 **Step 1B: Process VisionAppraisal Data**
 - **Action**: Press **"Process and Save VisionAppraisal"** button in HTML interface
-- **Code**: Executes `processAndSaveVisionAppraisal()` function from `baseCode.js`
+- **Code**: Executes `processAndSaveVisionAppraisal()` function from `index.html` **(Correction: 2025-11-16 - function is in index.html, not baseCode.js)**
 - **Input**: Uses raw data collected in Phase 0
+- **Result**: Creates processed data with enhanced fields (processedOwnerName, parsed addresses, MBLU components)
+- **Output**: Processed VisionAppraisal data stored in Google Drive (File ID: `1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf`) **(Correction: 2025-11-16 - this step creates processed data, not entities)**
+
+**Step 1C: Create VisionAppraisal Entities** **(Addition: 2025-11-16 - separate step for entity creation)**
+- **Action**: Press **"Create Entities from Processed Data"** button in HTML interface
+- **Code**: Executes `processAllVisionAppraisalRecordsWithAddresses()` function
+- **Input**: Uses processed data from Step 1B (File ID: `1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf`)
 - **Result**: Uses ConfigurableVisionAppraisalNameParser (34-case coverage, 100% success rate on 2,317 records)
 - **Output**: VisionAppraisal entities stored in Google Drive (File ID: `19cgccMYNBboL07CmMP-5hNNGwEUBXgCI`)
 

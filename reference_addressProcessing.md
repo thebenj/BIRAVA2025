@@ -1,5 +1,8 @@
 # Address Processing Module - Technical Reference
 
+**⚠️ DEPRECATED**: 2025-11-18 - Use reference_sessionTechnicalKnowledge.md instead
+**⚠️ OUTDATED**: Information may not reflect current implementation with recipient details extraction
+
 ## Architecture Overview
 
 The address processing system (`scripts/address/addressProcessing.js`) is designed for **Block Island-specific address processing** with these core features:

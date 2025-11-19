@@ -66,7 +66,7 @@ const VisionAppraisal = {
             const neighborhood = fields[6] || '';       // Field[6]: Neighborhood (was incorrectly called userCode)
             const date = fields[7] || '';               // Field[7]: Date
             const mblu = fields[8] || '';               // Field[8]: MBLU (to be expanded)
-            const pid = fields[9] || '';                // Field[9]: ACTUAL PID (was incorrectly mapped)
+            const pid = (fields[9] || '').trim().replace(/^["']|["']$/g, '');  // Field[9]: ACTUAL PID (clean quotes)
             const googleFileId = fields[10] || '';      // Field[10]: Google File ID (was incorrectly called PID)
 
             // Use parser functions to expand and clean data (access from window object)
@@ -97,7 +97,7 @@ const VisionAppraisal = {
                 neighborhood: neighborhood.trim(),
                 date: date.trim(),
                 mblu: mblu.trim(),
-                pid: pid.trim(),              // CORRECTED: Now using field[9]
+                pid: pid,                     // CORRECTED: Now using field[9] with quote cleaning
                 googleFileId: googleFileId.trim(),
 
                 // Expanded MBLU fields

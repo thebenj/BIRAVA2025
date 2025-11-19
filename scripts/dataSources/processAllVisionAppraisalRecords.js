@@ -26,7 +26,8 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
             './scripts/validation/case31Validator.js',
             './scripts/dataSources/visionAppraisal.js',
             './scripts/dataSources/visionAppraisalNameParser.js',
-            './scripts/address/addressProcessing.js'
+            './scripts/address/addressProcessing.js',
+            './scripts/utils/classSerializationUtils.js'
         ];
 
         for (const script of scripts) {
@@ -152,8 +153,12 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
                         addressProcessingSuccesses++;
                     }
 
-                    // Track entity type counts
+                    // Track entity type counts and preserve type for serialization
                     const entityType = entity.constructor.name;
+
+                    // SERIALIZATION FIX: Add explicit entityType property to preserve constructor info
+                    entity.entityType = entityType;
+
                     if (!entityTypeCounts[entityType]) {
                         entityTypeCounts[entityType] = 0;
                     }
@@ -330,8 +335,9 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
         const fileName = 'VisionAppraisal_ParsedEntities.json';
 
         try {
-            const fileContent = JSON.stringify(dataPackage, null, 2);
-            console.log(`📝 Saving ${allEntities.length} entities to Google Drive...`);
+            console.log(`🔄 Using recursive serialization to preserve class constructors...`);
+            const fileContent = serializeWithTypes(dataPackage);
+            console.log(`📝 Saving ${allEntities.length} entities to Google Drive with preserved class types...`);
 
             const uploadResponse = await gapi.client.request({
                 path: `https://www.googleapis.com/upload/drive/v3/files/${GOOGLE_FILE_ID}`,

@@ -1209,6 +1209,7 @@ class Address extends ComplexIdentifiers {
 
         // Original data preservation
         this.originalAddress = null;    // AttributedTerm for full unparsed address string
+        this.recipientDetails = null;   // AttributedTerm for recipient info (C/O, business names, etc.)
 
         // Parsed components from parse-address library
         this.streetNumber = null;       // AttributedTerm for "123"
@@ -1313,6 +1314,16 @@ class Address extends ComplexIdentifiers {
 
         // Set original address (same as primaryAlias for consistency)
         address.originalAddress = primaryAlias;
+
+        // Set recipient details if present
+        if (processedAddress.recipientDetails) {
+            address.recipientDetails = new AttributedTerm(
+                processedAddress.recipientDetails,
+                processedAddress.sourceType,
+                fieldName,
+                'recipient_details'
+            );
+        }
 
         // Create AttributedTerms for each component with proper data lineage
         if (processedAddress.number) {
@@ -1430,6 +1441,7 @@ class Address extends ComplexIdentifiers {
             primaryAlias: this.primaryAlias.serialize(),
             alternatives: this.alternatives.serialize(),
             originalAddress: this.originalAddress ? this.originalAddress.serialize() : null,
+            recipientDetails: this.recipientDetails ? this.recipientDetails.serialize() : null,
             streetNumber: this.streetNumber ? this.streetNumber.serialize() : null,
             streetName: this.streetName ? this.streetName.serialize() : null,
             streetType: this.streetType ? this.streetType.serialize() : null,
@@ -1462,6 +1474,7 @@ class Address extends ComplexIdentifiers {
 
         // Deserialize all components
         if (data.originalAddress) address.originalAddress = AttributedTerm.deserialize(data.originalAddress);
+        if (data.recipientDetails) address.recipientDetails = AttributedTerm.deserialize(data.recipientDetails);
         if (data.streetNumber) address.streetNumber = AttributedTerm.deserialize(data.streetNumber);
         if (data.streetName) address.streetName = AttributedTerm.deserialize(data.streetName);
         if (data.streetType) address.streetType = AttributedTerm.deserialize(data.streetType);
