@@ -40,7 +40,7 @@ async function loadVisionAppraisalEntitiesWorking() {
             // Show entity type breakdown
             const typeCounts = {};
             fileData.entities.forEach(entity => {
-                const type = entity.__type || 'Unknown';
+                const type = entity.type || 'Unknown';
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
             });
             console.log('📊 Entity types:', typeCounts);
@@ -106,7 +106,7 @@ function generateWorkingNameReport() {
     };
 
     workingLoadedEntities.visionAppraisal.entities.forEach((entity, index) => {
-        const entityType = entity.__type || 'Unknown';
+        const entityType = entity.type || 'Unknown';
         const name = extractNameWorking(entity);
 
         // Initialize type array if needed
@@ -213,25 +213,45 @@ async function runWorkingEntityTest() {
 
 /**
  * Load Bloomerang collections using tested working pattern
+ * @param {string} configFileId - Optional Google Drive file ID for config file (defaults to folder search)
  */
-async function loadBloomerangCollectionsWorking() {
+async function loadBloomerangCollectionsWorking(configFileId = null) {
     console.log('👥 Loading Bloomerang collections...');
 
     try {
-        const batchesFolderId = '1hcI8ZNKw9zfN5UMr7-LOfUldxuGF2V9e';
-        const configResponse = await gapi.client.drive.files.list({
-            q: `'${batchesFolderId}' in parents and name contains 'BloomerangEntityBrowserConfig_' and trashed=false`,
-            orderBy: 'modifiedTime desc',
-            pageSize: 1,
-            fields: 'files(id,name,modifiedTime)'
-        });
+        let config;
 
-        const configFile = configResponse.result.files[0];
-        console.log('📄 Using config:', configFile.name);
+        if (configFileId) {
+            // Use specific config file ID provided
+            console.log('📄 Using provided config file ID:', configFileId);
+            console.log('🔍 DEBUG: This is the config file that tells us which entity files to load');
+            const configResponse = await gapi.client.drive.files.get({
+                fileId: configFileId,
+                alt: 'media'
+            });
+            config = JSON.parse(configResponse.body);
+            console.log('📄 Config loaded:', config.metadata?.description || 'Config file');
+            console.log('🔍 DEBUG: Config entity file IDs:', config.entities || 'NO ENTITIES IN CONFIG');
 
-        const configData = await gapi.client.drive.files.get({fileId: configFile.id, alt: 'media'});
-        const config = JSON.parse(configData.body);
+        } else {
+            // Fall back to original folder search method
+            console.log('📄 Searching for config in default folder...');
+            const batchesFolderId = '1hcI8ZNKw9zfN5UMr7-LOfUldxuGF2V9e';
+            const configResponse = await gapi.client.drive.files.list({
+                q: `'${batchesFolderId}' in parents and name contains 'BloomerangEntityBrowserConfig_' and trashed=false`,
+                orderBy: 'modifiedTime desc',
+                pageSize: 1,
+                fields: 'files(id,name,modifiedTime)'
+            });
 
+            const configFile = configResponse.result.files[0];
+            console.log('📄 Using config:', configFile.name);
+
+            const configData = await gapi.client.drive.files.get({fileId: configFile.id, alt: 'media'});
+            config = JSON.parse(configData.body);
+        }
+
+        // Process config data to load collections
         const fileIds = {
             individuals: config.fileIds.individuals,
             households: config.fileIds.households,
@@ -241,10 +261,14 @@ async function loadBloomerangCollectionsWorking() {
         workingLoadedEntities.bloomerang = {};
 
         for (const [type, fileId] of Object.entries(fileIds)) {
+            console.log(`🔍 DEBUG: Loading ${type} entities from file ID: ${fileId}`);
+            console.log(`🔍 DEBUG: This file was created when? Check metadata...`);
             const response = await gapi.client.drive.files.get({fileId, alt: 'media'});
             const collectionData = JSON.parse(response.body);
             workingLoadedEntities.bloomerang[type] = collectionData;
             console.log(`✅ ${type}: ${collectionData.metadata.totalEntities} entities`);
+            console.log(`🔍 DEBUG: ${type} entities created at:`, collectionData.metadata.created);
+            console.log(`🔍 DEBUG: Are these the entities with secondary addresses we just processed?`);
         }
 
         workingLoadedEntities.bloomerang.loaded = true;

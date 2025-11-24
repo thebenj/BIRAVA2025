@@ -251,6 +251,142 @@
             border: 1px solid #28a745;
             color: #155724;
         }
+
+        /* Unified Entity Browser Styles */
+        .unified-result-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .unified-result-item:hover {
+            background-color: #f8f9fa;
+        }
+
+        .unified-result-item.unified-selected {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+
+        .unified-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .unified-entity-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .unified-source-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .unified-source-visionappraisal {
+            background-color: #dc3545;
+        }
+
+        .unified-source-bloomerang {
+            background-color: #007bff;
+        }
+
+        .unified-entity-type {
+            font-size: 11px;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .unified-entity-key {
+            font-family: 'Courier New', monospace;
+            color: #6c757d;
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+
+        .unified-entity-name {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+            margin-bottom: 3px;
+            line-height: 1.3;
+        }
+
+        .unified-entity-details {
+            color: #666;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .unified-status-message {
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .unified-status-loading {
+            background-color: #cce5ff;
+            border: 1px solid #007bff;
+            color: #004085;
+        }
+
+        .unified-status-error {
+            background-color: #f8d7da;
+            border: 1px solid #dc3545;
+            color: #721c24;
+        }
+
+        .unified-status-success {
+            background-color: #d4edda;
+            border: 1px solid #28a745;
+            color: #155724;
+        }
+
+        .control-section {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .control-group label {
+            font-size: 13px;
+        }
+
+        .control-group select {
+            background-color: white;
+            transition: border-color 0.2s ease;
+        }
+
+        .control-group select:focus {
+            outline: none;
+            border-color: #80bdff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+
+        /* Responsive adjustments for unified browser */
+        @media (max-width: 768px) {
+            .control-row {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 15px !important;
+            }
+
+            .control-group {
+                min-width: auto !important;
+            }
+
+            .unified-entity-header {
+                flex-wrap: wrap;
+            }
+        }
     </style>
 </head>
 <body>
@@ -276,6 +412,16 @@
 
         <div class="button-section">
             <h3>Entity Reconstruction</h3>
+            <div style="margin-bottom: 15px;">
+                <label for="bloomerangConfigFileId" style="display: block; font-size: 12px; color: #333; margin-bottom: 5px;">
+                    Bloomerang Config File ID (contains current entity file IDs):
+                </label>
+                <input type="text"
+                       id="bloomerangConfigFileId"
+                       placeholder="Enter Google Drive file ID"
+                       style="width: 100%; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;"
+                       onchange="saveBloomerangConfigFileId(this.value)">
+            </div>
             <button class="optBut" onclick="loadAllEntitiesIntoMemory()" style="background-color: #28a745; color: white;">
                 🚀 Load All Entities Into Memory
             </button>
@@ -338,83 +484,81 @@
             <button id="readmeButton" class="optBut" onclick="showReadme()">📖 README</button>
         </div>
 
-        <!-- Entity Browser Section -->
-        <div class="entity-browser-section">
-            <h3>🔍 Entity Browser - Collection Explorer</h3>
+        <!-- Unified Entity Browser Section -->
+        <div class="entity-browser-section" style="border-color: #28a745;">
+            <h3 style="color: #28a745;">🌐 Unified Entity Browser - Multi-Source Data Explorer</h3>
 
-            <div class="collection-tabs">
-                <div class="collection-tab active" onclick="switchCollection('individuals')">Individuals</div>
-                <div class="collection-tab" onclick="switchCollection('households')">Households</div>
-                <div class="collection-tab" onclick="switchCollection('nonhuman')">NonHuman</div>
+            <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
+                <div class="control-row" style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 200px;">
+                        <label for="unifiedDataSourceSelector" style="font-weight: 600; margin-bottom: 5px; color: #495057;">Data Source:</label>
+                        <select id="unifiedDataSourceSelector" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;">
+                            <option value="all">🌐 All Data Sources</option>
+                            <option value="visionappraisal">🏠 VisionAppraisal Property Data</option>
+                            <option value="bloomerang">👥 Bloomerang Contact Database</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 200px;">
+                        <label for="unifiedEntityTypeSelector" style="font-weight: 600; margin-bottom: 5px; color: #495057;">Entity Type:</label>
+                        <select id="unifiedEntityTypeSelector" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;">
+                            <option value="all">All Types</option>
+                            <option value="Individual">Individual</option>
+                            <option value="AggregateHousehold">Aggregate Household</option>
+                            <option value="Business">Business</option>
+                            <option value="LegalConstruct">Legal Construct</option>
+                            <option value="NonHuman">Non-Human</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group" style="display: flex; align-items: flex-end;">
+                        <button id="unifiedLoadDataBtn" class="action-button" style="background-color: #28a745; padding: 10px 20px; font-weight: 600;">
+                            📁 Load All Data Sources
+                        </button>
+                    </div>
+                </div>
+
+                <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                    <strong>Multi-Source Browser:</strong> Select a specific data source or choose "All Data Sources" to browse entities from VisionAppraisal and Bloomerang simultaneously.
+                    The browser will automatically adapt the display and filters based on your selection.
+                </div>
             </div>
 
             <div class="search-section">
-                <input type="text" id="searchInput" class="search-input" placeholder="Search by account number, fire number, name..." onkeypress="handleSearchKeyPress(event)">
-                <button class="search-button" onclick="performSearch()">🔍 Search</button>
-                <button class="search-button" onclick="clearSearch()" style="background-color: #6c757d;">Clear</button>
+                <input type="text" id="unifiedSearchInput" class="search-input" placeholder="Search across all fields: names, account numbers, fire numbers, addresses, emails..." onkeypress="handleUnifiedSearchKeyPress(event)">
+                <button id="unifiedSearchBtn" class="search-button" onclick="performUnifiedSearch()">🔍 Search</button>
+                <button id="unifiedClearBtn" class="search-button" onclick="clearSearchAndFilters()" style="background-color: #6c757d;">Clear</button>
 
                 <div class="quick-filters">
-                    <strong>Quick Filters:</strong>
-                    <button class="filter-button" onclick="quickFilter('account')">By Account #</button>
-                    <button class="filter-button" onclick="quickFilter('fire')">By Fire #</button>
-                    <button class="filter-button" onclick="quickFilter('name')">By Name</button>
-                    <button class="filter-button" onclick="showAll()">Show All</button>
+                    <strong>Enhanced Quick Filters:</strong>
+                    <button class="filter-button" onclick="applyQuickFilter('account')">By Account #</button>
+                    <button class="filter-button" onclick="applyQuickFilter('fire')">By Fire #</button>
+                    <button class="filter-button" onclick="applyQuickFilter('pid')">By PID</button>
+                    <button class="filter-button" onclick="applyQuickFilter('name')">By Name</button>
+                    <button class="filter-button" onclick="applyQuickFilter('all')" style="background-color: #17a2b8;">Show All</button>
                 </div>
             </div>
 
-            <div id="statusMessage" class="status-message" style="display: none;"></div>
+            <div id="unifiedStatusMessage" class="status-message" style="display: none;"></div>
 
             <div class="results-section">
                 <div class="results-header">
-                    <span id="resultsCount">Click "Load Collections" to begin</span>
+                    <span id="unifiedResultsCount">Select data source and click Load to begin</span>
                 </div>
-                <div id="resultsList" class="results-list">
-                    <!-- Results will be populated here -->
+                <div id="unifiedResultsList" class="results-list">
+                    <div style="padding: 20px; text-align: center; color: #999;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">🌐</div>
+                        <div style="font-weight: 600; margin-bottom: 10px;">Unified Entity Browser</div>
+                        <div>Select data source and load data to begin browsing entities</div>
+                    </div>
                 </div>
             </div>
 
             <div class="action-buttons">
-                <button class="action-button" onclick="loadCollections()">📁 Load Collections</button>
-                <button class="action-button" onclick="exportResults()">📄 Export Results</button>
-                <button class="action-button" onclick="showIndexStats()">📊 Index Stats</button>
-                <button class="action-button" onclick="viewSelectedEntity()">👁️ View Details</button>
-            </div>
-        </div>
-
-        <!-- VisionAppraisal Entity Browser Section -->
-        <div class="entity-browser-section" style="border-color: #dc3545;">
-            <h3 style="color: #dc3545;">🔍 VisionAppraisal Entity Browser - Property Data Explorer</h3>
-
-            <div class="search-section">
-                <input type="text" id="vaSearchInput" class="search-input" placeholder="Search by PID, Fire Number, owner name, address..." onkeypress="handleVASearchKeyPress(event)">
-                <button class="search-button" onclick="performVASearch()">🔍 Search</button>
-                <button class="search-button" onclick="clearVASearch()" style="background-color: #6c757d;">Clear</button>
-
-                <div class="quick-filters">
-                    <strong>Quick Filters:</strong>
-                    <button class="filter-button" onclick="quickVAFilter('pid')">By PID</button>
-                    <button class="filter-button" onclick="quickVAFilter('fire')">By Fire #</button>
-                    <button class="filter-button" onclick="quickVAFilter('owner')">By Owner</button>
-                    <button class="filter-button" onclick="showAllVA()">Show All</button>
-                </div>
-            </div>
-
-            <div id="vaStatusMessage" class="status-message" style="display: none;"></div>
-
-            <div class="results-section">
-                <div class="results-header">
-                    <span id="vaResultsCount">Click "Load VisionAppraisal Data" to begin</span>
-                </div>
-                <div id="vaResultsList" class="results-list">
-                    <!-- Results will be populated here -->
-                </div>
-            </div>
-
-            <div class="action-buttons">
-                <button class="action-button" onclick="loadVisionAppraisalData()" style="background-color: #dc3545;">📁 Load VisionAppraisal Data</button>
-                <button class="action-button" onclick="exportVAResults()">📄 Export Results</button>
-                <button class="action-button" onclick="showVAStats()">📊 Data Stats</button>
-                <button class="action-button" onclick="viewSelectedVAEntity()">👁️ View Details</button>
+                <button id="unifiedViewDetailsBtn" class="action-button" onclick="viewSelectedEntityDetails()">👁️ View Details</button>
+                <button id="unifiedExportBtn" class="action-button" onclick="exportCurrentResults()">📄 Export Results</button>
+                <button id="unifiedStatsBtn" class="action-button" onclick="showUnifiedStats()">📊 Unified Stats</button>
+                <button class="action-button" onclick="clearSearchAndFilters()" style="background-color: #6c757d;">🗑️ Clear All</button>
             </div>
         </div>
     </div>
@@ -460,6 +604,13 @@
     <script type="text/javascript" src="./scripts/integration/testPlugin.js"></script>
     <script type="text/javascript" src="./scripts/testAttributedTermSubclasses.js"></script>
     <script type="text/javascript" src="./scripts/bloomerang.js"></script>
+
+    <!-- Unified Entity Browser System -->
+    <script type="text/javascript" src="./scripts/dataSourceManager.js"></script>
+    <script type="text/javascript" src="./scripts/entityRenderer.js"></script>
+    <script type="text/javascript" src="./scripts/unifiedEntityBrowser.js"></script>
+
+    <!-- Legacy Entity Browsers (kept for reference) -->
     <script type="text/javascript" src="./scripts/entityBrowser.js"></script>
     <script type="text/javascript" src="./scripts/visionAppraisalBrowser.js"></script>
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
@@ -628,6 +779,40 @@
             if (event.target == modal) {
                 closeReadme();
             }
+        }
+
+        // Unified Entity Browser key press handler
+        function handleUnifiedSearchKeyPress(event) {
+            if (event.key === 'Enter') {
+                performUnifiedSearch();
+            }
+        }
+    </script>
+
+    <!-- Bloomerang Config File ID Management -->
+    <script>
+        // Load saved config file ID when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedFileId = localStorage.getItem('bloomerangConfigFileId');
+            if (savedFileId) {
+                document.getElementById('bloomerangConfigFileId').value = savedFileId;
+            }
+        });
+
+        // Save config file ID to localStorage
+        function saveBloomerangConfigFileId(fileId) {
+            localStorage.setItem('bloomerangConfigFileId', fileId);
+            console.log('✅ Bloomerang config file ID saved:', fileId);
+        }
+
+        // Get current config file ID
+        function getBloomerangConfigFileId() {
+            const fileId = document.getElementById('bloomerangConfigFileId').value.trim();
+            if (!fileId) {
+                alert('Please enter a Bloomerang Config File ID');
+                return null;
+            }
+            return fileId;
         }
     </script>
 
