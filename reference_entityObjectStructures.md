@@ -412,6 +412,86 @@ if (Array.isArray(entity.individuals)) {
 
 ---
 
-**Status**: ✅ **COMPLETE** - Comprehensive documentation of VisionAppraisal entity object structures
+## 🏠 **Bloomerang Household Membership Pattern**
+
+### **additionalData.householdData Structure**
+
+Bloomerang Individual entities have household membership data stored in `additionalData.householdData`:
+
+```javascript
+{
+    // ... entity properties ...
+    "additionalData": {
+        "transactionData": { /* ... */ },
+        "metadata": { /* ... */ },
+        "addresses": { /* ... */ },
+        "blockIslandData": { /* ... */ },
+        "householdData": {
+            "isInHousehold": "TRUE",                    // String "TRUE" or "FALSE"
+            "householdName": "Robert & Carolyn Benjamin", // Household name for lookup
+            "isHeadOfHousehold": "FALSE"               // String "TRUE" or "FALSE"
+        }
+    }
+}
+```
+
+### **Usage for Household Member Lookup**
+
+**Correct Pattern** (use for Bloomerang):
+```javascript
+function findBloomerangHouseholdMembers(householdName) {
+    const members = [];
+    const individuals = workingLoadedEntities.bloomerang.individuals.entities;
+
+    for (const key in individuals) {
+        const individual = individuals[key];
+        const householdData = individual.additionalData?.householdData;
+
+        if (householdData?.isInHousehold === "TRUE" &&
+            householdData?.householdName === householdName) {
+            members.push(individual);
+        }
+    }
+
+    return members;
+}
+```
+
+**Incorrect Pattern** (produces false positives):
+```javascript
+// DON'T DO THIS - imprecise location/address search produces wrong matches
+function findHouseholdMembersByLocation(locationId) {
+    // This will match unrelated individuals with similar addresses
+}
+```
+
+### **Key Points**
+- `isInHousehold`: String value "TRUE" or "FALSE" (not boolean)
+- `householdName`: Exact string match for household membership lookup
+- `isHeadOfHousehold`: String value indicating head of household status
+- **Always use exact householdName match** - not address/location proximity search
+
+---
+
+## 📋 **Known Data Issues**
+
+### **VisionAppraisal AggregateHousehold.individuals Arrays**
+
+**Problem**: Many VisionAppraisal AggregateHousehold entities have empty `individuals` arrays.
+
+**Root Cause**: ConfigurableVisionAppraisalNameParser case handlers pass `[]` to `createAggregateHousehold()`.
+
+**Affected Cases**: Lines 270, 482, 498, 546, 585, 602, 619, 636, 762 (9+ cases)
+
+**Working Cases**: Lines 133, 254, 409 (properly create Individual entities)
+
+**Reference**: See `reference_householdIndividualsPopulation.md` for implementation plan.
+
+**Impact**: Unified browser cannot display household members from individuals array; must rely on parser fix.
+
+---
+
+**Status**: ✅ **UPDATED** - Now includes Bloomerang householdData pattern and known data issues
 **Usage**: Reference for all future entity processing, display, and analysis work
-**Coverage**: Based on analysis of 2,317 real entities across all 4 entity types
+**Coverage**: Based on analysis of 2,317 VisionAppraisal + 1,788 Bloomerang entities (4,105 total)
+**Last Updated**: November 30, 2025

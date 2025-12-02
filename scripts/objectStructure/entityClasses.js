@@ -44,6 +44,11 @@ class Entity {
         // Process address parameters if provided
         this._processAddressParameters(propertyLocation, ownerAddress);
 
+        // Weighted comparison architecture properties
+        this.comparisonWeights = null;                    // Object: {propName: weight, ...}
+        this.comparisonCalculatorName = 'defaultWeightedComparison';  // Serializable string name
+        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
+
         // Legacy properties - kept for backwards compatibility during transition
         this.label = null;    // Will be deprecated
         this.number = null;   // Will be deprecated
@@ -66,7 +71,7 @@ class Entity {
 
             if (propertyType === 'text') {
                 // Case a) Text - pass through address parser
-                propertyAddressObject = this._processTextToAddress(propertyLocation, 'propertyLocation');
+                propertyAddressObject = this._processTextToAddressNew(propertyLocation, 'propertyLocation');
             } else if (propertyType === 'address') {
                 // Case b) Address object - direct use
                 propertyAddressObject = propertyLocation;
@@ -85,7 +90,7 @@ class Entity {
 
             if (ownerType === 'text') {
                 // Case a) Text - pass through address parser
-                ownerAddressObject = this._processTextToAddress(ownerAddress, 'ownerAddress');
+                ownerAddressObject = this._processTextToAddressNew(ownerAddress, 'ownerAddress');
             } else if (ownerType === 'address') {
                 // Case b) Address object - direct use
                 ownerAddressObject = ownerAddress;
@@ -142,16 +147,10 @@ class Entity {
         return 'other';
     }
 
-    /**
-     * Process text string through address parser to create Address object
-     * @param {string} addressText - Address text to parse
-     * @param {string} fieldName - Field name for data lineage
-     * @returns {Address|null} Address object or null if parsing failed
-     * @private
-     */
+    // RETIRED: Phase 3 migration complete - replaced by _processTextToAddressNew
+    /*
     _processTextToAddress(addressText, fieldName) {
         try {
-            // Use the address processing functions from addressProcessing.js
             if (typeof processAddress === 'function' && typeof createAddressFromParsedData === 'function') {
                 const processedAddress = processAddress(addressText, 'VisionAppraisal', fieldName);
                 if (processedAddress) {
@@ -162,6 +161,47 @@ class Entity {
             }
         } catch (error) {
             console.error('Error processing text address:', error);
+        }
+        return null;
+    }
+    */
+
+    /**
+     * PHASE 2 PARALLEL: Process text to address using generalized architecture
+     *
+     * This method implements the new generalized address processing architecture
+     * alongside the original _processTextToAddress for validation purposes.
+     *
+     * PARALLEL IMPLEMENTATION STRATEGY:
+     * - Uses processAddressGeneralized with VisionAppraisal configuration
+     * - Runs in parallel with original method for comparison testing
+     * - Ensures new architecture produces identical results to original
+     *
+     * @param {string} addressText - Raw address text to process
+     * @param {string} fieldName - Field name for data lineage
+     * @returns {Address|null} Address object using new architecture, or null if processing failed
+     * @private
+     */
+    _processTextToAddressNew(addressText, fieldName) {
+        try {
+            // Use the NEW generalized address processing architecture
+            if (typeof processAddressGeneralized === 'function' && typeof createAddressFromParsedData === 'function') {
+                // VisionAppraisal configuration for generalized architecture
+                const visionAppraisalConfig = {
+                    sourceType: 'VisionAppraisal',
+                    preprocess: preprocessAddress,
+                    postProcess: postProcessAddress
+                };
+
+                const processedAddress = processAddressGeneralized(addressText, visionAppraisalConfig);
+                if (processedAddress) {
+                    return createAddressFromParsedData(processedAddress, fieldName);
+                }
+            } else {
+                console.warn('Generalized address processing functions not available - processAddressGeneralized or createAddressFromParsedData not found');
+            }
+        } catch (error) {
+            console.error('Error processing text address with new architecture:', error);
         }
         return null;
     }
@@ -199,6 +239,26 @@ class Entity {
     }
 
     /**
+     * Compare this entity to another entity using weighted comparison
+     * Uses the comparisonCalculator function set by initializeWeightedComparison()
+     * Follows the compareTo architecture: each class handles its own comparison logic
+     *
+     * @param {Entity} otherEntity - The entity to compare against
+     * @returns {number} Similarity score 0-1 (1 = identical, 0 = completely different)
+     */
+    compareTo(otherEntity) {
+        if (!otherEntity) return 0;
+
+        // Use the comparison calculator if available
+        if (this.comparisonCalculator && typeof this.comparisonCalculator === 'function') {
+            return this.comparisonCalculator.call(this, otherEntity);
+        }
+
+        // Fallback to generic comparison if no calculator set
+        return genericObjectCompareTo(this, otherEntity);
+    }
+
+    /**
      * Serialize Entity to JSON-compatible object
      * @returns {Object} Serialized representation
      */
@@ -209,13 +269,18 @@ class Entity {
             name: this.name ? this.name.serialize() : null,
             accountNumber: this.accountNumber ? this.accountNumber.serialize() : null,
             contactInfo: this.contactInfo ? this.contactInfo.serialize() : null,
+            otherInfo: this.otherInfo,
+            legacyInfo: this.legacyInfo,
             label: this.label,
-            number: this.number
+            number: this.number,
+            comparisonWeights: this.comparisonWeights,
+            comparisonCalculatorName: this.comparisonCalculatorName
         };
     }
 
     /**
      * Deserialize Entity from JSON object
+     * Uses constructor (initialization logic runs)
      * @param {Object} data - Serialized data
      * @returns {Entity} Reconstructed Entity instance
      */
@@ -224,24 +289,54 @@ class Entity {
             throw new Error('Invalid Entity serialization format');
         }
 
-        // Deserialize components
-        const locationIdentifier = data.locationIdentifier ? IdentifyingData.deserialize(data.locationIdentifier) : null;
-        const name = data.name ? IdentifyingData.deserialize(data.name) : null;
-        const accountNumber = data.accountNumber ? IndicativeData.deserialize(data.accountNumber) : null;
+        // Properties are stored directly (not wrapped in IdentifyingData/IndicativeData)
+        // - locationIdentifier: string/number (Fire Number) or FireNumber instance
+        // - name: AttributedTerm or IndividualName/HouseholdName instance
+        // - accountNumber: AttributedTerm instance
+        // Already-transformed instances from deserializeWithTypes are passed through
+        const locationIdentifier = data.locationIdentifier;
+        const name = data.name;
+        const accountNumber = data.accountNumber;
 
-        // Create entity
-        const entity = new Entity(locationIdentifier, name, accountNumber);
+        // Create entity - constructor runs!
+        const entity = new Entity(locationIdentifier, name, null, null, accountNumber);
 
-        // Deserialize contact info
+        // ContactInfo is passed through (already deserialized by bottom-up reviver)
         if (data.contactInfo) {
-            entity.contactInfo = ContactInfo.deserialize(data.contactInfo);
+            entity.contactInfo = data.contactInfo;
         }
 
         // Set legacy properties
         entity.label = data.label;
         entity.number = data.number;
 
+        // Cases 13 & 15 resolution: Ensure otherInfo and legacyInfo are null, not undefined
+        entity.otherInfo = data.otherInfo || null;
+        entity.legacyInfo = data.legacyInfo || null;
+
+        // Restore comparison properties from serialized data if present
+        if (data.comparisonCalculatorName) {
+            entity.comparisonCalculatorName = data.comparisonCalculatorName;
+            entity.comparisonCalculator = resolveComparisonCalculator(data.comparisonCalculatorName);
+        }
+        if (data.comparisonWeights) {
+            entity.comparisonWeights = data.comparisonWeights;
+        }
+
         return entity;
+    }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * This is the preferred entry point for deserializeWithTypes to use
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {Entity} Reconstructed instance (Entity or subclass)
+     */
+    static fromSerializedData(data) {
+        // 'this' refers to the actual class called (Individual, AggregateHousehold, etc.)
+        // not necessarily Entity, enabling polymorphic deserialization
+        return this.deserialize(data);
     }
 
     /**
@@ -302,6 +397,27 @@ class Individual extends Entity {
     constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
         super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
         // Inherited this.name should contain IdentifyingData(IndividualName)
+        this.initializeWeightedComparison();
+    }
+
+    /**
+     * Initialize weighted comparison properties for Individual entities
+     * Uses entityWeightedComparison calculator which compares:
+     * - name (IndividualName) with highest weight
+     * - contactInfo (addresses + email)
+     * - otherInfo and legacyInfo if present
+     * Called from constructor to enable weighted Entity.compareTo()
+     */
+    initializeWeightedComparison() {
+        // Individual entities weight name heavily since it's the primary identifier
+        this.comparisonWeights = {
+            name: 0.5,
+            contactInfo: 0.3,
+            otherInfo: 0.15,
+            legacyInfo: 0.05
+        };
+        this.comparisonCalculatorName = 'entityWeightedComparison';
+        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
     }
 
     /**
@@ -392,6 +508,28 @@ class AggregateHousehold extends Entity {
         super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
         this.individuals = []; // Array of Individual objects
         // Inherited this.name should contain IdentifyingData(HouseholdName) - typically synthesized
+        this.initializeWeightedComparison();
+    }
+
+    /**
+     * Initialize weighted comparison properties for AggregateHousehold entities
+     * Uses entityWeightedComparison calculator which compares:
+     * - name (HouseholdName) - weighted less than Individual since household names are synthesized
+     * - contactInfo (addresses + email) - weighted more since address is key identifier for households
+     * - otherInfo and legacyInfo if present
+     * Called from constructor to enable weighted Entity.compareTo()
+     */
+    initializeWeightedComparison() {
+        // Household entities weight contactInfo more heavily since address is key identifier
+        // Name is weighted less since household names are often synthesized/approximate
+        this.comparisonWeights = {
+            name: 0.4,
+            contactInfo: 0.4,
+            otherInfo: 0.15,
+            legacyInfo: 0.05
+        };
+        this.comparisonCalculatorName = 'entityWeightedComparison';
+        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
     }
 
     /**
@@ -427,7 +565,14 @@ class AggregateHousehold extends Entity {
         // Deserialize individuals array
         if (data.individuals) {
             household.individuals = data.individuals.map(individualData => {
-                // Determine the specific entity type for proper deserialization
+                // Check if already deserialized by JSON.parse reviver (bottom-up processing)
+                if (individualData instanceof Individual) {
+                    return individualData; // Already an instance, pass through
+                }
+                if (individualData instanceof Entity) {
+                    return individualData; // Already an Entity subclass instance
+                }
+                // Raw data - deserialize based on type
                 switch (individualData.type) {
                     case 'Individual':
                         return Individual.deserialize(individualData);

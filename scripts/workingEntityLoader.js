@@ -25,7 +25,15 @@ async function loadVisionAppraisalEntitiesWorking() {
             alt: 'media'
         });
 
-        const fileData = JSON.parse(response.body);
+        // CRITICAL: Use deserializeWithTypes to reconstruct class instances with methods
+        let fileData;
+        if (typeof deserializeWithTypes === 'function') {
+            console.log('🔄 Using deserializeWithTypes for VisionAppraisal to restore class instances');
+            fileData = deserializeWithTypes(response.body);
+        } else {
+            console.warn('⚠️  deserializeWithTypes not available - falling back to JSON.parse (methods will not be available)');
+            fileData = JSON.parse(response.body);
+        }
 
         // Validate structure based on testing
         if (fileData.entities && Array.isArray(fileData.entities)) {
@@ -37,10 +45,10 @@ async function loadVisionAppraisalEntitiesWorking() {
             console.log(`✅ Loaded ${fileData.entities.length} VisionAppraisal entities`);
             console.log('📊 Metadata:', fileData.metadata);
 
-            // Show entity type breakdown
+            // Show entity type breakdown (use constructor.name for class instances)
             const typeCounts = {};
             fileData.entities.forEach(entity => {
-                const type = entity.type || 'Unknown';
+                const type = entity.constructor?.name || entity.type || 'Unknown';
                 typeCounts[type] = (typeCounts[type] || 0) + 1;
             });
             console.log('📊 Entity types:', typeCounts);
@@ -64,23 +72,50 @@ async function loadVisionAppraisalEntitiesWorking() {
 
 /**
  * Extract name from entity using correct tested pattern
+ * ALWAYS returns object with completeName property - never strings
  */
 function extractNameWorking(entity) {
     try {
-        // Based on testing: entity.name.term is the correct pattern
+        // Use constructor.name for deserialized class instances (type property is intentionally excluded during deserialization)
+        const entityType = entity.constructor?.name || entity.type;
+
+        // For Individual entities: MUST have IndividualName with completeName
+        if (entityType === 'Individual') {
+            if (!entity.name) {
+                console.error('DATA INTEGRITY ERROR: Individual entity missing name property', entity);
+                return { entityType: 'Individual', completeName: 'ERROR: Missing name property', error: true };
+            }
+            if (!entity.name.completeName) {
+                console.error('DATA INTEGRITY ERROR: Individual entity name missing completeName', entity.name);
+                return { entityType: 'Individual', completeName: 'ERROR: Missing completeName', error: true };
+            }
+            return {
+                entityType: 'Individual',
+                title: entity.name.title || '',
+                firstName: entity.name.firstName || '',
+                otherNames: entity.name.otherNames || '',
+                lastName: entity.name.lastName || '',
+                suffix: entity.name.suffix || '',
+                completeName: entity.name.completeName,
+                termOfAddress: entity.name.termOfAddress || ''
+            };
+        }
+
+        // For non-Individual entities: return object with completeName from term or string
         if (entity.name && entity.name.term) {
-            return entity.name.term;
+            return { entityType: entityType, completeName: entity.name.term };
         }
 
-        // Fallback: try direct name access
         if (typeof entity.name === 'string') {
-            return entity.name;
+            return { entityType: entityType, completeName: entity.name };
         }
 
-        return '[No name found]';
+        console.error('DATA INTEGRITY ERROR: Entity missing valid name', entity);
+        return { entityType: entityType, completeName: 'ERROR: No name found', error: true };
 
     } catch (error) {
-        return `[Name extraction error: ${error.message}]`;
+        console.error('extractNameWorking error:', error, entity);
+        return { entityType: 'Unknown', completeName: `ERROR: ${error.message}`, error: true };
     }
 }
 
@@ -106,7 +141,7 @@ function generateWorkingNameReport() {
     };
 
     workingLoadedEntities.visionAppraisal.entities.forEach((entity, index) => {
-        const entityType = entity.type || 'Unknown';
+        const entityType = entity.constructor?.name || entity.type || 'Unknown';
         const name = extractNameWorking(entity);
 
         // Initialize type array if needed
@@ -264,7 +299,18 @@ async function loadBloomerangCollectionsWorking(configFileId = null) {
             console.log(`🔍 DEBUG: Loading ${type} entities from file ID: ${fileId}`);
             console.log(`🔍 DEBUG: This file was created when? Check metadata...`);
             const response = await gapi.client.drive.files.get({fileId, alt: 'media'});
-            const collectionData = JSON.parse(response.body);
+
+            // CRITICAL: Use deserializeWithTypes to reconstruct class instances with methods
+            // This ensures IndividualName objects have compareTo() method and comparisonCalculator
+            let collectionData;
+            if (typeof deserializeWithTypes === 'function') {
+                console.log(`🔄 Using deserializeWithTypes for ${type} to restore class instances`);
+                collectionData = deserializeWithTypes(response.body);
+            } else {
+                console.warn(`⚠️  deserializeWithTypes not available for ${type} - falling back to JSON.parse (methods will not be available)`);
+                collectionData = JSON.parse(response.body);
+            }
+
             workingLoadedEntities.bloomerang[type] = collectionData;
             console.log(`✅ ${type}: ${collectionData.metadata.totalEntities} entities`);
             console.log(`🔍 DEBUG: ${type} entities created at:`, collectionData.metadata.created);

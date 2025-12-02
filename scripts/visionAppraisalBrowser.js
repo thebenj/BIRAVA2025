@@ -228,7 +228,7 @@ function extractVAEntityName(entity) {
     }
 
     // Handle IndividualName structures
-    if (entity.name.__type === 'IndividualName') {
+    if (entity.name.type === 'IndividualName') {
         // Try completeName first
         if (entity.name.completeName) {
             return entity.name.completeName;
@@ -333,7 +333,7 @@ function viewSelectedVAEntity() {
  * Generate comprehensive HTML display for VisionAppraisal entity
  */
 function generateEntityDetailHTML(entity, index) {
-    const entityType = entity.__type || 'Unknown';
+    const entityType = entity.type || 'Unknown';
     const entityName = extractVAEntityName(entity);
 
     return `
@@ -624,7 +624,7 @@ function getEntityDetailStyles() {
  * Generate header section HTML
  */
 function generateHeaderSection(entity, index) {
-    const entityType = entity.__type || 'Unknown';
+    const entityType = entity.type || 'Unknown';
     const entityName = extractVAEntityName(entity);
     const pid = entity.pid || 'Not Available';
     const locationId = entity.locationIdentifier || 'Not Available';
@@ -868,7 +868,7 @@ function cleanVisionAppraisalTags(text) {
  * Generate entity-specific section HTML
  */
 function generateEntitySpecificSection(entity) {
-    const entityType = entity.__type || 'Unknown';
+    const entityType = entity.type || 'Unknown';
 
     switch (entityType) {
         case 'AggregateHousehold':
@@ -995,7 +995,7 @@ function generateMetadataSection(entity) {
             <div class="metadata-grid">
                 <div class="info-item">
                     <div class="info-label">Entity Type</div>
-                    <div class="info-value">${entity.entityType || entity.__type || 'Unknown'}</div>
+                    <div class="info-value">${entity.entityType || entity.type || 'Unknown'}</div>
                 </div>
                 <div class="info-item">
                     <div class="info-label">Source System</div>

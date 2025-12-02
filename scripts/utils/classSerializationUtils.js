@@ -2,11 +2,11 @@
  * Recursive Class Serialization Utilities
  *
  * Handles serialization/deserialization of complex object hierarchies with class instances.
- * Preserves constructor information through the entire object tree by adding __type properties.
+ * Preserves constructor information through the entire object tree by adding type properties.
  *
  * ARCHITECTURE:
- * - serializeWithTypes: Recursive replacer adds __type property to all class instances
- * - deserializeWithTypes: Recursive reviver restores class instances from __type properties
+ * - serializeWithTypes: Recursive replacer adds type property to all class instances
+ * - deserializeWithTypes: Recursive reviver restores class instances from type properties
  * - Class registry maps class names to constructors for restoration
  *
  * USAGE:
@@ -89,7 +89,7 @@ function serializeWithTypes(obj) {
             // Handle Maps
             if (value instanceof Map) {
                 return {
-                    __type: 'Map',
+                    type: 'Map',
                     __data: Array.from(value.entries())
                 };
             }
@@ -97,7 +97,7 @@ function serializeWithTypes(obj) {
             // Handle Sets
             if (value instanceof Set) {
                 return {
-                    __type: 'Set',
+                    type: 'Set',
                     __data: Array.from(value)
                 };
             }
@@ -105,7 +105,7 @@ function serializeWithTypes(obj) {
             // Handle Dates
             if (value instanceof Date) {
                 return {
-                    __type: 'Date',
+                    type: 'Date',
                     __data: value.toISOString()
                 };
             }
@@ -113,7 +113,7 @@ function serializeWithTypes(obj) {
             // Handle RegExp
             if (value instanceof RegExp) {
                 return {
-                    __type: 'RegExp',
+                    type: 'RegExp',
                     __data: {
                         source: value.source,
                         flags: value.flags
@@ -127,7 +127,7 @@ function serializeWithTypes(obj) {
 
                 // Create a copy of the object with type information
                 const serializedObject = {
-                    __type: className
+                    type: className
                 };
 
                 // Copy all enumerable properties
@@ -171,8 +171,8 @@ function deserializeWithTypes(jsonString, classRegistry = CLASS_REGISTRY) {
             }
 
             // Handle objects with type information
-            if (value.__type) {
-                const className = value.__type;
+            if (value.type) {
+                const className = value.type;
 
                 // Handle built-in types
                 if (className === 'Map') {
@@ -194,23 +194,41 @@ function deserializeWithTypes(jsonString, classRegistry = CLASS_REGISTRY) {
                 // Handle custom classes
                 const ClassConstructor = classRegistry[className];
                 if (ClassConstructor) {
-                    // Create new instance
+                    // PREFERRED: Use fromSerializedData if available (constructor-based deserialization)
+                    // This ensures constructor initialization logic runs
+                    if (typeof ClassConstructor.fromSerializedData === 'function') {
+                        return ClassConstructor.fromSerializedData(value);
+                    }
+
+                    // FALLBACK: Create instance without calling constructor (legacy approach)
+                    // NOTE: This means constructor initialization code does NOT run
                     const instance = Object.create(ClassConstructor.prototype);
 
-                    // Copy all properties except __type
+                    // Copy all properties except type
                     for (const prop in value) {
-                        if (prop !== '__type' && value.hasOwnProperty(prop)) {
+                        if (prop !== 'type' && value.hasOwnProperty(prop)) {
                             instance[prop] = value[prop];
+                        }
+                    }
+
+                    // Restore comparisonCalculator from name if available (new pattern)
+                    if (instance.comparisonCalculatorName && typeof resolveComparisonCalculator !== 'undefined') {
+                        instance.comparisonCalculator = resolveComparisonCalculator(instance.comparisonCalculatorName);
+                    }
+                    // Legacy fallback: Restore comparisonCalculator function reference directly
+                    else if (instance.comparisonWeights && !instance.comparisonCalculator) {
+                        if (typeof defaultWeightedComparison !== 'undefined') {
+                            instance.comparisonCalculator = defaultWeightedComparison;
                         }
                     }
 
                     return instance;
                 } else {
                     console.warn(`Class '${className}' not found in registry, returning plain object`);
-                    // Return object without __type property
+                    // Return object without type property
                     const plainObject = {};
                     for (const prop in value) {
-                        if (prop !== '__type' && value.hasOwnProperty(prop)) {
+                        if (prop !== 'type' && value.hasOwnProperty(prop)) {
                             plainObject[prop] = value[prop];
                         }
                     }

@@ -66,7 +66,7 @@ function generateUniversalEntityHTML(entityWrapper) {
                     ${generateUniversalIdentifiersSection(entityWrapper)}
                     ${generateUniversalContactInfoSection(entityWrapper)}
                     ${generateUniversalLocationSection(entityWrapper)}
-                    <!-- ${generateHouseholdMembersSection(entityWrapper)} -->
+                    ${generateHouseholdMembersSection(entityWrapper)}
                     ${generateSourceSpecificSection(entityWrapper)}
                     ${generateUniversalMetadataSection(entityWrapper)}
                     ${generateUniversalRawDataSection(entityWrapper)}
@@ -1090,21 +1090,39 @@ function generateHouseholdMembersSection(entityWrapper) {
  * @returns {Array} Array of individual entity wrappers
  */
 function findHouseholdMembers(householdWrapper) {
+    const members = [];
+    const household = householdWrapper.entity;
+
+    // FIRST: Check if the household has an individuals array (AggregateHousehold stores members directly)
+    if (household.individuals && Array.isArray(household.individuals) && household.individuals.length > 0) {
+        console.log('🏠 Using household.individuals array:', household.individuals.length, 'members');
+        household.individuals.forEach((individual, index) => {
+            members.push({
+                source: householdWrapper.source,
+                sourceKey: householdWrapper.sourceKey,
+                entityType: 'Individual',
+                index: `member_${index}`,
+                key: `${householdWrapper.key}_member_${index}`,
+                entity: individual
+            });
+        });
+        console.log(`🏠 Found ${members.length} household members from individuals array`);
+        return members;
+    }
+
+    // FALLBACK: Search for related individuals by location/address (for households without individuals array)
     // Access the loaded entities from the global workingLoadedEntities
     if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
         console.warn('⚠️ Cannot find household members - workingLoadedEntities not loaded');
         return [];
     }
 
-    const members = [];
-    const household = householdWrapper.entity;
-
     // Get household location identifier for matching
     const householdLocationId = getEntityLocationIdentifier(household);
     const householdAddress = getEntityPrimaryAddress(household);
 
-    console.log('🏠 Looking for members with location:', householdLocationId);
-    console.log('🏠 Looking for members with address:', householdAddress);
+    console.log('🏠 Fallback search - looking for members with location:', householdLocationId);
+    console.log('🏠 Fallback search - looking for members with address:', householdAddress);
 
     // Search VisionAppraisal individuals
     if (workingLoadedEntities.visionAppraisal.loaded && workingLoadedEntities.visionAppraisal.entities) {
@@ -1142,7 +1160,7 @@ function findHouseholdMembers(householdWrapper) {
         });
     }
 
-    console.log(`🏠 Found ${members.length} household members`);
+    console.log(`🏠 Found ${members.length} household members via fallback search`);
     return members;
 }
 
@@ -1274,7 +1292,8 @@ function extractMemberDetails(memberWrapper) {
 
 // Helper function to get entity type (reuse from other parts)
 function getEntityType(entity) {
-    return entity.type || entity.constructor?.name || 'Unknown';
+    // For deserialized class instances, constructor.name is the correct type
+    return entity.constructor?.name || entity.type || 'Unknown';
 }
 
 // =============================================================================

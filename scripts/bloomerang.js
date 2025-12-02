@@ -272,8 +272,7 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
                     processedCount++;
                     locationIdentifierCount++;
 
-                    // Output only row number for successful records
-                    console.log(`${row.rowIndex}`);
+                    // Row processed successfully
                 } else {
                     skippedCount++;
                 }
@@ -766,7 +765,7 @@ async function processRowToEntity(row, dataSource, households) {
     // Step 2: Determine entity type
     const entityType = determineEntityType(fields, fieldMap);
 
-    // Step 3: Create name objects
+    // Step 3: Create name objects (both original and temp versions for migration testing)
     const nameObjects = await createNameObjects(fields, fieldMap, rowIndex, accountNumber, dataSource, entityType);
 
     // Step 4: Create entity based on type
@@ -775,12 +774,12 @@ async function processRowToEntity(row, dataSource, households) {
         // Use placeholder location identifier if none available
         const finalLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
         entity = new Individual(finalLocationIdentifier, nameObjects.individualName, null, null,
-            createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource));
+            createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource));
     } else if (entityType === 'NonHuman') {
         // Use placeholder location identifier if none available
         const finalLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
         entity = new NonHuman(finalLocationIdentifier, nameObjects.individualName, null, null,
-            createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource));
+            createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource));
     } else if (entityType === 'AggregateHousehold') {
         // Handle household processing (locationIdentifier may be null - handled inside function)
         entity = await processHouseholdMember(fields, fieldMap, locationIdentifier, nameObjects,
@@ -790,7 +789,8 @@ async function processRowToEntity(row, dataSource, households) {
     // Step 5: Add ContactInfo and additional data to entity
     if (entity) {
         // Create ContactInfo with all available contact fields
-        const contactInfo = createContactInfo(fields, fieldMap, rowIndex, accountNumber, dataSource);
+        // const contactInfo = createContactInfo(fields, fieldMap, rowIndex, accountNumber, dataSource);
+        const contactInfo = await createContactInfoEnhanced(fields, fieldMap, rowIndex, accountNumber, dataSource);
         if (contactInfo) {
             entity.addContactInfo(contactInfo);
         }
@@ -815,7 +815,7 @@ async function createLocationIdentifier(fields, fieldMap, rowIndex, accountNumbe
         if (fireNumberValue) {
             const fireNumberTerm = new AttributedTerm(fireNumberValue, dataSource, rowIndex, accountNumber);
             const fireNumber = new FireNumber(fireNumberTerm);
-            return new IdentifyingData(fireNumber);
+            return fireNumber;
         }
     }
 
@@ -860,7 +860,7 @@ async function createLocationIdentifier(fields, fieldMap, rowIndex, accountNumbe
                 if (fireNumberFromAddress) {
                     const fireNumberTerm = new AttributedTerm(fireNumberFromAddress, dataSource, rowIndex, accountNumber);
                     const fireNumber = new FireNumber(fireNumberTerm);
-                    return new IdentifyingData(fireNumber);
+                    return fireNumber;
                 }
             }
         }
@@ -876,9 +876,9 @@ async function createLocationIdentifier(fields, fieldMap, rowIndex, accountNumbe
 
             // Create AttributedTerm for the full address
             const addressTerm = new AttributedTerm(fullAddress, dataSource, rowIndex, accountNumber);
-            // Create ComplexIdentifiers for street address (not yet implemented ComplexIdentifiers subclass)
-            const streetAddress = new ComplexIdentifiers(addressTerm);
-            return new IdentifyingData(streetAddress);
+            // Create SimpleIdentifier for street address location identifier (corrected from ComplexIdentifiers)
+            const streetAddress = new SimpleIdentifiers(addressTerm);
+            return streetAddress;
         }
     }
 
@@ -923,8 +923,8 @@ function upgradeLocationIdentifierWithPID(entity, pidValue, dataSource, recordIn
         return false;
     }
 
-    // Current identifier is ComplexIdentifiers (street address) - upgrade to PID
-    if (currentIdentifier instanceof ComplexIdentifiers) {
+    // Current identifier is SimpleIdentifier (street address) - upgrade to PID
+    if (currentIdentifier instanceof SimpleIdentifier) {
         console.log(`Upgrading location identifier from street address to PID ${pidValue}`);
 
         // Validate PID (should be done with proper PID validation rules)
@@ -936,7 +936,7 @@ function upgradeLocationIdentifierWithPID(entity, pidValue, dataSource, recordIn
         // Create new PID identifier
         const pidTerm = new AttributedTerm(pidValue, dataSource, recordIndex, visionIdentifier);
         const pid = new PID(pidTerm);
-        entity.locationIdentifier = new IdentifyingData(pid);
+        entity.locationIdentifier = pid;
 
         console.log(`Successfully upgraded entity location identifier to PID ${pidValue}`);
         return true;
@@ -1067,6 +1067,12 @@ function determineEntityType(fields, fieldMap) {
         return 'NonHuman';
     }
 
+    // Check for records with empty name fields - these are organizations, not individuals
+    // They have data in a "name" field but no firstName/middleName/lastName
+    if (!firstName.trim() && !middleName.trim() && !lastName.trim()) {
+        return 'NonHuman';
+    }
+
     // Check household membership
     const isInHouseholdValue = isInHousehold.toString().toLowerCase().trim();
     if (isInHouseholdValue === 'true' || isInHouseholdValue === '1' || isInHouseholdValue === 'yes') {
@@ -1078,6 +1084,11 @@ function determineEntityType(fields, fieldMap) {
     }
 }
 
+/**
+ * TEMP NAME PROCESSING FUNCTION - VisionAppraisal-style processing
+ * Returns AttributedTerm objects directly WITHOUT IdentifyingData wrappers
+ * This matches VisionAppraisal entity creation patterns
+ */
 async function createNameObjects(fields, fieldMap, rowIndex, accountNumber, dataSource, entityType) {
     // Extract name fields from CSV
     const title = ''; // Not in Bloomerang data
@@ -1091,7 +1102,7 @@ async function createNameObjects(fields, fieldMap, rowIndex, accountNumber, data
     const nameParts = [title, firstName, middleName, lastName, suffix].filter(part => part !== '');
     const completeName = nameParts.join(' ');
 
-    // Create IndividualName object (required for all entity types)
+    // VISIONAPPRAISAL STYLE: Return IndividualName directly (no IdentifyingData wrapper)
     const individualNameTerm = new AttributedTerm(completeName, dataSource, rowIndex, accountNumber);
     const individualName = new IndividualName(
         individualNameTerm,
@@ -1101,24 +1112,121 @@ async function createNameObjects(fields, fieldMap, rowIndex, accountNumber, data
         lastName,
         suffix
     );
-    const individualNameIdentifyingData = new IdentifyingData(individualName);
 
-    // Create HouseholdName object if this is a household member
-    let householdNameIdentifyingData = null;
+    // VISIONAPPRAISAL STYLE: Return HouseholdName directly (no IdentifyingData wrapper)
+    let householdNameObject = null;
     if (entityType === 'AggregateHousehold' && householdName) {
         const householdNameTerm = new AttributedTerm(householdName, dataSource, rowIndex, accountNumber);
-        const householdNameObj = new HouseholdName(householdNameTerm, householdName);
-        householdNameIdentifyingData = new IdentifyingData(householdNameObj);
+        householdNameObject = new HouseholdName(householdNameTerm, householdName);
     }
 
     return {
-        individualName: individualNameIdentifyingData,
-        householdName: householdNameIdentifyingData
+        individualName: individualName,        // Direct IndividualName object
+        householdName: householdNameObject     // Direct HouseholdName object
     };
 }
 
-function createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource) {
-    // Account Number is IndicativeData - moderate reliability for identity matching
+/**
+ * TEST FUNCTION: Test workingEntityLoader.js extractNameWorking function after our changes
+ * Tests whether extractNameWorking() breaks with new individualNameTemp structure
+ */
+async function testWorkingEntityLoaderBreakage() {
+    console.log('🧪 Testing workingEntityLoader.js after name structure changes');
+
+    try {
+        // Step 1: Load current Bloomerang entities from Google Drive
+        console.log('Step 1: Loading current Bloomerang entities from Google Drive...');
+        const response = await gapi.client.drive.files.get({
+            fileId: '1StluRrtq2lAlZO22XFmHn6Xc1lD3_MO0',
+            alt: 'media'
+        });
+
+        const fileData = JSON.parse(response.body);
+        const entities = fileData.entities || [];
+
+        console.log(`✅ Loaded ${entities.length} entities from current Bloomerang file`);
+
+        // Step 2: Test extractNameWorking on first 3 entities
+        console.log('\\nStep 2: Testing extractNameWorking() function...');
+
+        for (let i = 0; i < Math.min(3, entities.length); i++) {
+            const entity = entities[i];
+
+            console.log(`\\n--- Entity ${i + 1} ---`);
+            console.log('Entity type:', entity.constructor.name);
+            console.log('entity.name structure:', typeof entity.name);
+
+            if (entity.name && typeof entity.name === 'object') {
+                console.log('entity.name.term:', entity.name.term);
+                console.log('entity.name keys:', Object.keys(entity.name));
+            }
+
+            // Test the extractNameWorking function
+            const extractedName = extractNameWorking(entity);
+            console.log('extractNameWorking result:', extractedName);
+
+            const isError = extractedName.includes('error') || extractedName.includes('No name found');
+            console.log('Status:', isError ? '❌ BROKEN' : '✅ Working');
+        }
+
+        console.log('\\n=== Test completed - check results above ===');
+
+    } catch (error) {
+        console.error('❌ Test failed:', error);
+    }
+}
+
+/**
+ * TEST FUNCTION: Verify dual name field processing works correctly
+ * Tests that name fields are populated correctly
+ */
+async function testDualNameFields() {
+    console.log('=== TESTING DUAL NAME FIELD PROCESSING ===');
+    console.log('Processing first few Bloomerang records to verify name fields...\n');
+
+    try {
+        // Process first 3 records only for testing
+        const results = await readBloomerangWithEntities(false, 'dual-field-test');
+
+        console.log(`✅ Processed ${results.entities.length} entities`);
+        console.log('📋 Checking first 3 entities for dual name fields:\n');
+
+        // Check first 3 entities
+        for (let i = 0; i < Math.min(3, results.entities.length); i++) {
+            const entity = results.entities[i];
+            const entityType = entity.constructor.name;
+
+            console.log(`--- Entity ${i + 1}: ${entityType} ---`);
+            console.log('✅ name field:', entity.name ? 'Present' : '❌ Missing');
+
+            if (entity.name) {
+
+                // Show name structure for observation
+                if (entity.name.identifier) {
+                    console.log('📝 Name structure:', entity.name.identifier.completeName || entity.name.identifier.term || 'Unknown');
+                }
+            }
+            console.log('');
+        }
+
+        return {
+            success: true,
+            entitiesProcessed: results.entities.length,
+            dualFieldsWorking: true
+        };
+
+    } catch (error) {
+        console.error('❌ Test failed:', error.message);
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+
+function createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource) {
+    // Account Number as SimpleIdentifiers - Case 9 resolution: removed IndicativeData wrapper
     if (!accountNumber || accountNumber.toString().trim() === '') {
         return null;
     }
@@ -1126,7 +1234,7 @@ function createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource) 
     const accountNumberValue = accountNumber.toString().trim();
     const accountNumberTerm = new AttributedTerm(accountNumberValue, dataSource, rowIndex, accountNumber);
     const accountNumberIdentifier = new SimpleIdentifiers(accountNumberTerm);
-    return new IndicativeData(accountNumberIdentifier);
+    return accountNumberIdentifier; // Case 9: Return SimpleIdentifiers directly instead of wrapping in IndicativeData
 }
 
 /**
@@ -1144,7 +1252,7 @@ function createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource) 
  *
  * @param {Array} fields - CSV field array for the individual record
  * @param {Object} fieldMap - Field index mappings
- * @param {IdentifyingData|null} locationIdentifier - Location identifier for this individual (may be null)
+ * @param {FireNumber|PID|ComplexIdentifiers|null} locationIdentifier - Location identifier for this individual (may be null)
  * @param {Object} nameObjects - Name objects (individualName and householdName)
  * @param {Map} households - Map of existing households by household name
  * @param {number} rowIndex - Row number for debugging
@@ -1162,15 +1270,16 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
     if (!householdName) {
         console.warn(`Row ${rowIndex}: Individual in household but no household name provided`);
         // Treat as individual if no household name
-        return new Individual(locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber),
+        const individual = new Individual(locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber),
                              nameObjects.individualName, null, null,
-                             createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource));
+                             createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource));
+        return individual;
     }
 
     // Create individual entity
     const individualLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
     const individual = new Individual(individualLocationIdentifier, nameObjects.individualName, null, null,
-                                     createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource));
+                                     createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource));
 
     // Check if household already exists
     if (households.has(householdName)) {
@@ -1208,11 +1317,13 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
         const householdLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
 
         // Create household entity
+        // console.log("🔍 CASE 13/15 DEBUG: Creating AggregateHousehold entity for row", rowIndex);
         const household = new AggregateHousehold(
             householdLocationIdentifier,
             nameObjects.householdName, null, null,
-            createAccountNumberIndicativeData(accountNumber, rowIndex, dataSource)
+            createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource)
         );
+        // console.log("🔍 CASE 13/15 DEBUG: AggregateHousehold created - otherInfo:", household.otherInfo, "legacyInfo:", household.legacyInfo);
 
         // Add individual to household
         household.individuals.push(individual);
@@ -1234,20 +1345,20 @@ function createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber
     const placeholderFireNumber = 3499; // Highest allowed fire number
     const fireNumberTerm = new AttributedTerm(placeholderFireNumber, dataSource, rowIndex, accountNumber);
     const fireNumber = new FireNumber(fireNumberTerm);
-    return new IdentifyingData(fireNumber);
+    return fireNumber;
 }
 
 /**
  * Check if a location identifier is a placeholder (fire number 3499)
  */
 function isPlaceholderLocationIdentifier(locationIdentifier) {
-    if (!locationIdentifier || !locationIdentifier.identifier) {
+    if (!locationIdentifier) {
         return false;
     }
 
-    const identifier = locationIdentifier.identifier;
-    if (identifier instanceof FireNumber) {
-        return identifier.primaryAlias.term === 3499;
+    // Direct object access (no IdentifyingData wrapper)
+    if (locationIdentifier instanceof FireNumber) {
+        return locationIdentifier.primaryAlias.term === 3499;
     }
 
     return false;
@@ -1275,8 +1386,9 @@ function getSerializationFolders() {
  */
 async function saveSerializedEntity(entity, folderIds, batchId = null) {
     try {
-        // Serialize the entity
-        const serializedData = entity.serialize();
+        // Serialize the entity using serializeWithTypes for consistency with VisionAppraisal
+        // This preserves Map/Set/Date types and class constructor information
+        const serializedData = JSON.parse(serializeWithTypes(entity));
 
         // Generate filename based on entity summary
         const summary = entity.generateSummary();
@@ -1909,11 +2021,11 @@ async function uploadEntityCollection(entityCollection, entityType, batchId, tar
         // Generate searchable indexes for this collection
         const indexes = generateCollectionIndexes(entityCollection, entityType);
 
-        // Serialize all entities in the collection
+        // Serialize all entities in the collection using serializeWithTypes for consistency with VisionAppraisal
         const serializedEntities = {};
         for (const [key, entity] of entityCollection) {
             try {
-                serializedEntities[key] = entity.serialize();
+                serializedEntities[key] = JSON.parse(serializeWithTypes(entity));
             } catch (error) {
                 console.warn(`Error serializing entity ${key}:`, error);
                 // Continue with other entities
@@ -1995,9 +2107,9 @@ function createContactInfo(fields, fieldMap, rowIndex, accountNumber, dataSource
     // Only create contact info entry if email address is provided and non-empty
     const email = (fields[fieldMap.email] || '').trim();
     if (email) {
-        // Create AttributedTerm with full provenance tracking for data lineage
+        // Create SimpleIdentifiers with AttributedTerm for email (no IndicativeData wrapper)
         const emailTerm = new AttributedTerm(email, dataSource, rowIndex, accountNumber);
-        contactInfo.email = new IndicativeData(emailTerm);
+        contactInfo.email = new SimpleIdentifiers(emailTerm);
         hasContactData = true;
     }
 
@@ -2005,9 +2117,9 @@ function createContactInfo(fields, fieldMap, rowIndex, accountNumber, dataSource
     // High-confidence unique identifier for Block Island residents
     const biPoBox = (fields[fieldMap.biPoBox] || '').trim();
     if (biPoBox) {
-        // PO Box is critical for Block Island communication - many residents use PO boxes exclusively
+        // Create SimpleIdentifiers with AttributedTerm for PO Box (no IndicativeData wrapper)
         const poBoxTerm = new AttributedTerm(biPoBox, dataSource, rowIndex, accountNumber);
-        contactInfo.poBox = new IndicativeData(poBoxTerm);
+        contactInfo.poBox = new SimpleIdentifiers(poBoxTerm);
         hasContactData = true;
     }
 
@@ -2015,15 +2127,359 @@ function createContactInfo(fields, fieldMap, rowIndex, accountNumber, dataSource
     // Supplementary address information for Block Island locations beyond fire numbers
     const biStreet = (fields[fieldMap.biStreet] || '').trim();
     if (biStreet) {
-        // BI Street provides additional address context beyond fire numbers for Block Island entities
+        // Create SimpleIdentifiers with AttributedTerm for BI Street (no IndicativeData wrapper)
         const streetTerm = new AttributedTerm(biStreet, dataSource, rowIndex, accountNumber);
-        contactInfo.biStreet = new IndicativeData(streetTerm);
+        contactInfo.biStreet = new SimpleIdentifiers(streetTerm);
         hasContactData = true;
     }
 
     // Return ContactInfo object only if we found actual contact data
     // This preserves data integrity by avoiding empty contact objects
     return hasContactData ? contactInfo : null;
+}
+
+/**
+ * Enhanced ContactInfo Creation Using Generalized Address Architecture
+ *
+ * ARCHITECTURAL PURPOSE: This function implements the new address processing architecture
+ * that processes all 4 Bloomerang address types into proper Address objects in ContactInfo.
+ * Uses the preprocess→parse→post-process generalized architecture for consistency with
+ * VisionAppraisal processing patterns.
+ *
+ * IMPROVEMENTS OVER ORIGINAL:
+ * - Processes all 4 address types (Primary, Home, Vacation, Work) using proper Address objects
+ * - Implements Block Island priority logic: BI addresses become primary (fire number wins ties)
+ * - Uses generalized address architecture for consistent processing
+ * - Creates proper ContactInfo with setPrimaryAddress() and addSecondaryAddress()
+ * - Maintains existing email and biPoBox processing
+ *
+ * @param {Array} fields - CSV field array
+ * @param {Object} fieldMap - Field mapping object
+ * @param {number} rowIndex - Row index for data lineage
+ * @param {string} accountNumber - Account number for AttributedTerm provenance
+ * @param {string} dataSource - Data source identifier ("BLOOMERANG_CSV")
+ * @returns {ContactInfo|null} Enhanced ContactInfo object with proper Address objects, or null if no contact data
+ */
+async function createContactInfoEnhanced(fields, fieldMap, rowIndex, accountNumber, dataSource) {
+    let hasContactData = false;
+    const contactInfo = new ContactInfo();
+
+    // Process existing contact fields (email, biPoBox) - using SimpleIdentifiers (no IndicativeData wrapper)
+    const email = (fields[fieldMap.email] || '').trim();
+    if (email) {
+        const emailTerm = new AttributedTerm(email, dataSource, rowIndex, accountNumber);
+        contactInfo.email = new SimpleIdentifiers(emailTerm);
+        hasContactData = true;
+    }
+
+    const biPoBox = (fields[fieldMap.biPoBox] || '').trim();
+    if (biPoBox) {
+        const poBoxTerm = new AttributedTerm(biPoBox, dataSource, rowIndex, accountNumber);
+        contactInfo.poBox = new SimpleIdentifiers(poBoxTerm);
+        hasContactData = true;
+    }
+
+    // NEW: Process all 4 address sets using generalized architecture
+    const addressSets = [
+        {
+            name: 'Primary',
+            street: fields[fieldMap.primaryStreet],    // Array index 9 (Field 10)
+            city: fields[fieldMap.primaryCity],        // Array index 10 (Field 11)
+            state: fields[fieldMap.primaryState],      // Array index 11 (Field 12)
+            zip: fields[fieldMap.primaryZip],          // Array index 12 (Field 13)
+            isPrimary: true  // Primary field gets priority for ContactInfo
+        },
+        {
+            name: 'Home',
+            street: fields[fieldMap.homeStreet],       // Array index 13 (Field 14)
+            city: fields[fieldMap.homeCity],           // Array index 14 (Field 15)
+            state: fields[fieldMap.homeState],         // Array index 15 (Field 16)
+            zip: fields[fieldMap.homeZip],             // Array index 16 (Field 17)
+            isPrimary: false
+        },
+        {
+            name: 'Vacation',
+            street: fields[fieldMap.vacationStreet],   // Array index 17 (Field 18)
+            city: fields[fieldMap.vacationCity],       // Array index 18 (Field 19)
+            state: fields[fieldMap.vacationState],     // Array index 19 (Field 20)
+            zip: fields[fieldMap.vacationZip],         // Array index 20 (Field 21)
+            isPrimary: false
+        },
+        {
+            name: 'Work',
+            street: fields[fieldMap.workStreet],       // Array index 21 (Field 22)
+            city: fields[fieldMap.workCity],           // Array index 22 (Field 23)
+            state: fields[fieldMap.workState],         // Array index 23 (Field 24)
+            zip: fields[fieldMap.workZip],             // Array index 24 (Field 25)
+            isPrimary: false
+        }
+    ];
+
+    // Process addresses using new generalized architecture
+    const processedAddresses = processAddressSetsEnhanced(addressSets, dataSource, rowIndex, accountNumber);
+
+    // Apply priority logic: Block Island override, then Primary preference, then single address fallback
+    // Process addresses using enhanced priority logic
+    const { primaryAddress, secondaryAddresses } = determineAddressPriorityEnhanced(processedAddresses);
+    // Primary and secondary addresses determined
+
+    // Populate ContactInfo with proper Address objects
+    if (primaryAddress) {
+        contactInfo.setPrimaryAddress(primaryAddress);
+        hasContactData = true;
+        // Primary address set
+    }
+
+    if (secondaryAddresses.length > 0) {
+        contactInfo.setSecondaryAddresses(secondaryAddresses);
+        hasContactData = true;
+        // Secondary addresses set
+    } else {
+        // No secondary addresses to set
+    }
+
+    // Handle biStreet field using new architecture (preserves existing functionality)
+    const biStreet = (fields[fieldMap.biStreet] || '').trim();
+    if (biStreet) {
+        try {
+            // Process BI Street using generalized architecture
+            const biStreetProcessed = processAddressGeneralized(
+                {
+                    addressSet: { street: biStreet, city: '', state: '', zip: '' },
+                    fieldName: 'BI Street'
+                },
+                bloomerangConfig
+            );
+
+            if (biStreetProcessed) {
+                // Create Address object from processed result
+                const biStreetAddress = createAddressFromParsedData(biStreetProcessed, 'BI Street');
+
+                // Add as secondary address if not already primary
+                if (!primaryAddress || primaryAddress.originalAddress.term !== biStreetAddress.originalAddress.term) {
+                    contactInfo.addSecondaryAddress(biStreetAddress);
+                    hasContactData = true;
+                }
+            } else {
+                // Fallback to SimpleIdentifiers if processing fails (no IndicativeData wrapper)
+                const streetTerm = new AttributedTerm(biStreet, dataSource, rowIndex, accountNumber);
+                contactInfo.biStreet = new SimpleIdentifiers(streetTerm);
+                hasContactData = true;
+            }
+        } catch (error) {
+            console.warn('Enhanced BI Street processing failed, using fallback:', error);
+            // Fallback to SimpleIdentifiers (no IndicativeData wrapper)
+            const streetTerm = new AttributedTerm(biStreet, dataSource, rowIndex, accountNumber);
+            contactInfo.biStreet = new SimpleIdentifiers(streetTerm);
+            hasContactData = true;
+        }
+    }
+
+    // NEW: Create location identifier using existing function
+    const locationIdentifier = await createLocationIdentifier(fields, fieldMap, dataSource, rowIndex, accountNumber);
+    if (locationIdentifier) {
+        contactInfo.locationIdentifiers = [locationIdentifier];
+        hasContactData = true;
+    }
+
+    return hasContactData ? contactInfo : null;
+}
+
+// =============================================================================
+// RAW ADDRESS FIELD-BY-FIELD COMPARISON SYSTEM (Phase 1)
+// Future Enhancement Placeholder: Replace simple string matching with sophisticated algorithms
+// =============================================================================
+
+// simpleStringMatch function available from utils.js
+// Assumes utils.js is loaded before this file
+
+/**
+ * Compare raw address field sets with field-by-field analysis
+ * FUTURE: Each field comparison can be enhanced with sophisticated matching
+ * @param {Object} addressSet1 - First address set {street, city, state, zip, name}
+ * @param {Object} addressSet2 - Second address set {street, city, state, zip, name}
+ * @returns {boolean} True if all address fields match
+ */
+function compareRawAddressesFutureEnhanced(addressSet1, addressSet2) {
+    // Field-by-field comparison with future enhancement placeholders
+    // Each field can be independently enhanced with sophisticated matching algorithms
+
+    const streetMatch = simpleStringMatch(addressSet1.street, addressSet2.street);
+    const cityMatch = simpleStringMatch(addressSet1.city, addressSet2.city);
+    const stateMatch = simpleStringMatch(addressSet1.state, addressSet2.state);
+    const zipMatch = simpleStringMatch(addressSet1.zip, addressSet2.zip);
+
+    // ALL fields must match for addresses to be considered identical
+    return streetMatch && cityMatch && stateMatch && zipMatch;
+}
+
+/**
+ * Check if an address set matches any address in a collection
+ * @param {Object} addressSet - Address set to check {street, city, state, zip}
+ * @param {Array} addressCollection - Array of address sets to compare against
+ * @returns {Object|null} Matching address set if found, null if no match
+ */
+function findMatchingRawAddress(addressSet, addressCollection) {
+    for (const existingAddress of addressCollection) {
+        if (compareRawAddressesFutureEnhanced(addressSet, existingAddress)) {
+            return existingAddress;
+        }
+    }
+    return null;
+}
+
+// =============================================================================
+
+/**
+ * Process Address Sets Using Generalized Architecture
+ * Helper function for enhanced ContactInfo creation
+ * @param {Array} addressSets - Array of address set objects
+ * @param {string} dataSource - Data source identifier
+ * @param {number} rowIndex - Row index for provenance
+ * @param {string} accountNumber - Account number for provenance
+ * @returns {Array} Array of processed address objects with metadata
+ */
+function processAddressSetsEnhanced(addressSets, dataSource, rowIndex, accountNumber) {
+    const processedAddresses = [];
+    const seenRawAddresses = []; // Track raw addresses already processed
+
+    for (const addressSet of addressSets) {
+        // Skip if no street address available
+        if (!addressSet.street || addressSet.street.trim() === '') {
+            continue;
+        }
+
+        // DEDUPLICATION CHECK: Skip if this raw address has already been seen
+        const matchingRawAddress = findMatchingRawAddress(addressSet, seenRawAddresses);
+        if (matchingRawAddress) {
+            // Skip processing - this address is a duplicate of a previously seen address
+            // NOTE: Primary field precedence is maintained by processing order (Primary comes first)
+            continue;
+        }
+
+        // Add to seen addresses before processing
+        seenRawAddresses.push(addressSet);
+
+        try {
+            // Use generalized architecture to process address
+            const processedAddress = processAddressGeneralized(
+                {
+                    addressSet: addressSet,
+                    fieldName: addressSet.name
+                },
+                bloomerangConfig
+            );
+
+            if (processedAddress) {
+                // Create proper Address object
+                const addressObject = createAddressFromParsedData(processedAddress, addressSet.name);
+
+                processedAddresses.push({
+                    addressObject: addressObject,
+                    addressSet: addressSet,
+                    isBlockIsland: processedAddress.isBlockIslandAddress,
+                    hasFireNumber: processedAddress.matchedStreet && /^\d+/.test(addressSet.street),
+                    processedData: processedAddress
+                });
+            }
+        } catch (error) {
+            console.warn(`Failed to process ${addressSet.name} address: ${buildFullAddress(addressSet)}`, error);
+        }
+    }
+
+    return processedAddresses;
+}
+
+/**
+ * Determine Address Priority for ContactInfo
+ * Implements Block Island priority logic with Primary field fallback
+ * @param {Array} processedAddresses - Array of processed address objects
+ * @returns {Object} Object with primaryAddress and secondaryAddresses arrays
+ */
+function determineAddressPriorityEnhanced(processedAddresses) {
+    // Find Block Island addresses
+    const blockIslandAddresses = processedAddresses.filter(addr => addr.isBlockIsland);
+    const nonBlockIslandAddresses = processedAddresses.filter(addr => !addr.isBlockIsland);
+
+    let primaryAddress = null;
+    let secondaryAddresses = [];
+
+    if (blockIslandAddresses.length > 0) {
+        // Block Island override logic: BI addresses become primary
+        const fireNumberBI = blockIslandAddresses.find(addr => addr.hasFireNumber);
+        const selectedBI = fireNumberBI || blockIslandAddresses[0];
+        primaryAddress = selectedBI.addressObject;
+
+        // All other addresses (BI and non-BI) become secondary
+        const remainingBI = blockIslandAddresses.filter(addr => addr !== selectedBI);
+        secondaryAddresses = [...remainingBI, ...nonBlockIslandAddresses].map(addr => addr.addressObject);
+
+    } else {
+        // No Block Island addresses - Primary field gets priority
+        const primaryFieldAddress = processedAddresses.find(addr => addr.addressSet.isPrimary);
+
+        if (primaryFieldAddress) {
+            primaryAddress = primaryFieldAddress.addressObject;
+            secondaryAddresses = processedAddresses
+                .filter(addr => addr !== primaryFieldAddress)
+                .map(addr => addr.addressObject);
+        } else if (processedAddresses.length === 1) {
+            // Single address fallback
+            primaryAddress = processedAddresses[0].addressObject;
+        } else if (processedAddresses.length > 1) {
+            // Multiple non-primary addresses - just pick first as primary
+            primaryAddress = processedAddresses[0].addressObject;
+            secondaryAddresses = processedAddresses.slice(1).map(addr => addr.addressObject);
+        }
+    }
+
+    // FINAL DEDUPLICATION: Remove any secondary addresses that duplicate the primary address
+    // or duplicate each other using Address object field-by-field comparison
+    if (primaryAddress && secondaryAddresses.length > 0) {
+        secondaryAddresses = deduplicateSecondaryAddresses(primaryAddress, secondaryAddresses);
+    }
+
+    return { primaryAddress, secondaryAddresses };
+}
+
+/**
+ * Remove duplicate Address objects from secondary addresses
+ * Uses Address.matches() method for field-by-field comparison
+ * @param {Address} primaryAddress - Primary address to check against
+ * @param {Array<Address>} secondaryAddresses - Array of secondary addresses to deduplicate
+ * @returns {Array<Address>} Deduplicated array of secondary addresses
+ */
+function deduplicateSecondaryAddresses(primaryAddress, secondaryAddresses) {
+    // Starting deduplication of secondary addresses
+
+    const uniqueSecondaryAddresses = [];
+
+    for (let i = 0; i < secondaryAddresses.length; i++) {
+        const secondaryAddress = secondaryAddresses[i];
+        // Checking secondary address for duplicates
+
+        // Skip if this secondary address matches the primary address
+        if (primaryAddress && primaryAddress.compareTo(secondaryAddress) === 0) {
+            // Skipping: matches primary address
+            continue;  // Skip duplicate of primary
+        }
+
+        // Skip if this secondary address matches any already-kept secondary address
+        const isDuplicateSecondary = uniqueSecondaryAddresses.some(existing =>
+            existing.compareTo(secondaryAddress) === 0
+        );
+        if (isDuplicateSecondary) {
+            // Skipping: matches existing secondary address
+            continue;  // Skip duplicate of existing secondary
+        }
+
+        // This address is unique - keep it
+        // Keeping: unique secondary address
+        uniqueSecondaryAddresses.push(secondaryAddress);
+    }
+
+    // Deduplication complete
+    return uniqueSecondaryAddresses;
 }
 
 /**

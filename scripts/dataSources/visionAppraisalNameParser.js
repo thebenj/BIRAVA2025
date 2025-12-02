@@ -97,10 +97,12 @@ const VisionAppraisalNameParser = {
 
         case5: {
             priority: 5,
-            entityType: 'AggregateHousehold',
+            entityType: 'Individual',
             // Case 5: Three words, without business terms, with commas only, where the first word ends in the comma
             // HANDLING: First word (comma removed) = lastName, first word after comma = firstName, other word = other name
             // "GELSOMINI, PAMELA A." → lastName="GELSOMINI", firstName="PAMELA", otherName="A."
+            // "WILLIS, WILLIAM H" → lastName="WILLIS", firstName="WILLIAM", otherName="H"
+            // FIX: Returns Individual directly (not wrapped in AggregateHousehold) - single person pattern
             logicalTest: function(data) {
                 return data.wordCount === 3 &&
                        !data.hasBusinessTerms &&
@@ -108,7 +110,7 @@ const VisionAppraisalNameParser = {
                        data.firstWordEndsComma;
             },
             processor: function(words, record, index) {
-                // Case 5: "LAST, FIRST OTHER" → Individual inside AggregateHousehold
+                // Case 5: "LAST, FIRST OTHER" → Individual (single person, not household)
                 if (words.length !== 3) {
                     throw new Error(`Case 5 expects 3 words, got ${words.length}`);
                 }
@@ -127,10 +129,8 @@ const VisionAppraisalNameParser = {
                     "" // suffix
                 );
 
-                const individual = this.createIndividual(individualName, record, index);
-
-                // Case 5 creates AggregateHousehold with single individual
-                return this.createHouseholdFromIndividuals(fullName, [individual], record, index);
+                // Return Individual directly - this is a single person, not a household
+                return this.createIndividual(individualName, record, index);
             }
         },
 
@@ -264,10 +264,86 @@ const VisionAppraisalNameParser = {
                        !data.fitsIdentifiedCases;
             },
             processor: function(words, record, index) {
-                // Case 30: Complex patterns like "STRATTON, ROBERT P & SANDRA MCLEAN, STRATTON"
+                // Case 30: Complex patterns - catch-all for 5+ word household patterns
+                // Examples: "BENJAMIN ROBERT P & CAROLYN H" (shared last name, ampersand-only)
+                //           "STRATTON, ROBERT P & SANDRA MCLEAN, STRATTON" (complex with commas)
                 const fullName = words.join(' ');
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                const individuals = [];
+
+                // Check if this contains an ampersand (married couple pattern)
+                const ampersandIndex = words.findIndex(word => word === '&');
+
+                if (ampersandIndex > 0) {
+                    // Has ampersand - parse as married couple
+                    // Determine if first word is likely the shared last name
+                    // Pattern: "LASTNAME FIRST1 MIDDLE1 & FIRST2 MIDDLE2" (no comma on first word = shared last name first)
+                    // Pattern: "LASTNAME, FIRST1 MIDDLE1 & FIRST2 MIDDLE2" (comma on first word = shared last name first)
+
+                    const firstWordHasComma = words[0].endsWith(',') || words[0].endsWith(';');
+                    const sharedLastName = words[0].replace(/[,;]$/, '').trim();
+
+                    // First individual: words between first word (last name) and ampersand
+                    const firstIndividualWords = words.slice(1, ampersandIndex);
+                    if (firstIndividualWords.length > 0) {
+                        const firstName1 = firstIndividualWords[0].trim();
+                        const otherNames1 = firstIndividualWords.slice(1).join(' ').trim();
+                        const fullName1 = otherNames1 ? `${firstName1} ${otherNames1} ${sharedLastName}` : `${firstName1} ${sharedLastName}`;
+
+                        const individualName1 = new IndividualName(
+                            new AttributedTerm(fullName1, 'VISION_APPRAISAL', index, record.pid),
+                            '', firstName1, otherNames1, sharedLastName, ''
+                        );
+                        const individual1 = this.createIndividual(individualName1, record, index);
+                        individuals.push(individual1);
+                    }
+
+                    // Second individual: words after ampersand
+                    const secondIndividualWords = words.slice(ampersandIndex + 1);
+                    if (secondIndividualWords.length > 0) {
+                        // Check if any word after ampersand contains a comma (different last name pattern)
+                        const commaWordIndex = secondIndividualWords.findIndex(w => w.endsWith(',') || w.endsWith(';'));
+
+                        let firstName2, otherNames2, lastName2;
+
+                        if (commaWordIndex >= 0) {
+                            // Has comma - pattern like "SANDRA MCLEAN," followed by last name
+                            // Or "SANDRA, MCLEAN" where comma indicates last name follows
+                            // This is complex - for now assume shared last name and ignore the comma complexity
+                            firstName2 = secondIndividualWords[0].replace(/[,;]$/, '').trim();
+                            otherNames2 = secondIndividualWords.slice(1).map(w => w.replace(/[,;]$/, '').trim()).join(' ').trim();
+                            lastName2 = sharedLastName; // Assume shared for now
+                        } else {
+                            // No comma after ampersand - uses shared last name
+                            firstName2 = secondIndividualWords[0].trim();
+                            otherNames2 = secondIndividualWords.slice(1).join(' ').trim();
+                            lastName2 = sharedLastName;
+                        }
+
+                        const fullName2 = otherNames2 ? `${firstName2} ${otherNames2} ${lastName2}` : `${firstName2} ${lastName2}`;
+
+                        const individualName2 = new IndividualName(
+                            new AttributedTerm(fullName2, 'VISION_APPRAISAL', index, record.pid),
+                            '', firstName2, otherNames2, lastName2, ''
+                        );
+                        const individual2 = this.createIndividual(individualName2, record, index);
+                        individuals.push(individual2);
+                    }
+                } else {
+                    // No ampersand - single complex name, treat as single individual in household
+                    // This handles edge cases that fall through to case30
+                    const firstName = words[0].replace(/[,;]$/, '').trim();
+                    const otherNames = words.slice(1).join(' ').trim();
+                    const fullNameIndividual = `${firstName} ${otherNames}`;
+
+                    const individualName = new IndividualName(
+                        new AttributedTerm(fullNameIndividual, 'VISION_APPRAISAL', index, record.pid),
+                        '', firstName, otherNames, '', ''
+                    );
+                    const individual = this.createIndividual(individualName, record, index);
+                    individuals.push(individual);
+                }
+
+                return this.createHouseholdFromIndividuals(fullName, individuals, record, index);
             }
         },
 
@@ -475,11 +551,32 @@ const VisionAppraisalNameParser = {
                        data.firstAndThirdWordsMatch;
             },
             processor: function(words, record, index) {
-                // Case 15b: "LAST, FIRST, LAST, SECOND" → Two individuals, different last names
+                // Case 15b: "LAST, FIRST, LAST, SECOND" → Two individuals with shared last name
+                // Pattern: first and third words match and are the shared last name
+                // Example: "SMITH, JOHN, SMITH, MARY" → JOHN SMITH, MARY SMITH
                 const fullName = words.join(' ');
-                // This case needs firstAndThirdWordsMatch helper - for now, create household
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                const individuals = [];
+
+                // First and third words are the shared last name (remove trailing commas)
+                const sharedLastName = words[0].replace(/[,;]$/, '').trim();
+                const firstName1 = words[1].replace(/[,;]$/, '').trim();
+                const firstName2 = words[3].replace(/[,;]$/, '').trim();
+
+                // Create first individual
+                const individual1Name = new IndividualName(
+                    new AttributedTerm(`${firstName1} ${sharedLastName}`, 'VISION_APPRAISAL', index, record.pid),
+                    "", firstName1, "", sharedLastName, ""
+                );
+                individuals.push(this.createIndividual(individual1Name, record, index));
+
+                // Create second individual
+                const individual2Name = new IndividualName(
+                    new AttributedTerm(`${firstName2} ${sharedLastName}`, 'VISION_APPRAISAL', index, record.pid),
+                    "", firstName2, "", sharedLastName, ""
+                );
+                individuals.push(this.createIndividual(individual2Name, record, index));
+
+                return this.createHouseholdFromIndividuals(fullName, individuals, record, index);
             }
         },
 
@@ -494,8 +591,7 @@ const VisionAppraisalNameParser = {
             processor: function(words, record, index) {
                 // Case 17: Four words, ampersand only
                 const fullName = words.join(' ');
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
 
@@ -542,8 +638,7 @@ const VisionAppraisalNameParser = {
             processor: function(words, record, index) {
                 // Case 16: Four words, commas only, first and third don't match
                 const fullName = words.join(' ');
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
 
@@ -581,8 +676,7 @@ const VisionAppraisalNameParser = {
             processor: function(words, record, index) {
                 // Case 26: Five+ words, household with complex ampersand pattern
                 const fullName = words.join(' ');
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
 
@@ -597,9 +691,9 @@ const VisionAppraisalNameParser = {
             },
             processor: function(words, record, index) {
                 // Case 27: Five+ words, commas with repeating pattern
+                // Too many edge cases to reliably extract individuals
                 const fullName = words.join(' ');
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
 
@@ -615,8 +709,7 @@ const VisionAppraisalNameParser = {
             processor: function(words, record, index) {
                 // Case 28: Five+ words, commas without repeating pattern
                 const fullName = words.join(' ');
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
 
@@ -632,8 +725,7 @@ const VisionAppraisalNameParser = {
             processor: function(words, record, index) {
                 // Case 29: Five+ words, ampersand with one word after
                 const fullName = words.join(' ');
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
 
@@ -758,8 +850,7 @@ const VisionAppraisalNameParser = {
             processor: function(words, record, index) {
                 // Case 11: Three words with ampersand (e.g., "JOHN & MARY")
                 const fullName = words.join(' ');
-                const householdName = new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
 
@@ -805,8 +896,7 @@ const VisionAppraisalNameParser = {
             },
             processor: function(words, record, index) {
                 const ownerName = words.join(' ');
-                const householdName = new AttributedTerm(ownerName, 'VISION_APPRAISAL', index, record.pid);
-                return this.createAggregateHousehold(householdName, [], record, index);
+                return this.createHouseholdFromIndividuals(ownerName, [], record, index);
             }
         },
 
@@ -878,9 +968,37 @@ const VisionAppraisalNameParser = {
         }
     },
 
+    // Helper method: Create FireNumber object from raw fire number value
+    createFireNumberObject(fireNumber) {
+        const fireNumberTerm = new AttributedTerm(fireNumber, 'VISION_APPRAISAL', 0, 'locationIdentifier_fireNumber');
+        return new FireNumber(fireNumberTerm);
+    },
+
+    // Helper method: Create PID object from raw PID value
+    createPidObject(pid) {
+        const pidTerm = new AttributedTerm(pid.toString(), 'VISION_APPRAISAL', 0, 'locationIdentifier_pid');
+        return new PID(pidTerm);
+    },
+
+    // Helper method: Create HouseholdName object from AttributedTerm (Case 1a resolution)
+    createHouseholdNameObject(householdNameTerm) {
+        return new HouseholdName(householdNameTerm, householdNameTerm.term);
+    },
+
+    // Helper method: Create SimpleIdentifiers object from AttributedTerm (Cases 1b & 1c resolution)
+    createSimpleIdentifiersObject(attributedTerm) {
+        return new SimpleIdentifiers(attributedTerm);
+    },
+
     // Helper method: Create Individual entity (copied from existing parser for compatibility)
     createIndividual(individualName, record, index) {
-        const locationIdentifier = record.fireNumber || record.pid || null;
+        // Create proper locationIdentifier object (Cases 4 & 5 resolution)
+        let locationIdentifier = null;
+        if (record.fireNumber) {
+            locationIdentifier = this.createFireNumberObject(record.fireNumber);
+        } else if (record.pid) {
+            locationIdentifier = this.createPidObject(record.pid);
+        }
         const individual = new Individual(locationIdentifier, individualName, record.propertyLocation, record.ownerAddress, null);
 
         // Add VisionAppraisal-specific properties (addresses handled by constructor)
@@ -923,8 +1041,18 @@ const VisionAppraisalNameParser = {
 
     // Helper method: Create AggregateHousehold entity
     createAggregateHousehold(householdName, individuals, record, index) {
-        const locationIdentifier = record.fireNumber || record.pid || null;
-        const household = new AggregateHousehold(locationIdentifier, householdName, record.propertyLocation, record.ownerAddress, null);
+        // Create proper locationIdentifier object (Cases 4 & 5 resolution)
+        let locationIdentifier = null;
+        if (record.fireNumber) {
+            locationIdentifier = this.createFireNumberObject(record.fireNumber);
+        } else if (record.pid) {
+            locationIdentifier = this.createPidObject(record.pid);
+        }
+
+        // Create proper HouseholdName object (Case 1a resolution)
+        const properHouseholdName = this.createHouseholdNameObject(householdName);
+
+        const household = new AggregateHousehold(locationIdentifier, properHouseholdName, record.propertyLocation, record.ownerAddress, null);
 
         // Add individuals to household
         individuals.forEach(individual => {
@@ -949,8 +1077,18 @@ const VisionAppraisalNameParser = {
 
     // Helper method: Create Business entity
     createBusiness(businessName, record, index) {
-        const locationIdentifier = record.fireNumber || record.pid || null;
-        const business = new Business(locationIdentifier, businessName, record.propertyLocation, record.ownerAddress, null);
+        // Create proper locationIdentifier object (Cases 4 & 5 resolution)
+        let locationIdentifier = null;
+        if (record.fireNumber) {
+            locationIdentifier = this.createFireNumberObject(record.fireNumber);
+        } else if (record.pid) {
+            locationIdentifier = this.createPidObject(record.pid);
+        }
+
+        // Create proper SimpleIdentifiers object (Case 1b resolution)
+        const properBusinessName = this.createSimpleIdentifiersObject(businessName);
+
+        const business = new Business(locationIdentifier, properBusinessName, record.propertyLocation, record.ownerAddress, null);
 
         // Add VisionAppraisal-specific properties (addresses handled by constructor)
         business.pid = record.pid;
@@ -964,8 +1102,18 @@ const VisionAppraisalNameParser = {
 
     // Helper method: Create LegalConstruct entity
     createLegalConstruct(businessName, record, index) {
-        const locationIdentifier = record.fireNumber || record.pid || null;
-        const legalConstruct = new LegalConstruct(locationIdentifier, businessName, record.propertyLocation, record.ownerAddress, null);
+        // Create proper locationIdentifier object (Cases 4 & 5 resolution)
+        let locationIdentifier = null;
+        if (record.fireNumber) {
+            locationIdentifier = this.createFireNumberObject(record.fireNumber);
+        } else if (record.pid) {
+            locationIdentifier = this.createPidObject(record.pid);
+        }
+
+        // Create proper SimpleIdentifiers object (Case 1c resolution)
+        const properBusinessName = this.createSimpleIdentifiersObject(businessName);
+
+        const legalConstruct = new LegalConstruct(locationIdentifier, properBusinessName, record.propertyLocation, record.ownerAddress, null);
 
         // Add VisionAppraisal-specific properties (addresses handled by constructor)
         legalConstruct.pid = record.pid;
@@ -992,6 +1140,20 @@ const VisionAppraisalNameParser = {
     parseRecordToEntity(record, index) {
         this.requireDependencies();
 
+        // DIAGNOSTIC: Target PIDs for tracing
+        const isTargetPID280 = record.pid === "280" || record.pid === 280;
+        const isTargetPID711 = record.pid === "711" || record.pid === 711;
+        const isTargetPID = isTargetPID280 || isTargetPID711;
+        const targetLabel = isTargetPID280 ? 'PID 280' : 'PID 711';
+
+        if (isTargetPID) {
+            console.log(`🎯 DIAGNOSTIC ${targetLabel}: Starting parseRecordToEntity`);
+            console.log('   record.pid:', record.pid);
+            console.log('   record.processedOwnerName:', record.processedOwnerName);
+            console.log('   record.ownerName:', record.ownerName);
+            console.log('   record.fireNumber:', record.fireNumber);
+        }
+
         try {
             // Step 1: Prepare data for logical tests (similar to detectCaseRetVal pattern)
             const ownerName = record.processedOwnerName || record.ownerName;
@@ -1010,6 +1172,20 @@ const VisionAppraisalNameParser = {
             const moreThanOneCommaWithRepeating = words && words.length >= 5 ? Case31Validator.moreThanOneCommaWithRepeatingWord(words) : false;
             const moreThanOneCommaNoRepeating = words && words.length >= 5 ? Case31Validator.moreThanOneCommaNoRepeatingWord(words) : false;
             const ampersandHasOnlyOneWordAfter = words && words.length >= 5 ? Case31Validator.ampersandHasOnlyOneWordAfter(words) : false;
+
+            // DIAGNOSTIC: Show all test data for target PIDs
+            if (isTargetPID) {
+                console.log(`🎯 DIAGNOSTIC ${targetLabel}: Test data computed`);
+                console.log('   ownerName used:', ownerName);
+                console.log('   words:', words);
+                console.log('   wordCount:', wordCount);
+                console.log('   hasBusinessTerms:', hasBusinessTerms);
+                console.log('   punctuationInfo:', JSON.stringify(punctuationInfo));
+                console.log('   firstWordEndsComma:', firstWordEndsComma);
+                console.log('   secondWordIsSingleLetter:', secondWordIsSingleLetter);
+                console.log('   lastWordIsSingleLetter:', lastWordIsSingleLetter);
+                console.log('   firstAndThirdWordsMatch:', firstAndThirdWordsMatch);
+            }
 
             const testData = {
                 words,
@@ -1033,12 +1209,28 @@ const VisionAppraisalNameParser = {
 
             for (const [caseName, caseConfig] of sortedCases) {
                 if (caseConfig.logicalTest(testData)) {
+                    // DIAGNOSTIC: Show which case matched for target PIDs
+                    if (isTargetPID) {
+                        console.log(`🎯 DIAGNOSTIC ${targetLabel}: MATCHED`, caseName);
+                        console.log('   entityType:', caseConfig.entityType);
+                    }
                     console.log(`📋 ConfigurableParser matched ${caseName}: "${ownerName}"`);
-                    return caseConfig.processor.call(this, words, record, index);
+                    const result = caseConfig.processor.call(this, words, record, index);
+                    // DIAGNOSTIC: Show what was returned for target PIDs
+                    if (isTargetPID) {
+                        console.log(`🎯 DIAGNOSTIC ${targetLabel}: Processor returned`);
+                        console.log('   result type:', result?.constructor?.name);
+                        console.log('   result.individuals:', result?.individuals);
+                        console.log('   result.individuals?.length:', result?.individuals?.length);
+                    }
+                    return result;
                 }
             }
 
             // Step 3: No case matched
+            if (isTargetPID) {
+                console.log(`🎯 DIAGNOSTIC ${targetLabel}: NO CASE MATCHED!`);
+            }
             console.log(`❌ ConfigurableParser: No case matched "${ownerName}"`);
             return null;
 

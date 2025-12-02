@@ -114,7 +114,7 @@ async function analyzeSecondaryAddressPatterns() {
 
                     const entityInfo = {
                         entityIndex: index,
-                        entityType: entity.__type,
+                        entityType: entity.type,
                         entityName: entity.name?.completeName || entity.name?.term || 'Unknown',
                         secAddressIndex: secIndex,
                         originalString,
@@ -143,7 +143,7 @@ async function analyzeSecondaryAddressPatterns() {
                     if (hasBusinessOrCO || doesNotBeginWithNumOrPO) {
                         threePartAnalysis.push({
                             entityIndex: index,
-                            entityType: entity.__type,
+                            entityType: entity.type,
                             entityName: entity.name?.completeName || entity.name?.term || 'Unknown',
                             secAddressIndex: secIndex,
                             originalString,

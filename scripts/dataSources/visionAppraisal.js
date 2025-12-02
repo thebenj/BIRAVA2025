@@ -174,7 +174,7 @@ const VisionAppraisal = {
                 records: processedData
             };
 
-            console.log(`✓ Processed ${dataPackage.recordCount} records`);
+            console.log(`✓ Processed ${dataPackage.metadata.recordCount} records`);
             console.log(`✓ ${dataPackage.metadata.withFireNumbers} with Fire Numbers, ${dataPackage.metadata.withoutFireNumbers} without`);
 
             // Step 3: Save to Google Drive
@@ -187,13 +187,13 @@ const VisionAppraisal = {
 
             console.log("✅ VisionAppraisal processed data saved successfully!");
             console.log(`Google Drive File ID: ${GOOGLE_FILE_ID}`);
-            console.log(`Records saved: ${dataPackage.recordCount}`);
+            console.log(`Records saved: ${dataPackage.metadata.recordCount}`);
 
             return {
                 success: true,
                 fileId: GOOGLE_FILE_ID,
                 fileName: FILE_NAME,
-                recordCount: dataPackage.recordCount,
+                recordCount: dataPackage.metadata.recordCount,
                 metadata: dataPackage.metadata,
                 message: "VisionAppraisal processed data saved to Google Drive"
             };

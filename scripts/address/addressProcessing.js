@@ -718,3 +718,331 @@ function createAddressFromParsedData(processedAddress, fieldName) {
         throw error;
     }
 }
+
+/**
+ * =============================================================================
+ * GENERALIZED ADDRESS PROCESSING ARCHITECTURE
+ * =============================================================================
+ *
+ * New generalized architecture that decomposes processAddress() into configurable
+ * preprocess→parse→post-process phases. Supports both VisionAppraisal and Bloomerang
+ * data sources with parallel implementation for safety.
+ *
+ * IMPORTANT: Original processAddress() function preserved above - do not modify
+ * until migration is complete and tested.
+ */
+
+/**
+ * Phase 1: Preprocessing - VisionAppraisal Logic (Extracted from processAddress)
+ * Handles recipient extraction, tag cleaning, and placeholder number logic
+ * @param {string} addressString - Raw address string
+ * @param {string} sourceType - Data source type ('VisionAppraisal', 'Bloomerang', etc.)
+ * @param {string} fieldName - Field name for data lineage
+ * @returns {Object} Preprocessing result with finalAddressString and metadata
+ */
+function preprocessAddress(addressString, sourceType, fieldName) {
+    // Special field handling first (BI PO Box, BI Street)
+    if (fieldName === 'BI PO Box') {
+        return {
+            finalAddressString: `PO Box ${addressString.trim()}, New Shoreham, RI 02807`,
+            originalString: addressString,
+            recipientDetails: null,
+            usedPlaceholderNumber: false,
+            specialHandling: 'BI_PO_BOX'
+        };
+    }
+
+    if (fieldName === 'BI Street') {
+        const streetData = addressString.trim();
+        if (/^\d+/.test(streetData)) {
+            return {
+                finalAddressString: `${streetData}, Block Island, RI 02807`,
+                originalString: addressString,
+                recipientDetails: null,
+                usedPlaceholderNumber: false,
+                specialHandling: 'BI_STREET'
+            };
+        }
+    }
+
+    // Standard preprocessing - extracted from processAddress lines 472-492
+    // 1. Extract recipient details before tag cleaning
+    const recipientExtractionResult = extractRecipientDetails(addressString.trim());
+    const addressAfterRecipientExtraction = recipientExtractionResult.addressString;
+    const recipientDetails = recipientExtractionResult.recipientDetails;
+
+    // 2. Apply VisionAppraisal tag cleaning
+    const cleanedAddressString = cleanVisionAppraisalTags(addressAfterRecipientExtraction);
+
+    // 3. Block Island placeholder number logic
+    const preParseCheck = preParseBlockIslandCheck(addressAfterRecipientExtraction.trim(), sourceType, fieldName);
+    let addressForParsing = cleanedAddressString;
+    let usedPlaceholderNumber = false;
+
+    if (preParseCheck.isBlockIsland && preParseCheck.matchedStreet) {
+        const startsWithNumber = /^\d+\s/.test(cleanedAddressString.trim());
+        if (!startsWithNumber) {
+            addressForParsing = "9999 " + cleanedAddressString;
+            usedPlaceholderNumber = true;
+        }
+    }
+
+    return {
+        finalAddressString: addressForParsing,
+        originalString: addressString,
+        recipientDetails: recipientDetails,
+        usedPlaceholderNumber: usedPlaceholderNumber,
+        preParseBlockIslandCheck: preParseCheck,
+        specialHandling: null
+    };
+}
+
+/**
+ * Phase 1: Preprocessing - Bloomerang Logic
+ * Builds full address from component fields and extracts reliable components
+ * @param {Object} inputData - Object with addressSet and fieldName
+ * @param {string} sourceType - Data source type ('Bloomerang')
+ * @param {string} fieldName - Field name for data lineage
+ * @returns {Object} Preprocessing result with finalAddressString and reliable components
+ */
+function preprocessBloomerangAddress(inputData, sourceType, fieldName) {
+    const addressSet = inputData.addressSet;
+
+    // Build full address from component fields using existing buildFullAddress
+    const fullAddress = buildFullAddress(addressSet);
+
+    // Extract reliable components for post-processing override
+    const reliableComponents = {
+        city: (addressSet.city || '').trim(),
+        state: (addressSet.state || '').trim(),
+        zip: (addressSet.zip || '').trim()
+    };
+
+    return {
+        finalAddressString: fullAddress,
+        originalString: fullAddress,  // For Bloomerang, these are the same
+        recipientDetails: null,       // Bloomerang doesn't have recipient extraction
+        usedPlaceholderNumber: false, // Bloomerang doesn't use placeholder logic
+        reliableComponents: reliableComponents,
+        specialHandling: null
+    };
+}
+
+/**
+ * Phase 2: Parsing - Common for All Sources (Extracted from processAddress)
+ * Handles core address parsing using parseAddress.parseLocation library
+ * @param {Object} preprocessResult - Result from preprocessing phase
+ * @returns {Object|null} Parsed address object or null if parsing failed
+ */
+function parseAddressPhase(preprocessResult) {
+    // Handle special cases that bypass normal parsing
+    if (preprocessResult.specialHandling === 'BI_PO_BOX' ||
+        preprocessResult.specialHandling === 'BI_STREET') {
+        // These already have generated full addresses, just parse them
+        return parseAddress.parseLocation(preprocessResult.finalAddressString);
+    }
+
+    // Standard parsing - extracted from processAddress line 494
+    const parsed = parseAddress.parseLocation(preprocessResult.finalAddressString);
+
+    // Validation - extracted from processAddress lines 518-520
+    if (!parsed || (!parsed.city && !parsed.zip && !parsed.street)) {
+        return null; // Failed to parse meaningfully
+    }
+
+    return parsed;
+}
+
+/**
+ * Phase 3: Post-Processing - VisionAppraisal Logic (Extracted from processAddress)
+ * Handles Block Island detection, normalization, and two-path processing
+ * @param {Object} parsed - Parsed address object from parsing phase
+ * @param {Object} preprocessResult - Result from preprocessing phase
+ * @param {string} sourceType - Data source type
+ * @param {string} fieldName - Field name for data lineage
+ * @returns {Object} Final processed address object
+ */
+function postProcessAddress(parsed, preprocessResult, sourceType, fieldName) {
+    // Handle special cases first - extracted from processAddress lines 441-448, 461-468
+    if (preprocessResult.specialHandling === 'BI_PO_BOX') {
+        const processedAddress = createProcessedAddressObject(
+            parsed, preprocessResult.originalString, sourceType, fieldName
+        );
+        processedAddress.isBlockIslandAddress = true;
+        processedAddress.blockIslandReason = 'BI PO Box generated address';
+        processedAddress.generatedAddress = preprocessResult.finalAddressString;
+        return processedAddress;
+    }
+
+    if (preprocessResult.specialHandling === 'BI_STREET') {
+        const processedAddress = createProcessedAddressObject(
+            parsed, preprocessResult.originalString, sourceType, fieldName
+        );
+        processedAddress.isBlockIslandAddress = true;
+        processedAddress.blockIslandReason = 'BI Street generated address with Fire Number';
+        processedAddress.generatedAddress = preprocessResult.finalAddressString;
+        return processedAddress;
+    }
+
+    // Standard post-processing - extracted from processAddress lines 522-573
+    // 1. Apply Block Island city normalization
+    const normalized = normalizeBlockIslandCity(parsed);
+
+    // 2. Block Island detection
+    const detectionResult = detectBlockIslandAddress(
+        normalized, preprocessResult.originalString, sourceType, fieldName
+    );
+
+    // 3. Create base address object
+    const processedAddress = createProcessedAddressObject(
+        normalized,
+        preprocessResult.originalString,
+        sourceType,
+        fieldName,
+        preprocessResult.usedPlaceholderNumber,
+        preprocessResult.recipientDetails
+    );
+
+    // 4. Apply detection results
+    processedAddress.isBlockIslandAddress = detectionResult.isBI;
+    processedAddress.needsBlockIslandForcing = detectionResult.needsForcing;
+    processedAddress.blockIslandDetectionMethod = detectionResult.method;
+    if (detectionResult.matchedStreet) {
+        processedAddress.matchedStreet = detectionResult.matchedStreet;
+    }
+
+    // 5. Restore street number if placeholder was used
+    if (preprocessResult.usedPlaceholderNumber && processedAddress.number === "9999") {
+        processedAddress.number = null;
+        processedAddress.placeholderNumberRemoved = true;
+
+        if (!detectionResult.isBI) {
+            console.warn('Unexpected: Restored placeholder in non-Block Island address', {
+                address: preprocessResult.originalString,
+                preParseBI: preprocessResult.preParseBlockIslandCheck?.isBlockIsland,
+                fullDetectionBI: detectionResult.isBI,
+                preParseMethod: preprocessResult.preParseBlockIslandCheck?.matchedStreet ? 'street' : 'visionappraisal',
+                fullDetectionMethod: detectionResult.method
+            });
+        }
+    }
+
+    // 6. Two-path processing decision - extracted from processAddress lines 556-573
+    if (detectionResult.isBI) {
+        // Block Island specialized processing
+        return createBlockIslandAddress(
+            normalized,
+            preprocessResult.originalString,
+            sourceType,
+            fieldName,
+            detectionResult.matchedStreet,
+            preprocessResult.usedPlaceholderNumber
+        );
+    } else {
+        // Non-Block Island processing
+        if (normalized.street && normalized.suffix) {
+            const addressPart = preprocessResult.originalString.split('::#^#::')[0];
+            const streetWithoutNumber = normalized.number
+                ? addressPart.replace(new RegExp(`^\\s*${normalized.number}\\s+`), '')
+                : addressPart;
+            processedAddress.street = streetWithoutNumber;
+        }
+        return processedAddress;
+    }
+}
+
+/**
+ * Phase 3: Post-Processing - Bloomerang Logic (Extends VisionAppraisal Logic)
+ * Runs standard post-processing then overrides with reliable field data
+ * @param {Object} parsed - Parsed address object from parsing phase
+ * @param {Object} preprocessResult - Result from preprocessing phase
+ * @param {string} sourceType - Data source type
+ * @param {string} fieldName - Field name for data lineage
+ * @returns {Object} Final processed address object with Bloomerang overrides
+ */
+function postProcessBloomerangAddress(parsed, preprocessResult, sourceType, fieldName) {
+    // Run standard post-processing first (VisionAppraisal logic)
+    const standardResult = postProcessAddress(parsed, preprocessResult, sourceType, fieldName);
+
+    // Override with reliable field data from Bloomerang CSV
+    if (preprocessResult.reliableComponents) {
+        if (preprocessResult.reliableComponents.city) {
+            standardResult.city = preprocessResult.reliableComponents.city;
+        }
+        if (preprocessResult.reliableComponents.state) {
+            standardResult.state = preprocessResult.reliableComponents.state;
+        }
+        if (preprocessResult.reliableComponents.zip) {
+            standardResult.zip = preprocessResult.reliableComponents.zip;
+        }
+    }
+
+    return standardResult;
+}
+
+/**
+ * Generalized Address Processing Function
+ * Main entry point for new architecture - supports multiple data sources via configuration
+ * @param {Object} inputData - Input data structure (varies by data source)
+ * @param {Object} dataSourceConfig - Configuration object defining preprocess/postprocess functions
+ * @returns {Object|null} Processed address object or null if processing failed
+ */
+function processAddressGeneralized(inputData, dataSourceConfig) {
+    // Validation
+    if (!inputData || !dataSourceConfig) {
+        console.log('❌ PROCESSADDRESSGENERALIZED: Invalid input - missing inputData or dataSourceConfig');
+        return null;
+    }
+
+    if (!dataSourceConfig.preprocess || !dataSourceConfig.postProcess) {
+        console.log('❌ PROCESSADDRESSGENERALIZED: Invalid configuration - missing preprocess or postProcess functions');
+        return null;
+    }
+
+    try {
+        // Phase 1: PREPROCESS - source-specific input preparation
+        const preprocessResult = dataSourceConfig.preprocess(inputData, dataSourceConfig.sourceType, inputData.fieldName);
+
+        if (!preprocessResult || !preprocessResult.finalAddressString) {
+            console.log('❌ PROCESSADDRESSGENERALIZED: Preprocessing failed or returned invalid result');
+            return null;
+        }
+
+        // Phase 2: PARSE - common parsing via existing library
+        const parsed = parseAddressPhase(preprocessResult);
+        if (!parsed) {
+            console.log(`❌ PROCESSADDRESSGENERALIZED: Parsing failed for address: ${preprocessResult.finalAddressString}`);
+            return null;
+        }
+
+        // Phase 3: POST-PROCESS - source-specific enhancement
+        const result = dataSourceConfig.postProcess(parsed, preprocessResult, dataSourceConfig.sourceType, inputData.fieldName);
+
+        return result;
+
+    } catch (error) {
+        console.error('❌ PROCESSADDRESSGENERALIZED: Error in generalized processing:', error);
+        console.error('Input data:', inputData);
+        console.error('Config:', dataSourceConfig);
+        return null;
+    }
+}
+
+/**
+ * Data Source Configurations
+ * Define preprocessing and post-processing behavior for different data sources
+ */
+
+// VisionAppraisal configuration (preserves existing processAddress behavior exactly)
+const visionAppraisalConfig = {
+    sourceType: 'VisionAppraisal',
+    preprocess: preprocessAddress,        // Uses existing VisionAppraisal preprocessing logic
+    postProcess: postProcessAddress       // Uses existing VisionAppraisal post-processing logic
+};
+
+// Bloomerang configuration (new functionality for component field override)
+const bloomerangConfig = {
+    sourceType: 'Bloomerang',
+    preprocess: preprocessBloomerangAddress,  // Builds full address from component fields
+    postProcess: postProcessBloomerangAddress // Overrides with reliable field data
+};

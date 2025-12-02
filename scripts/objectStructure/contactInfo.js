@@ -14,6 +14,33 @@
 class Info {
     constructor() {
         // Base initialization - subclasses will extend with specific properties
+
+        // Weighted comparison architecture properties
+        this.comparisonWeights = null;                    // Object: {propName: weight, ...}
+        this.comparisonCalculatorName = 'defaultWeightedComparison';  // Serializable string name
+        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
+    }
+
+    /**
+     * Compare this Info to another Info of the same type
+     * Uses the registered comparison calculator for matching
+     * @param {Info} other - Info to compare against
+     * @returns {number} Similarity score 0-1 (1 = identical, 0 = completely different)
+     * @throws {Error} If comparing with incompatible object type
+     */
+    compareTo(other) {
+        // Type checking - must be same class
+        if (!other || other.constructor !== this.constructor) {
+            throw new Error(`Cannot compare ${this.constructor.name} with ${other ? other.constructor.name : 'null'}`);
+        }
+
+        // Use the comparison calculator if available
+        if (this.comparisonCalculator && typeof this.comparisonCalculator === 'function') {
+            return this.comparisonCalculator.call(this, other);
+        }
+
+        // Fallback to generic comparison
+        return genericObjectCompareTo(this, other);
     }
 
     /**
@@ -63,6 +90,7 @@ class Info {
 
     /**
      * Generic serialize method for Info subclasses
+     * Iterates over properties automatically (no hardcoded property lists)
      * @returns {Object} Serialized representation
      */
     serialize() {
@@ -72,8 +100,19 @@ class Info {
 
         const propertyNames = Object.getOwnPropertyNames(this);
         propertyNames.forEach(propertyName => {
-            if (propertyName !== 'constructor') {
-                serialized[propertyName] = this[propertyName] ? this[propertyName].serialize() : null;
+            if (propertyName !== 'constructor' && propertyName !== 'comparisonCalculator') {
+                // Serialize all properties except constructor and comparisonCalculator (function)
+                if (propertyName === 'comparisonWeights' || propertyName === 'comparisonCalculatorName') {
+                    // Serialize these directly (plain values, not IndicativeData)
+                    serialized[propertyName] = this[propertyName];
+                } else if (Array.isArray(this[propertyName])) {
+                    // Handle arrays (like secondaryAddress) - map each element through serialize
+                    serialized[propertyName] = this[propertyName].map(item =>
+                        item && typeof item.serialize === 'function' ? item.serialize() : item
+                    );
+                } else {
+                    serialized[propertyName] = this[propertyName] ? this[propertyName].serialize() : null;
+                }
             }
         });
 
@@ -82,6 +121,7 @@ class Info {
 
     /**
      * Generic deserialize method for Info subclasses
+     * Uses constructor (initialization logic runs) then copies additional properties
      * @param {Object} data - Serialized data
      * @param {Function} constructorClass - Constructor function for the specific subclass
      * @returns {Info} Reconstructed Info subclass instance
@@ -91,15 +131,47 @@ class Info {
             throw new Error(`Invalid ${constructorClass.name} serialization format`);
         }
 
+        // Create instance via constructor - initialization logic runs!
         const instance = new constructorClass();
 
         Object.keys(data).forEach(key => {
-            if (key !== 'type' && data[key]) {
-                instance[key] = IndicativeData.deserialize(data[key]);
+            if (key !== 'type' && data[key] !== null && data[key] !== undefined) {
+                if (key === 'comparisonCalculator') {
+                    // Skip - function reference, will be resolved from name
+                } else if (key === 'comparisonCalculatorName') {
+                    // Restore calculator name and resolve to function
+                    instance.comparisonCalculatorName = data[key];
+                    instance.comparisonCalculator = resolveComparisonCalculator(data[key]);
+                } else if (key === 'comparisonWeights') {
+                    // Restore weights directly (plain object)
+                    instance.comparisonWeights = data[key];
+                } else if (key === 'primaryAddress') {
+                    // Address object - handle already-transformed instances
+                    instance[key] = ensureDeserialized(data[key], Address);
+                } else if (key === 'secondaryAddress' || key === 'secondaryAddresses') {
+                    // Array of Address objects - handle already-transformed instances
+                    instance[key] = data[key].map(addr => addr ? ensureDeserialized(addr, Address) : null);
+                } else {
+                    // Other properties (email, phone, poBox, etc.) - pass through directly
+                    // These are NOT wrapped in IndicativeData - they're direct values or already-deserialized objects
+                    instance[key] = data[key];
+                }
             }
         });
 
         return instance;
+    }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * This is the preferred entry point for deserializeWithTypes to use
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {Info} Reconstructed instance (Info or subclass)
+     */
+    static fromSerializedData(data) {
+        // 'this' refers to the actual class called, enabling polymorphic deserialization
+        return Info.deserializeBase(data, this);
     }
 }
 
@@ -113,35 +185,56 @@ class ContactInfo extends Info {
         super(); // Call parent constructor
 
         // Contact-related fields
-        this.email = null;       // IndicativeData containing SimpleIdentifiers for email
-        this.phone = null;       // IndicativeData containing SimpleIdentifiers for phone
-        this.poBox = null;       // IndicativeData containing SimpleIdentifiers for PO Box
+        this.email = null;       // SimpleIdentifiers for email (no IndicativeData wrapper)
+        this.phone = null;       // SimpleIdentifiers for phone (no IndicativeData wrapper)
+        this.poBox = null;       // SimpleIdentifiers for PO Box (no IndicativeData wrapper)
         this.primaryAddress = null;      // Address object for primary mailing address
         this.secondaryAddress = [];      // Array of Address objects for secondary addresses (home, vacation, work, etc.)
+
+        // Initialize weighted comparison
+        this.initializeWeightedComparison();
+    }
+
+    /**
+     * Initialize weighted comparison properties for ContactInfo
+     * Uses contactInfoWeightedComparison calculator for sophisticated address matching logic
+     */
+    initializeWeightedComparison() {
+        // Weights are handled conditionally by contactInfoWeightedComparison
+        // Standard: primaryAddress 0.6, secondaryAddress 0.2, email 0.2
+        // Perfect match override: winner 0.9, others 0.05 each
+        this.comparisonWeights = {
+            primaryAddress: 'conditional',
+            secondaryAddress: 'conditional',
+            email: 'conditional'
+            // phone has no weight
+        };
+        this.comparisonCalculatorName = 'contactInfoWeightedComparison';
+        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
     }
 
     /**
      * Set email contact information
-     * @param {IndicativeData} emailIndicativeData - IndicativeData containing email SimpleIdentifier
+     * @param {SimpleIdentifiers} emailSimpleIdentifiers - SimpleIdentifiers containing email AttributedTerm
      */
-    setEmail(emailIndicativeData) {
-        this.email = emailIndicativeData;
+    setEmail(emailSimpleIdentifiers) {
+        this.email = emailSimpleIdentifiers;
     }
 
     /**
      * Set phone contact information
-     * @param {IndicativeData} phoneIndicativeData - IndicativeData containing phone SimpleIdentifier
+     * @param {SimpleIdentifiers} phoneSimpleIdentifiers - SimpleIdentifiers containing phone AttributedTerm
      */
-    setPhone(phoneIndicativeData) {
-        this.phone = phoneIndicativeData;
+    setPhone(phoneSimpleIdentifiers) {
+        this.phone = phoneSimpleIdentifiers;
     }
 
     /**
      * Set PO Box contact information
-     * @param {IndicativeData} poBoxIndicativeData - IndicativeData containing PO Box SimpleIdentifier
+     * @param {SimpleIdentifiers} poBoxSimpleIdentifiers - SimpleIdentifiers containing PO Box AttributedTerm
      */
-    setPoBox(poBoxIndicativeData) {
-        this.poBox = poBoxIndicativeData;
+    setPoBox(poBoxSimpleIdentifiers) {
+        this.poBox = poBoxSimpleIdentifiers;
     }
 
     /**
@@ -281,20 +374,10 @@ class ContactInfo extends Info {
         };
     }
 
-    /**
-     * Serialize ContactInfo to JSON-compatible object
-     * @returns {Object} Serialized representation
-     */
-    serialize() {
-        return {
-            type: 'ContactInfo',
-            email: this.email ? this.email.serialize() : null,
-            phone: this.phone ? this.phone.serialize() : null,
-            poBox: this.poBox ? this.poBox.serialize() : null,
-            primaryAddress: this.primaryAddress ? this.primaryAddress.serialize() : null,
-            secondaryAddress: this.secondaryAddress ? this.secondaryAddress.map(addr => addr ? addr.serialize() : null) : []
-        };
-    }
+    // NOTE: ContactInfo uses the inherited Info.serialize() method which iterates
+    // over all properties automatically. No custom serialize() method needed here.
+    // The base class handles comparisonWeights, comparisonCalculatorName, and
+    // calls .serialize() on nested objects like primaryAddress and secondaryAddress.
 
     /**
      * Deserialize ContactInfo from JSON object
@@ -303,6 +386,18 @@ class ContactInfo extends Info {
      */
     static deserialize(data) {
         return Info.deserializeBase(data, ContactInfo);
+    }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * This is the preferred entry point for deserializeWithTypes to use
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {ContactInfo} Reconstructed instance (ContactInfo or subclass)
+     */
+    static fromSerializedData(data) {
+        // 'this' refers to the actual class called, enabling polymorphic deserialization
+        return this.deserialize(data);
     }
 }
 
@@ -317,6 +412,17 @@ class OtherInfo extends Info {
 
         // This base class can be extended by specific OtherInfo subclasses
         // Properties will be added by subclasses based on entity type
+    }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {OtherInfo} Reconstructed instance (OtherInfo or subclass)
+     */
+    static fromSerializedData(data) {
+        // 'this' refers to the actual class called, enabling polymorphic deserialization
+        return Info.deserializeBase(data, this);
     }
 }
 
@@ -341,6 +447,16 @@ class HouseholdOtherInfo extends OtherInfo {
     static deserialize(data) {
         return Info.deserializeBase(data, HouseholdOtherInfo);
     }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {HouseholdOtherInfo} Reconstructed instance
+     */
+    static fromSerializedData(data) {
+        return this.deserialize(data);
+    }
 }
 
 /**
@@ -363,6 +479,16 @@ class IndividualOtherInfo extends OtherInfo {
      */
     static deserialize(data) {
         return Info.deserializeBase(data, IndividualOtherInfo);
+    }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {IndividualOtherInfo} Reconstructed instance
+     */
+    static fromSerializedData(data) {
+        return this.deserialize(data);
     }
 }
 
@@ -461,6 +587,16 @@ class LegacyInfo extends Info {
      */
     static deserialize(data) {
         return Info.deserializeBase(data, LegacyInfo);
+    }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {LegacyInfo} Reconstructed instance
+     */
+    static fromSerializedData(data) {
+        return this.deserialize(data);
     }
 }
 

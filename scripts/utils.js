@@ -18,6 +18,1057 @@
 // ✅ Google Drive API function moved to scripts/core/googleDriveAPI.js
 // testGetFilesList() - Test function to verify getFilesList works with Google Drive API
 
+// =============================================================================
+// STRING MATCHING UTILITIES
+// Future Enhancement Placeholder: Replace simple string matching with sophisticated algorithms
+// =============================================================================
+
+/**
+ * Simple string matching with future enhancement placeholder
+ * FUTURE: Replace with sophisticated matching algorithms (fuzzy matching, normalization, etc.)
+ * @param {string} field1 - First field to compare
+ * @param {string} field2 - Second field to compare
+ * @returns {boolean} True if fields match
+ */
+function simpleStringMatch(field1, field2) {
+    // TODO FUTURE ENHANCEMENT: Replace simple equality with sophisticated matching
+    // - Fuzzy string matching (Levenshtein distance, soundex, etc.)
+    // - Address normalization (St vs Street, N vs North, etc.)
+    // - Whitespace and punctuation handling
+    // - Case insensitive comparison with proper locale handling
+
+    const normalized1 = (field1 || '').toString().trim();
+    const normalized2 = (field2 || '').toString().trim();
+
+    // Simple equality comparison - PLACEHOLDER for future enhancement
+    return normalized1 === normalized2;
+}
+
+// =============================================================================
+// WEIGHTED COMPARISON ARCHITECTURE
+// Shared utilities for configurable weighted object comparison
+// =============================================================================
+
+// COMMENTED OUT: Algorithm mismatch - compareStringsFuzzy uses simple substring/word overlap
+// instead of sophisticated weighted Levenshtein from matchingTools.js
+// Preserved for potential revert. See matchingTools.js levenshteinDistance() for correct algorithm.
+// /**
+//  * Fuzzy string comparison helper - matches logic from nameMatchingAnalysis.js compareComponent()
+//  * @param {string} str1 - First string
+//  * @param {string} str2 - Second string
+//  * @returns {number} Similarity score 0-1
+//  */
+// function compareStringsFuzzy(str1, str2) {
+//     if (!str1 && !str2) return 1.0;  // Both empty = perfect match
+//     if (!str1 || !str2) return 0.0;  // One empty = no match
+//
+//     const s1 = str1.toUpperCase().trim();
+//     const s2 = str2.toUpperCase().trim();
+//
+//     if (s1 === s2) return 1.0;  // Exact match
+//
+//     // Check for substring matches (handles initials, shortened names)
+//     if (s1.includes(s2) || s2.includes(s1)) return 0.7;
+//
+//     // Basic word overlap for compound names
+//     const words1 = s1.split(/\s+/);
+//     const words2 = s2.split(/\s+/);
+//     const overlap = words1.filter(w => words2.includes(w)).length;
+//     const maxWords = Math.max(words1.length, words2.length);
+//
+//     return maxWords > 0 ? overlap / maxWords : 0.0;
+// }
+
+// COMMENTED OUT: defaultWeightedComparison uses wrong algorithm (compareStringsFuzzy)
+// Should use weighted Levenshtein from matchingTools.js to match compareNames() results
+// This causes algorithm mismatch preventing parallel test validation (correlation < 0.95)
+// Preserved for potential revert.
+// /**
+//  * Default weighted comparison calculator
+//  * Used by genericObjectCompareTo when comparisonWeights are configured
+//  * Operates in 'this' context of the calling object
+//  * @param {Object} otherObject - Object to compare against
+//  * @returns {number} Comparison result from -1 to 1, rounded to 10th place, or null for fallback
+//  */
+// function defaultWeightedComparison(otherObject) {
+//     // Check if weights are configured
+//     if (!this.comparisonWeights) {
+//         return null; // Fall back to standard property-by-property comparison
+//     }
+//
+//     let totalWeightedScore = 0;
+//     let totalWeight = 0;
+//
+//     // DIAGNOSTIC: Log what we're comparing
+//     const diagnosticLog = [];
+//     diagnosticLog.push('=== defaultWeightedComparison DIAGNOSTIC ===');
+//
+//     // Iterate through configured weights only (exclusion approach)
+//     for (let propName in this.comparisonWeights) {
+//         const weight = this.comparisonWeights[propName];
+//         const thisValue = this[propName];
+//         const otherValue = otherObject[propName];
+//
+//         diagnosticLog.push(`\nProperty: ${propName} (weight: ${weight})`);
+//         diagnosticLog.push(`  thisValue: ${thisValue}`);
+//         diagnosticLog.push(`  otherValue: ${otherValue}`);
+//
+//         // Skip if either value is missing (exclusion approach for robustness)
+//         if (!thisValue || !otherValue) {
+//             diagnosticLog.push(`  SKIPPED: Missing value`);
+//             continue;
+//         }
+//
+//         // Calculate property similarity score using fuzzy matching
+//         let propScore = 0;
+//         if (typeof thisValue.compareTo === 'function') {
+//             // For objects with compareTo methods, use fuzzy string comparison
+//             // Extract string representations for comparison
+//             const str1 = thisValue.toString ? thisValue.toString() : String(thisValue);
+//             const str2 = otherValue.toString ? otherValue.toString() : String(otherValue);
+//             propScore = compareStringsFuzzy(str1, str2);
+//             diagnosticLog.push(`  Using fuzzy match: "${str1}" vs "${str2}" = ${propScore}`);
+//         } else {
+//             // Direct comparison fallback for primitive values
+//             propScore = thisValue === otherValue ? 1.0 : 0.0;
+//             diagnosticLog.push(`  Using exact match: ${propScore}`);
+//         }
+//
+//         totalWeightedScore += propScore * weight;
+//         totalWeight += weight;
+//         diagnosticLog.push(`  Weighted contribution: ${propScore} * ${weight} = ${propScore * weight}`);
+//     }
+//
+//     // Calculate final weighted similarity
+//     const similarity = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+//
+//     diagnosticLog.push(`\nTotal weighted score: ${totalWeightedScore}`);
+//     diagnosticLog.push(`Total weight: ${totalWeight}`);
+//     diagnosticLog.push(`Final similarity: ${similarity}`);
+//
+//     // Log only for first comparison (to avoid spam)
+//     if (!window._defaultWeightedComparison_logged) {
+//         console.log(diagnosticLog.join('\n'));
+//         window._defaultWeightedComparison_logged = true;
+//     }
+//
+//     // Convert to compareTo convention (-1 to 1 range, rounded to 10th place)
+//     const compareToResult = (similarity * 2) - 1; // Convert 0-1 to -1 to +1
+//     return Math.round(compareToResult * 10) / 10;
+// }
+
+// =============================================================================
+// VOWEL-WEIGHTED LEVENSHTEIN DISTANCE
+// Copied from matchingTools.js - sophisticated string comparison for names
+// Lower penalty for vowel-vowel mismatches (common in name variations like Smith/Smyth)
+// =============================================================================
+
+/**
+ * Calculate vowel-weighted Levenshtein distance between two strings
+ * @param {string} str1 - First string to compare
+ * @param {string} str2 - Second string to compare
+ * @returns {number} Distance value (lower = more similar)
+ */
+const levenshteinDistance = (str1 = '', str2 = '') => {
+    const vow = ["a", "e", "i", "o", "u", "y"];
+    const cons = ["b", "c", "d", "f", "g", "h", "j", "k", "l", "m", "n", "p", "q", "r", "s", "t", "v", "w", "x", "z"];
+
+    // Convert to lowercase for comparison
+    const s1 = str1.toLowerCase();
+    const s2 = str2.toLowerCase();
+
+    const track = Array(s2.length + 1).fill(null).map(() =>
+        Array(s1.length + 1).fill(null));
+
+    for (let i = 0; i <= s1.length; i += 1) {
+        track[0][i] = i;
+    }
+    for (let j = 0; j <= s2.length; j += 1) {
+        track[j][0] = j;
+    }
+
+    for (let j = 1; j <= s2.length; j += 1) {
+        for (let i = 1; i <= s1.length; i += 1) {
+            // Substitution penalty varies by character type:
+            // - Exact match: 0
+            // - Vowel-vowel mismatch: ~0.079 (low - common in name variations)
+            // - Consonant-consonant mismatch: 1 (high)
+            // - Vowel-consonant mismatch: ~0.632 (medium)
+            const indicator = ((s1[i - 1] === s2[j - 1]) ? 0 :
+                (((vow.indexOf(s1[i - 1]) > -1) && (vow.indexOf(s2[j - 1]) > -1)) ? (6 * 5) / (20 * 19) :
+                    (((cons.indexOf(s1[i - 1]) > -1) && (cons.indexOf(s2[j - 1]) > -1) ? 1 : (6 + 6) / 19))));
+
+            track[j][i] = Math.min(
+                track[j][i - 1] + 1,           // deletion
+                track[j - 1][i] + 1,           // insertion
+                track[j - 1][i - 1] + indicator // substitution
+            );
+        }
+    }
+    return track[s2.length][s1.length];
+};
+
+/**
+ * Convert Levenshtein distance to similarity score (0-1 range)
+ * @param {string} str1 - First string
+ * @param {string} str2 - Second string
+ * @returns {number} Similarity score (1 = identical, 0 = completely different)
+ */
+function levenshteinSimilarity(str1, str2) {
+    if (!str1 && !str2) return 1.0;  // Both empty = perfect match
+    if (!str1 || !str2) return 0.0;  // One empty = no match
+
+    const distance = levenshteinDistance(str1, str2);
+    const maxLength = Math.max(str1.length, str2.length);
+    return maxLength > 0 ? 1 - (distance / maxLength) : 1.0;
+}
+
+// =============================================================================
+// DEFAULT WEIGHTED COMPARISON - Real Implementation
+// Uses vowel-weighted Levenshtein for sophisticated name/string comparison
+// =============================================================================
+
+/**
+ * Default weighted comparison calculator using vowel-weighted Levenshtein
+ * Used by genericObjectCompareTo when comparisonWeights are configured
+ * Operates in 'this' context of the calling object
+ * @param {Object} otherObject - Object to compare against
+ * @returns {number} Similarity score 0-1, or null for fallback to property-by-property
+ */
+function defaultWeightedComparison(otherObject) {
+    // Check if weights are configured
+    if (!this.comparisonWeights) {
+        return null; // Fall back to standard property-by-property comparison
+    }
+
+    let totalWeightedScore = 0;
+    let totalWeight = 0;
+
+    // Iterate through configured weights only
+    for (let propName in this.comparisonWeights) {
+        const weight = this.comparisonWeights[propName];
+        const thisValue = this[propName];
+        const otherValue = otherObject[propName];
+
+        // Skip if either value is missing (exclusion approach for robustness)
+        if (!thisValue || !otherValue) {
+            continue;
+        }
+
+        // Calculate similarity using the component's native compareTo method
+        // ARCHITECTURE REQUIREMENT: All objects use their own compareTo for comparison
+        let similarity = 0;
+
+        if (typeof thisValue.compareTo === 'function') {
+            // Use the object's native compareTo method (returns 0-1 similarity)
+            similarity = thisValue.compareTo(otherValue);
+        } else if (typeof thisValue === 'string') {
+            // For plain strings, use levenshteinSimilarity directly
+            const str2 = typeof otherValue === 'string' ? otherValue : String(otherValue);
+            similarity = levenshteinSimilarity(thisValue, str2);
+        } else {
+            // Fallback for primitives - exact match only
+            similarity = thisValue === otherValue ? 1.0 : 0.0;
+        }
+
+        totalWeightedScore += similarity * weight;
+        totalWeight += weight;
+    }
+
+    // Calculate final weighted similarity (0-1 range)
+    const finalSimilarity = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+
+    // Round to 2 decimal places for clean output
+    return Math.round(finalSimilarity * 100) / 100;
+}
+
+// =============================================================================
+// ADDRESS-SPECIFIC WEIGHTED COMPARISON
+// Handles conditional logic for PO Box vs Street Address comparisons
+// With special handling for Block Island addresses
+// =============================================================================
+
+/**
+ * Determine if an Address object represents a PO Box address
+ * @param {Address} addr - Address object to check
+ * @returns {boolean} True if this is a PO Box address
+ */
+function isPOBoxAddress(addr) {
+    if (!addr) return false;
+
+    // Helper to normalize and check a string value
+    const checkForPOBox = (value) => {
+        if (!value) return false;
+        const term = value.term !== undefined ? value.term : value;
+        // Normalize: uppercase, remove periods and spaces
+        const normalized = String(term).toUpperCase().replace(/\./g, '').replace(/\s+/g, '');
+        // Check for various PO Box indicators
+        return normalized.includes('BOX') ||
+               normalized.includes('PO') ||
+               normalized.includes('POSTOFFICE') ||
+               normalized === 'POB';
+    };
+
+    // Check secUnitType
+    if (checkForPOBox(addr.secUnitType)) {
+        return true;
+    }
+
+    // Also check streetName (some parsers put "PO Box" there)
+    if (checkForPOBox(addr.streetName)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Check if a city name is a Block Island variant
+ * @param {string|AttributedTerm} cityValue - City to check
+ * @returns {boolean} True if city is a Block Island variant
+ */
+function isBlockIslandCity(cityValue) {
+    if (!cityValue) return false;
+    const term = cityValue.term !== undefined ? cityValue.term : cityValue;
+    const normalized = String(term).toUpperCase().replace(/\s+/g, '');
+    return normalized.includes('BLOCKISLAND') ||
+           normalized.includes('NEWSHOREHAM') ||
+           normalized === 'BI';
+}
+
+/**
+ * Check if a street name exists in the Block Island streets database
+ * @param {string|AttributedTerm} streetValue - Street name to check
+ * @returns {boolean} True if street is in BI database
+ */
+function isBlockIslandStreet(streetValue) {
+    if (!streetValue) return false;
+    if (typeof window === 'undefined' || !window.blockIslandStreets) return false;
+
+    const term = streetValue.term !== undefined ? streetValue.term : streetValue;
+    const normalized = String(term).toUpperCase().trim();
+
+    return window.blockIslandStreets.has(normalized);
+}
+
+/**
+ * Get similarity between two AttributedTerm or string values
+ * @param {AttributedTerm|string} val1 - First value
+ * @param {AttributedTerm|string} val2 - Second value
+ * @returns {number} Similarity 0-1
+ */
+function getComponentSimilarity(val1, val2) {
+    if (!val1 || !val2) return 0;
+
+    // Use compareTo if available (AttributedTerm)
+    if (typeof val1.compareTo === 'function') {
+        return val1.compareTo(val2);
+    }
+
+    // Fall back to levenshteinSimilarity for strings
+    const str1 = val1.term !== undefined ? String(val1.term) : String(val1);
+    const str2 = val2.term !== undefined ? String(val2.term) : String(val2);
+    return levenshteinSimilarity(str1, str2);
+}
+
+/**
+ * Get similarity between two state values
+ * For 2-letter state codes: exact match only (1.0 or 0.0)
+ * For longer state names: use levenshteinSimilarity
+ * @param {AttributedTerm|string} state1 - First state value
+ * @param {AttributedTerm|string} state2 - Second state value
+ * @returns {number} Similarity 0-1
+ */
+function getStateSimilarity(state1, state2) {
+    if (!state1 || !state2) return 0;
+
+    const str1 = state1.term !== undefined ? String(state1.term).trim().toUpperCase() : String(state1).trim().toUpperCase();
+    const str2 = state2.term !== undefined ? String(state2.term).trim().toUpperCase() : String(state2).trim().toUpperCase();
+
+    // For 2-letter state codes, use exact match only
+    if (str1.length === 2 && str2.length === 2) {
+        return str1 === str2 ? 1.0 : 0.0;
+    }
+
+    // For longer state names, use levenshteinSimilarity
+    return levenshteinSimilarity(str1, str2);
+}
+
+/**
+ * Check if zip code is 02807 (Block Island)
+ * @param {AttributedTerm|string} zipValue - Zip code to check
+ * @returns {boolean} True if zip is 02807
+ */
+function isBlockIslandZip(zipValue) {
+    if (!zipValue) return false;
+    const term = zipValue.term !== undefined ? zipValue.term : zipValue;
+    return String(term).trim() === '02807';
+}
+
+/**
+ * Address-specific weighted comparison calculator
+ * Uses different logic for:
+ * - PO Box addresses
+ * - Block Island street addresses
+ * - General street addresses
+ *
+ * @param {Address} otherObject - The other Address to compare against
+ * @returns {number} Similarity score 0-1
+ */
+function addressWeightedComparison(otherObject) {
+    const thisAddr = this;
+    const otherAddr = otherObject;
+
+    // Determine address types
+    const thisIsPOBox = isPOBoxAddress(thisAddr);
+    const otherIsPOBox = isPOBoxAddress(otherAddr);
+
+    // If either is a PO Box, use PO Box comparison for both
+    if (thisIsPOBox || otherIsPOBox) {
+        return comparePOBoxAddresses(thisAddr, otherAddr);
+    }
+
+    // Check for Block Island addresses
+    const thisIsBI = isBlockIslandZip(thisAddr.zipCode) ||
+                     (isBlockIslandStreet(thisAddr.streetName) && isBlockIslandCity(thisAddr.city));
+    const otherIsBI = isBlockIslandZip(otherAddr.zipCode) ||
+                      (isBlockIslandStreet(otherAddr.streetName) && isBlockIslandCity(otherAddr.city));
+
+    if (thisIsBI || otherIsBI) {
+        return compareBlockIslandAddresses(thisAddr, otherAddr);
+    }
+
+    // General street address comparison
+    return compareGeneralStreetAddresses(thisAddr, otherAddr);
+}
+
+/**
+ * Compare PO Box addresses
+ * Logic:
+ * - When zip present: zip < 0.74 → 0; zip == 1 → secUnitNum; 0.74-1 → weighted with city/state
+ * - When zip absent: secUnitNum < 0.8 → 0; secUnitNum == 1 → 50/50 city/state; 0.8-1 → weighted
+ */
+function comparePOBoxAddresses(addr1, addr2) {
+    const hasZip = addr1.zipCode && addr2.zipCode;
+
+    if (hasZip) {
+        const zipSim = getComponentSimilarity(addr1.zipCode, addr2.zipCode);
+
+        if (zipSim < 0.74) {
+            return 0;
+        }
+
+        const secUnitSim = getComponentSimilarity(addr1.secUnitNum, addr2.secUnitNum);
+
+        if (zipSim === 1) {
+            return Math.round(secUnitSim * 100) / 100;
+        }
+
+        // Zip between 0.74 and 1: weighted calculation including city/state
+        const citySim = getComponentSimilarity(addr1.city, addr2.city);
+        const stateSim = getStateSimilarity(addr1.state, addr2.state);
+        const result = 0.3 * zipSim + 0.3 * secUnitSim + 0.2 * citySim + 0.2 * stateSim;
+        return Math.round(result * 100) / 100;
+    } else {
+        // No zip code - use secUnitNum, city, state
+        const secUnitSim = getComponentSimilarity(addr1.secUnitNum, addr2.secUnitNum);
+
+        if (secUnitSim < 0.8) {
+            return 0;
+        }
+
+        const citySim = getComponentSimilarity(addr1.city, addr2.city);
+        const stateSim = getStateSimilarity(addr1.state, addr2.state);
+
+        if (secUnitSim === 1) {
+            // Return 50/50 city/state
+            const result = 0.5 * citySim + 0.5 * stateSim;
+            return Math.round(result * 100) / 100;
+        }
+
+        // secUnitNum between 0.8 and 1: weighted calculation
+        const result = 0.6 * secUnitSim + 0.2 * citySim + 0.2 * stateSim;
+        return Math.round(result * 100) / 100;
+    }
+}
+
+/**
+ * Compare Block Island addresses
+ * Logic:
+ * - When zip = 02807: streetNumber 0.85, streetName 0.15
+ * - When zip absent but streetName in BI database + city is BI: streetNumber only
+ */
+function compareBlockIslandAddresses(addr1, addr2) {
+    const hasZip02807 = isBlockIslandZip(addr1.zipCode) || isBlockIslandZip(addr2.zipCode);
+
+    if (hasZip02807) {
+        // Weights: streetNumber 0.85, streetName 0.15
+        const streetNumSim = getComponentSimilarity(addr1.streetNumber, addr2.streetNumber);
+        const streetNameSim = getComponentSimilarity(addr1.streetName, addr2.streetName);
+
+        const result = 0.85 * streetNumSim + 0.15 * streetNameSim;
+        return Math.round(result * 100) / 100;
+    } else {
+        // No zip but confirmed BI via street database + city
+        // Only compare street number
+        const streetNumSim = getComponentSimilarity(addr1.streetNumber, addr2.streetNumber);
+        return Math.round(streetNumSim * 100) / 100;
+    }
+}
+
+/**
+ * Compare general street addresses (not BI, not PO Box)
+ * Logic:
+ * - When zip present (either side): streetNumber 0.3, streetName 0.2, zipCode 0.4, state 0.1 (city: 0)
+ * - When zip absent (both sides): streetNumber 0.3, streetName 0.2, city 0.25, state 0.25
+ *
+ * IMPORTANT: All categories always contribute to the score with their fixed weights.
+ * If either side has undefined/empty/null for a field, that field contributes 0 similarity
+ * but the weight is NOT skipped or renormalized.
+ *
+ * Note: State uses exact match for 2-letter codes
+ */
+function compareGeneralStreetAddresses(addr1, addr2) {
+    // Check if EITHER side has a zip code - if so, use zip-based weighting
+    const hasZip = addr1.zipCode || addr2.zipCode;
+
+    // Helper to get similarity, returning 0 if either value is missing
+    const getSimilarityOrZero = (val1, val2) => {
+        if (!val1 || !val2) return 0;
+        return getComponentSimilarity(val1, val2);
+    };
+
+    const getStateSimilarityOrZero = (val1, val2) => {
+        if (!val1 || !val2) return 0;
+        return getStateSimilarity(val1, val2);
+    };
+
+    if (hasZip) {
+        // With zip: streetNumber 0.3, streetName 0.2, zipCode 0.4, state 0.1
+        // All weights always applied - missing fields contribute 0 similarity
+        const streetNumSim = getSimilarityOrZero(addr1.streetNumber, addr2.streetNumber);
+        const streetNameSim = getSimilarityOrZero(addr1.streetName, addr2.streetName);
+        const zipSim = getSimilarityOrZero(addr1.zipCode, addr2.zipCode);
+        const stateSim = getStateSimilarityOrZero(addr1.state, addr2.state);
+
+        const totalScore = (streetNumSim * 0.3) + (streetNameSim * 0.2) + (zipSim * 0.4) + (stateSim * 0.1);
+        return Math.round(totalScore * 100) / 100;
+    } else {
+        // Without zip (both sides): streetNumber 0.3, streetName 0.2, city 0.25, state 0.25
+        // All weights always applied - missing fields contribute 0 similarity
+        const streetNumSim = getSimilarityOrZero(addr1.streetNumber, addr2.streetNumber);
+        const streetNameSim = getSimilarityOrZero(addr1.streetName, addr2.streetName);
+        const citySim = getSimilarityOrZero(addr1.city, addr2.city);
+        const stateSim = getStateSimilarityOrZero(addr1.state, addr2.state);
+
+        const totalScore = (streetNumSim * 0.3) + (streetNameSim * 0.2) + (citySim * 0.25) + (stateSim * 0.25);
+        return Math.round(totalScore * 100) / 100;
+    }
+}
+
+// =============================================================================
+// CONTACTINFO-SPECIFIC WEIGHTED COMPARISON
+// Sophisticated logic for comparing contact information with address matching
+// =============================================================================
+
+/**
+ * Compare an address against all addresses in a ContactInfo (primary + secondary)
+ * Returns the best match found and which address it matched
+ * @param {Address} addr - Address to compare
+ * @param {ContactInfo} contactInfo - ContactInfo to compare against
+ * @returns {Object} { bestScore: number, matchedAddress: Address|null, matchedIndex: number }
+ */
+function findBestAddressMatch(addr, contactInfo) {
+    if (!addr) return { bestScore: 0, matchedAddress: null, matchedIndex: -1 };
+
+    let bestScore = 0;
+    let matchedAddress = null;
+    let matchedIndex = -1;
+
+    // Check primary address
+    if (contactInfo.primaryAddress) {
+        const score = addr.compareTo(contactInfo.primaryAddress);
+        if (score > bestScore) {
+            bestScore = score;
+            matchedAddress = contactInfo.primaryAddress;
+            matchedIndex = -1; // -1 means primary
+        }
+    }
+
+    // Check secondary addresses
+    const secondaries = contactInfo.secondaryAddress || [];
+    for (let i = 0; i < secondaries.length; i++) {
+        if (secondaries[i]) {
+            const score = addr.compareTo(secondaries[i]);
+            if (score > bestScore) {
+                bestScore = score;
+                matchedAddress = secondaries[i];
+                matchedIndex = i;
+            }
+        }
+    }
+
+    return { bestScore, matchedAddress, matchedIndex };
+}
+
+/**
+ * Get email value as string for comparison
+ * @param {SimpleIdentifiers|AttributedTerm|string} emailValue - Email value from ContactInfo
+ * @returns {string|null} Email string or null
+ */
+function getEmailString(emailValue) {
+    if (!emailValue) return null;
+
+    // Handle SimpleIdentifiers structure (has primaryAlias which is an AttributedTerm)
+    if (emailValue.primaryAlias && emailValue.primaryAlias.term !== undefined) {
+        return emailValue.primaryAlias.term;
+    }
+    // Handle direct string
+    if (typeof emailValue === 'string') {
+        return emailValue;
+    }
+    // Handle AttributedTerm directly
+    if (emailValue.term !== undefined) {
+        return emailValue.term;
+    }
+    return null;
+}
+
+/**
+ * ContactInfo-specific weighted comparison calculator
+ *
+ * Logic:
+ * 1. Primary address similarity: Best match comparing each primary to any address in other (0.6 weight)
+ * 2. Secondary address similarity: Best match of remaining secondaries (0.2 weight)
+ * 3. Email similarity: (0.2 weight)
+ * 4. Phone: no weight
+ * 5. Perfect match override: If any category is perfect (non-null match),
+ *    that category gets 0.9 weight, others get 0.05 each
+ *
+ * @param {ContactInfo} otherObject - The other ContactInfo to compare against
+ * @returns {number} Similarity score 0-1
+ */
+function contactInfoWeightedComparison(otherObject) {
+    const thisCI = this;
+    const otherCI = otherObject;
+
+    // Step 1: Find best primary address match
+    // Compare this.primaryAddress to all addresses in otherCI
+    // AND compare otherCI.primaryAddress to all addresses in thisCI
+    // Take the best of these
+    let primarySimilarity = 0;
+    let thisPrimaryMatchedIndex = -2; // -2 means no match, -1 means primary, 0+ means secondary index
+    let otherPrimaryMatchedIndex = -2;
+
+    if (thisCI.primaryAddress) {
+        const result = findBestAddressMatch(thisCI.primaryAddress, otherCI);
+        primarySimilarity = result.bestScore;
+        otherPrimaryMatchedIndex = result.matchedIndex;
+    }
+
+    if (otherCI.primaryAddress) {
+        const result = findBestAddressMatch(otherCI.primaryAddress, thisCI);
+        if (result.bestScore > primarySimilarity) {
+            primarySimilarity = result.bestScore;
+            thisPrimaryMatchedIndex = result.matchedIndex;
+            otherPrimaryMatchedIndex = -2; // Reset since we're using other's primary match
+        }
+    }
+
+    // Step 2: Find best secondary address match, excluding addresses used in primary match
+    let secondarySimilarity = 0;
+
+    // Get secondary addresses, excluding any used in primary match
+    const thisSecondaries = (thisCI.secondaryAddress || []).filter((addr, idx) => {
+        return addr && idx !== thisPrimaryMatchedIndex;
+    });
+    const otherSecondaries = (otherCI.secondaryAddress || []).filter((addr, idx) => {
+        return addr && idx !== otherPrimaryMatchedIndex;
+    });
+
+    // Also exclude primaryAddress if it was the matched one
+    const thisAllSecondaries = thisPrimaryMatchedIndex === -1 ?
+        thisSecondaries :
+        (thisCI.primaryAddress ? [thisCI.primaryAddress, ...thisSecondaries] : thisSecondaries);
+
+    const otherAllSecondaries = otherPrimaryMatchedIndex === -1 ?
+        otherSecondaries :
+        (otherCI.primaryAddress ? [otherCI.primaryAddress, ...otherSecondaries] : otherSecondaries);
+
+    // Actually, let's be more precise:
+    // - If thisPrimaryMatchedIndex === -1, it means this.primaryAddress matched other.primaryAddress (exclude other.primaryAddress from secondary comparison)
+    // - If otherPrimaryMatchedIndex >= 0, it means this.primaryAddress matched other.secondaryAddress[otherPrimaryMatchedIndex]
+    // For secondary comparison, we compare this.secondaries against other.secondaries,
+    // but exclude the one used in primary match
+
+    // Collect available addresses for secondary comparison
+    let thisAvailableForSecondary = [...thisSecondaries];
+    let otherAvailableForSecondary = [...otherSecondaries];
+
+    // If this.primaryAddress matched other.primaryAddress, exclude other.primaryAddress from secondary pool
+    if (thisPrimaryMatchedIndex === -2 && otherPrimaryMatchedIndex === -1) {
+        // this.primaryAddress matched other.primaryAddress - don't add other.primary to pool
+    } else if (otherCI.primaryAddress && otherPrimaryMatchedIndex !== -1) {
+        // this.primaryAddress matched a secondary OR other.primaryAddress is still available
+        // If other.primaryAddress wasn't matched, add it to available pool
+        if (otherPrimaryMatchedIndex === -2 || otherPrimaryMatchedIndex >= 0) {
+            // other.primaryAddress can be used in secondary comparison if it wasn't the primary match
+            // Actually only add if it wasn't the match
+            if (otherPrimaryMatchedIndex >= 0 || otherPrimaryMatchedIndex === -2) {
+                // other's primary wasn't used - but wait, we need to track which was matched
+            }
+        }
+    }
+
+    // Simplify: compare all secondaries from this to all secondaries from other
+    // (the primary match exclusion is already handled by checking against each)
+    for (const thisAddr of thisSecondaries) {
+        for (const otherAddr of otherSecondaries) {
+            const score = thisAddr.compareTo(otherAddr);
+            if (score > secondarySimilarity) {
+                secondarySimilarity = score;
+            }
+        }
+    }
+
+    // Step 3: Email comparison
+    let emailSimilarity = 0;
+    const thisEmail = getEmailString(thisCI.email);
+    const otherEmail = getEmailString(otherCI.email);
+
+    if (thisEmail && otherEmail) {
+        // Use levenshteinSimilarity for email comparison
+        emailSimilarity = levenshteinSimilarity(thisEmail.toLowerCase(), otherEmail.toLowerCase());
+    }
+
+    // Step 4: Determine which components have data to compare
+    // Only weight components where BOTH sides have data (don't penalize for missing data)
+    const hasPrimaryData = thisCI.primaryAddress && otherCI.primaryAddress;
+    const hasSecondaryData = thisSecondaries.length > 0 && otherSecondaries.length > 0;
+    const hasEmailData = thisEmail && otherEmail;
+
+    // Step 5: Apply weighting only to components with data
+    // Base weights: primary 0.6, secondary 0.2, email 0.2
+    let totalWeight = 0;
+    let weightedSum = 0;
+
+    if (hasPrimaryData) {
+        weightedSum += 0.6 * primarySimilarity;
+        totalWeight += 0.6;
+    }
+    if (hasSecondaryData) {
+        weightedSum += 0.2 * secondarySimilarity;
+        totalWeight += 0.2;
+    }
+    if (hasEmailData) {
+        weightedSum += 0.2 * emailSimilarity;
+        totalWeight += 0.2;
+    }
+
+    // If no components have data, return 0
+    if (totalWeight === 0) {
+        return 0;
+    }
+
+    // Normalize by total weight (so missing data doesn't penalize)
+    const result = weightedSum / totalWeight;
+
+    return Math.round(result * 100) / 100;
+}
+
+/**
+ * Entity-level weighted comparison calculator
+ * Compares Individual or AggregateHousehold entities using:
+ * - name (IndividualName.compareTo)
+ * - contactInfo (ContactInfo.compareTo)
+ * - otherInfo (if both have it)
+ * - legacyInfo (if both have it)
+ *
+ * Following the "don't penalize for missing data" principle:
+ * Only weights components where BOTH sides have data, then normalizes.
+ *
+ * @param {Entity} otherObject - The other entity to compare against
+ * @returns {number} Similarity score 0-1
+ */
+function entityWeightedComparison(otherObject) {
+    const thisEntity = this;
+    const otherEntity = otherObject;
+
+    // Base weights from CLAUDE.md:
+    // Individual: {name: 0.5, contactInfo: 0.3, otherInfo: 0.15, legacyInfo: 0.05}
+    // We use the weights from comparisonWeights if set, otherwise defaults
+    const baseWeights = thisEntity.comparisonWeights || {
+        name: 0.5,
+        contactInfo: 0.3,
+        otherInfo: 0.15,
+        legacyInfo: 0.05
+    };
+
+    // First pass: calculate raw similarities for name and contactInfo
+    let nameSimilarity = null;
+    let contactInfoSimilarity = null;
+
+    const hasNameData = thisEntity.name && otherEntity.name &&
+                        typeof thisEntity.name.compareTo === 'function';
+    if (hasNameData) {
+        nameSimilarity = thisEntity.name.compareTo(otherEntity.name);
+    }
+
+    const hasContactInfoData = thisEntity.contactInfo && otherEntity.contactInfo &&
+                               typeof thisEntity.contactInfo.compareTo === 'function';
+    if (hasContactInfoData) {
+        contactInfoSimilarity = thisEntity.contactInfo.compareTo(otherEntity.contactInfo);
+    }
+
+    // Apply weight boost logic:
+    // - If one of name/contactInfo is 100% and other isn't: +12% to the perfect one
+    // - If one is >95% (but <100%) and other is <95%: +6% to the high one
+    // Boost is taken proportionally from other categories
+    let weights = { ...baseWeights };
+    let boostAmount = 0;
+    let boostTarget = null;
+
+    if (nameSimilarity !== null && contactInfoSimilarity !== null) {
+        // Check for 100% perfect match boost (12%)
+        if (nameSimilarity === 1.0 && contactInfoSimilarity !== 1.0) {
+            boostAmount = 0.12;
+            boostTarget = 'name';
+        } else if (contactInfoSimilarity === 1.0 && nameSimilarity !== 1.0) {
+            boostAmount = 0.12;
+            boostTarget = 'contactInfo';
+        }
+        // Check for >95% high match boost (6%) - only if no perfect match boost applied
+        else if (nameSimilarity > 0.95 && contactInfoSimilarity <= 0.95) {
+            boostAmount = 0.06;
+            boostTarget = 'name';
+        } else if (contactInfoSimilarity > 0.95 && nameSimilarity <= 0.95) {
+            boostAmount = 0.06;
+            boostTarget = 'contactInfo';
+        }
+    }
+
+    // Apply boost by redistributing from other categories proportionally
+    if (boostAmount > 0 && boostTarget) {
+        // Calculate total weight of non-boosted categories
+        const otherCategory = boostTarget === 'name' ? 'contactInfo' : 'name';
+        const nonBoostCategories = ['otherInfo', 'legacyInfo', otherCategory];
+        const totalNonBoostWeight = nonBoostCategories.reduce((sum, cat) => sum + weights[cat], 0);
+
+        if (totalNonBoostWeight > 0) {
+            // Reduce each non-boost category proportionally
+            nonBoostCategories.forEach(cat => {
+                const proportion = weights[cat] / totalNonBoostWeight;
+                weights[cat] -= boostAmount * proportion;
+            });
+            // Add boost to target
+            weights[boostTarget] += boostAmount;
+        }
+    }
+
+    // Second pass: calculate weighted sum with adjusted weights
+    let totalWeight = 0;
+    let weightedSum = 0;
+
+    if (hasNameData) {
+        weightedSum += weights.name * nameSimilarity;
+        totalWeight += weights.name;
+    }
+
+    if (hasContactInfoData) {
+        weightedSum += weights.contactInfo * contactInfoSimilarity;
+        totalWeight += weights.contactInfo;
+    }
+
+    // Compare otherInfo (if both have it and it has compareTo)
+    const hasOtherInfoData = thisEntity.otherInfo && otherEntity.otherInfo &&
+                             typeof thisEntity.otherInfo.compareTo === 'function';
+    if (hasOtherInfoData) {
+        const otherInfoSimilarity = thisEntity.otherInfo.compareTo(otherEntity.otherInfo);
+        weightedSum += weights.otherInfo * otherInfoSimilarity;
+        totalWeight += weights.otherInfo;
+    }
+
+    // Compare legacyInfo (if both have it and it has compareTo)
+    const hasLegacyInfoData = thisEntity.legacyInfo && otherEntity.legacyInfo &&
+                              typeof thisEntity.legacyInfo.compareTo === 'function';
+    if (hasLegacyInfoData) {
+        const legacyInfoSimilarity = thisEntity.legacyInfo.compareTo(otherEntity.legacyInfo);
+        weightedSum += weights.legacyInfo * legacyInfoSimilarity;
+        totalWeight += weights.legacyInfo;
+    }
+
+    // If no components have data, return 0
+    if (totalWeight === 0) {
+        return 0;
+    }
+
+    // Normalize by total weight (so missing data doesn't penalize)
+    const result = weightedSum / totalWeight;
+
+    return Math.round(result * 100) / 100;
+}
+
+// =============================================================================
+// COMPARISON CALCULATOR REGISTRY
+// Maps string names to calculator functions for serializable references
+// Enables constructor-based deserialization by avoiding function serialization
+// =============================================================================
+
+/**
+ * Registry mapping calculator names to their function implementations
+ * Used by resolveComparisonCalculator() to restore function references after deserialization
+ *
+ * To add a new calculator:
+ * 1. Define the calculator function (must accept otherObject, operate in 'this' context)
+ * 2. Add entry to this registry: 'calculatorName': calculatorFunction
+ * 3. Use the name in class constructors: this.comparisonCalculatorName = 'calculatorName'
+ */
+const COMPARISON_CALCULATOR_REGISTRY = Object.freeze({
+    'defaultWeightedComparison': defaultWeightedComparison,
+    'addressWeightedComparison': addressWeightedComparison,
+    'contactInfoWeightedComparison': contactInfoWeightedComparison,
+    'entityWeightedComparison': entityWeightedComparison
+});
+
+/**
+ * Resolve a calculator name to its function reference
+ * Used during deserialization to restore function references from serialized string names
+ *
+ * @param {string} calculatorName - Name of the calculator to resolve
+ * @param {Function} fallback - Optional fallback function if name not found (defaults to defaultWeightedComparison)
+ * @returns {Function|null} The calculator function, fallback, or null if no fallback provided
+ */
+function resolveComparisonCalculator(calculatorName, fallback = defaultWeightedComparison) {
+    if (!calculatorName) {
+        return fallback;
+    }
+
+    const calculator = COMPARISON_CALCULATOR_REGISTRY[calculatorName];
+    if (calculator) {
+        return calculator;
+    }
+
+    console.warn(`[resolveComparisonCalculator] Calculator '${calculatorName}' not found in registry, using fallback`);
+    return fallback;
+}
+
+/**
+ * Check if a calculator name is valid (exists in registry)
+ * @param {string} calculatorName - Name to validate
+ * @returns {boolean} True if name exists in registry
+ */
+function isValidCalculatorName(calculatorName) {
+    return calculatorName && COMPARISON_CALCULATOR_REGISTRY.hasOwnProperty(calculatorName);
+}
+
+/**
+ * Get list of all available calculator names
+ * @returns {Array<string>} Array of registered calculator names
+ */
+function getAvailableCalculators() {
+    return Object.keys(COMPARISON_CALCULATOR_REGISTRY);
+}
+
+// =============================================================================
+// GENERIC OBJECT COMPARISON UTILITY (compareTo convention)
+// Core comparison logic for all classes with dynamic property iteration
+// Enhanced with weighted comparison support
+// Returns 0 for match, non-zero for non-match (following Java compareTo convention)
+// =============================================================================
+
+/**
+ * Generic object comparison utility that dynamically iterates through properties
+ * Auto-detects and calls .compareTo() methods on object properties
+ * @param {Object} obj1 - First object to compare
+ * @param {Object} obj2 - Second object to compare
+ * @param {Array} excludedProperties - Array of additional property names to skip
+ * @returns {number} 0 if objects match, non-zero if different
+ * @throws {Error} If objects are different types (invalid comparison)
+ */
+function genericObjectCompareTo(obj1, obj2, excludedProperties) {
+    // Basic null/undefined checks
+    if (!obj1 && !obj2) return 0; // Both null = match
+    if (!obj1 || !obj2) return 1; // One null, one not = no match
+
+    // Different types should throw error - invalid comparison
+    if (obj1.constructor !== obj2.constructor) {
+        throw new Error('Cannot compare objects of different types: ' +
+                       obj1.constructor.name + ' vs ' + obj2.constructor.name);
+    }
+
+    // Check if object has weighted comparison capability
+    // COMMENTED OUT: Diagnostic logging - preserved for debugging if needed
+    // console.log('[genericObjectCompareTo] Checking weighted comparison...');
+    // console.log('  obj1.comparisonCalculator:', typeof obj1.comparisonCalculator);
+    // console.log('  obj1.comparisonWeights:', obj1.comparisonWeights);
+
+    if (obj1.comparisonCalculator && typeof obj1.comparisonCalculator === 'function') {
+        // console.log('[genericObjectCompareTo] Calling comparisonCalculator...');
+        const weightedResult = obj1.comparisonCalculator.call(obj1, obj2);
+        // console.log('[genericObjectCompareTo] weightedResult:', weightedResult);
+        if (weightedResult !== null) {
+            // console.log('[genericObjectCompareTo] Returning weighted result');
+            return weightedResult; // Return weighted comparison result (already rounded)
+        }
+    }
+    // console.log('[genericObjectCompareTo] Falling back to property-by-property comparison');
+
+    // Get all enumerable properties from obj1
+    var allProperties = Object.keys(obj1);
+
+    // Default exclusions (internal/metadata properties that shouldn't affect matching)
+    var defaultExclusions = [
+        '__type', 'constructor', 'prototype',
+        'sourceMap', 'processingTimestamp', 'processingSource',
+        'alternatives', // Aliases are handled separately in most cases
+        'comparisonWeights', 'comparisonCalculator' // Weighted comparison architecture properties
+    ];
+
+    // Combine default exclusions with provided exclusions
+    var skipProperties = defaultExclusions.concat(excludedProperties || []);
+
+    // Check each property
+    for (var i = 0; i < allProperties.length; i++) {
+        var propName = allProperties[i];
+
+        // Skip excluded properties
+        if (skipProperties.indexOf(propName) !== -1) {
+            continue;
+        }
+
+        var value1 = obj1[propName];
+        var value2 = obj2[propName];
+
+        // Both null/undefined = match for this property
+        if (!value1 && !value2) {
+            continue;
+        }
+
+        // One null, one not null = no match
+        if (!value1 || !value2) {
+            return 1;
+        }
+
+        // Check if the value has a compareTo() method
+        if (typeof value1.compareTo === 'function') {
+            var result = value1.compareTo(value2);
+            if (result !== 0) {
+                return result; // Propagate non-zero result
+            }
+            continue;
+        }
+
+        // For primitive values, use simple equality
+        // FUTURE ENHANCEMENT: Could use simpleStringMatch for strings
+        if (value1 !== value2) {
+            return 1; // Different primitive values
+        }
+    }
+
+    return 0; // All properties matched
+}
+
+
 // ✅ Google Drive API function moved to scripts/core/googleDriveAPI.js
 // testResponseFormats() - Test function to verify response format consistency
 
@@ -443,4 +1494,48 @@ function testAddressParsing() {
 //
 // To use these functions, include: <script src="./scripts/data/sampleDataLoader.js"></script>
 // ============================================================================
+
+// ============================================================================
+// BROWSER AND NODE.JS EXPORTS
+// ============================================================================
+
+// Export for browser
+if (typeof window !== 'undefined') {
+    window.levenshteinDistance = levenshteinDistance;
+    window.levenshteinSimilarity = levenshteinSimilarity;
+    window.defaultWeightedComparison = defaultWeightedComparison;
+    window.addressWeightedComparison = addressWeightedComparison;
+    window.contactInfoWeightedComparison = contactInfoWeightedComparison;
+    window.entityWeightedComparison = entityWeightedComparison;
+    window.findBestAddressMatch = findBestAddressMatch;
+    window.getEmailString = getEmailString;
+    window.isPOBoxAddress = isPOBoxAddress;
+    window.isBlockIslandCity = isBlockIslandCity;
+    window.isBlockIslandStreet = isBlockIslandStreet;
+    window.isBlockIslandZip = isBlockIslandZip;
+    window.getComponentSimilarity = getComponentSimilarity;
+    window.getStateSimilarity = getStateSimilarity;
+    window.genericObjectCompareTo = genericObjectCompareTo;
+    window.simpleStringMatch = simpleStringMatch;
+}
+
+// Export for Node.js
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports.levenshteinDistance = levenshteinDistance;
+    module.exports.levenshteinSimilarity = levenshteinSimilarity;
+    module.exports.defaultWeightedComparison = defaultWeightedComparison;
+    module.exports.addressWeightedComparison = addressWeightedComparison;
+    module.exports.contactInfoWeightedComparison = contactInfoWeightedComparison;
+    module.exports.entityWeightedComparison = entityWeightedComparison;
+    module.exports.findBestAddressMatch = findBestAddressMatch;
+    module.exports.getEmailString = getEmailString;
+    module.exports.isPOBoxAddress = isPOBoxAddress;
+    module.exports.isBlockIslandCity = isBlockIslandCity;
+    module.exports.isBlockIslandStreet = isBlockIslandStreet;
+    module.exports.isBlockIslandZip = isBlockIslandZip;
+    module.exports.getComponentSimilarity = getComponentSimilarity;
+    module.exports.getStateSimilarity = getStateSimilarity;
+    module.exports.genericObjectCompareTo = genericObjectCompareTo;
+    module.exports.simpleStringMatch = simpleStringMatch;
+}
 

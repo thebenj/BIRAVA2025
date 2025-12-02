@@ -352,7 +352,9 @@ function getAllSelectedEntities() {
  * @returns {string} Entity type name
  */
 function getEntityType(entity) {
-    return entity.type || entity.constructor?.name || 'Unknown';
+    // For deserialized class instances, constructor.name is the correct type
+    // entity.type is only present in serialized (raw) data
+    return entity.constructor?.name || entity.type || 'Unknown';
 }
 
 /**

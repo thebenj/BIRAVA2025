@@ -22,6 +22,27 @@ const DATA_SOURCES = Object.freeze({
 });
 
 /**
+ * Helper function for deserialize methods to handle both raw data and already-transformed instances
+ * JSON.parse reviver (used by deserializeWithTypes) processes bottom-up, so nested objects
+ * may already be class instances when parent's deserialize is called.
+ *
+ * @param {*} value - The value to deserialize (may already be an instance)
+ * @param {Function} TargetClass - The expected class type
+ * @param {Function} deserializeFn - Function to deserialize raw data (defaults to TargetClass.deserialize)
+ * @returns {*} The class instance (either passed through or deserialized)
+ */
+function ensureDeserialized(value, TargetClass, deserializeFn = null) {
+    if (value === null || value === undefined) {
+        return value;
+    }
+    if (value instanceof TargetClass) {
+        return value; // Already transformed by reviver
+    }
+    // Raw data - needs deserialization
+    return deserializeFn ? deserializeFn(value) : TargetClass.deserialize(value);
+}
+
+/**
  * AttributedTerm class - represents a term with source attribution information
  * All terms require source attribution for data lineage and conflict resolution
  */
@@ -42,6 +63,11 @@ class AttributedTerm {
             index: index,
             identifier: identifier
         });
+
+        // Weighted comparison architecture properties
+        this.comparisonWeights = null;                    // Object: {propName: weight, ...}
+        this.comparisonCalculatorName = 'defaultWeightedComparison';  // Serializable string name
+        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
     }
 
     /**
@@ -112,13 +138,17 @@ class AttributedTerm {
                 source: source,
                 index: data.index,
                 identifier: data.identifier
-            }))
+            })),
+            comparisonWeights: this.comparisonWeights,
+            comparisonCalculatorName: this.comparisonCalculatorName
         };
     }
 
     /**
      * Deserialize AttributedTerm from JSON object
-     * @param {Object} data - Serialized data
+     * Uses constructor (initialization logic runs)
+     * Expects sourceMap to be a Map (restored by deserializeWithTypes)
+     * @param {Object} data - Serialized data with sourceMap as Map
      * @returns {AttributedTerm} Reconstructed AttributedTerm instance
      */
     static deserialize(data) {
@@ -126,23 +156,57 @@ class AttributedTerm {
             throw new Error('Invalid AttributedTerm serialization format');
         }
 
-        // Recreate with first source entry
-        const firstSource = data.sourceMap[0];
+        // sourceMap should be a Map (restored by deserializeWithTypes)
+        if (!(data.sourceMap instanceof Map)) {
+            throw new Error('AttributedTerm.deserialize expects sourceMap to be a Map (use deserializeWithTypes)');
+        }
+
+        // Get first entry from Map to create instance
+        const entries = Array.from(data.sourceMap.entries());
+        if (entries.length === 0) {
+            throw new Error('AttributedTerm has no source entries');
+        }
+
+        const [firstSource, firstInfo] = entries[0];
+
+        // Recreate with first source entry - constructor runs!
         const term = new AttributedTerm(
             data.term,
-            firstSource.source,
-            firstSource.index,
-            firstSource.identifier,
-            data.fieldName || null  // Include fieldName in reconstruction
+            firstSource,
+            firstInfo.index,
+            firstInfo.identifier,
+            data.fieldName || null
         );
 
         // Add remaining source entries
-        for (let i = 1; i < data.sourceMap.length; i++) {
-            const sourceData = data.sourceMap[i];
-            term.addAdditionalSource(sourceData.source, sourceData.index, sourceData.identifier);
+        for (let i = 1; i < entries.length; i++) {
+            const [source, info] = entries[i];
+            term.addAdditionalSource(source, info.index, info.identifier);
+        }
+
+        // Restore comparison properties from serialized data if present
+        if (data.comparisonCalculatorName) {
+            term.comparisonCalculatorName = data.comparisonCalculatorName;
+            term.comparisonCalculator = resolveComparisonCalculator(data.comparisonCalculatorName);
+        }
+        if (data.comparisonWeights) {
+            term.comparisonWeights = data.comparisonWeights;
         }
 
         return term;
+    }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * This is the preferred entry point for deserializeWithTypes to use
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {AttributedTerm} Reconstructed instance (AttributedTerm or subclass)
+     */
+    static fromSerializedData(data) {
+        // 'this' refers to the actual class called (FireNumberTerm, EmailTerm, etc.)
+        // not necessarily AttributedTerm, enabling polymorphic deserialization
+        return this.deserialize(data);
     }
 
     /**
@@ -193,6 +257,42 @@ class AttributedTerm {
             return `${this.term} (field: ${this.fieldName})`;
         }
         return this.term;
+    }
+
+    /**
+     * Compare this AttributedTerm with another AttributedTerm
+     * Uses compareTo convention: returns 0 for match, non-zero for non-match
+     * FUTURE: Can be enhanced with sophisticated string matching algorithms
+     * @param {AttributedTerm} other - Other AttributedTerm to compare
+     * @returns {number} Similarity score 0-1 (1 = identical, 0 = completely different)
+     * @throws {Error} If comparing with non-AttributedTerm object
+     */
+    compareTo(other) {
+        // Type checking - throw error for invalid comparison
+        if (!other || !(other instanceof AttributedTerm)) {
+            throw new Error('Cannot compare AttributedTerm with non-AttributedTerm object');
+        }
+
+        // Both null/undefined - perfect match
+        if (!this.term && !other.term) {
+            return 1.0;
+        }
+
+        // One null, one not null - no match
+        if (!this.term || !other.term) {
+            return 0.0;
+        }
+
+        // Compare using vowel-weighted Levenshtein similarity
+        // Returns 0-1 similarity score (1 = identical, 0 = completely different)
+        if (typeof levenshteinSimilarity === 'function') {
+            return levenshteinSimilarity(this.term, other.term);
+        }
+
+        // Fallback to simple equality if levenshteinSimilarity not available
+        var normalized1 = (this.term || '').toString().trim().toUpperCase();
+        var normalized2 = (other.term || '').toString().trim().toUpperCase();
+        return normalized1 === normalized2 ? 1.0 : 0.0;
     }
 }
 
@@ -316,6 +416,11 @@ class Aliased {
 
         // Collection of alternative representations
         this.alternatives = new Aliases();
+
+        // Weighted comparison architecture properties
+        this.comparisonWeights = null;                    // Object: {propName: weight, ...}
+        this.comparisonCalculatorName = 'defaultWeightedComparison';  // Serializable string name
+        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
     }
 
     /**
@@ -376,6 +481,28 @@ class Aliased {
         }
     }
 
+    // COMMENTED OUT: Duplicate compareTo definition - this was dead code being overwritten by later definition
+    // Left here for reference in case revert needed. See line ~573 for the active compareTo method.
+    // /**
+    //  * Compare this Aliased object to another using genericObjectCompareTo
+    //  * @param {Aliased} other - Other Aliased object to compare against
+    //  * @returns {number} Comparison result (-1 to 1 for weighted, 0 for match, non-zero for non-match otherwise)
+    //  */
+    // compareTo(other) {
+    //     // DIAGNOSTIC: Log when compareTo is called (first 3 times only)
+    //     if (typeof window !== 'undefined') {
+    //         if (!window._compareTo_count) window._compareTo_count = 0;
+    //         if (window._compareTo_count < 3) {
+    //             console.log(`[Aliased.compareTo #${window._compareTo_count + 1}] Called on:`, this.constructor.name);
+    //             console.log(`[Aliased.compareTo #${window._compareTo_count + 1}] this.comparisonWeights:`, this.comparisonWeights);
+    //             console.log(`[Aliased.compareTo #${window._compareTo_count + 1}] this.comparisonCalculator:`, typeof this.comparisonCalculator);
+    //             console.trace(`[Aliased.compareTo #${window._compareTo_count + 1}] Call stack`);
+    //             window._compareTo_count++;
+    //         }
+    //     }
+    //     return genericObjectCompareTo(this, other, ['alternatives']);
+    // }
+
     /**
      * Serialize Aliased to JSON-compatible object
      * @returns {Object} Serialized representation
@@ -384,12 +511,16 @@ class Aliased {
         return {
             type: 'Aliased',
             primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize()
+            alternatives: this.alternatives.serialize(),
+            comparisonWeights: this.comparisonWeights,
+            comparisonCalculatorName: this.comparisonCalculatorName
         };
     }
 
     /**
      * Deserialize Aliased from JSON object
+     * Uses constructor (initialization logic runs)
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {Aliased} Reconstructed Aliased instance
      */
@@ -398,11 +529,34 @@ class Aliased {
             throw new Error('Invalid Aliased serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        // Constructor runs! Handle already-transformed instances from bottom-up reviver
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const aliased = new Aliased(primaryAlias);
-        aliased.alternatives = Aliases.deserialize(data.alternatives);
+        aliased.alternatives = ensureDeserialized(data.alternatives, Aliases);
+
+        // Restore comparison properties from serialized data if present
+        if (data.comparisonCalculatorName) {
+            aliased.comparisonCalculatorName = data.comparisonCalculatorName;
+            aliased.comparisonCalculator = resolveComparisonCalculator(data.comparisonCalculatorName);
+        }
+        if (data.comparisonWeights) {
+            aliased.comparisonWeights = data.comparisonWeights;
+        }
 
         return aliased;
+    }
+
+    /**
+     * Factory method for deserialization - creates instance via constructor
+     * This is the preferred entry point for deserializeWithTypes to use
+     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
+     * @param {Object} data - Serialized data object
+     * @returns {Aliased} Reconstructed instance (Aliased or subclass)
+     */
+    static fromSerializedData(data) {
+        // 'this' refers to the actual class called (FireNumber, PID, etc.)
+        // not necessarily Aliased, enabling polymorphic deserialization
+        return this.deserialize(data);
     }
 
     /**
@@ -411,6 +565,25 @@ class Aliased {
      */
     toString() {
         return this.primaryAlias.toString();
+    }
+
+    /**
+     * Base compareTo implementation for all Aliased subclasses using generic utility
+     * Uses genericObjectCompareTo for dynamic property iteration with automatic compareTo detection
+     * Subclasses can override for more sophisticated comparison logic
+     * @param {Aliased} other - Other Aliased object to compare
+     * @returns {number} 0 if objects match, non-zero if different
+     * @throws {Error} If comparing with non-Aliased object or if utility not available
+     */
+    compareTo(other) {
+        // Check if generic utility is available
+        if (typeof genericObjectCompareTo === 'function') {
+            // Use generic utility with 'alternatives' excluded (aliases handled separately in most cases)
+            return genericObjectCompareTo(this, other, ['alternatives']);
+        } else {
+            // Clear error message if dependency missing
+            throw new Error('genericObjectCompareTo utility not available - ensure utils.js is loaded first');
+        }
     }
 }
 
@@ -437,6 +610,7 @@ class SimpleIdentifiers extends Aliased {
 
     /**
      * Deserialize SimpleIdentifiers from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {SimpleIdentifiers} Reconstructed SimpleIdentifiers instance
      */
@@ -445,9 +619,9 @@ class SimpleIdentifiers extends Aliased {
             throw new Error('Invalid SimpleIdentifiers serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const identifier = new SimpleIdentifiers(primaryAlias);
-        identifier.alternatives = Aliases.deserialize(data.alternatives);
+        identifier.alternatives = ensureDeserialized(data.alternatives, Aliases);
 
         return identifier;
     }
@@ -477,6 +651,7 @@ class IndicativeData {
 
     /**
      * Deserialize IndicativeData from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {IndicativeData} Reconstructed IndicativeData instance
      */
@@ -492,11 +667,21 @@ class IndicativeData {
 
     /**
      * Helper method to deserialize identifier based on type
-     * @param {Object} identifierData - Serialized identifier data
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
+     * @param {Object} identifierData - Serialized identifier data or already-transformed instance
      * @returns {SimpleIdentifiers|ComplexIdentifiers} Reconstructed identifier
      * @private
      */
     static _deserializeIdentifier(identifierData) {
+        // Handle already-transformed instances (from deserializeWithTypes bottom-up processing)
+        // Check if it's already one of the identifier types
+        if (identifierData instanceof SimpleIdentifiers ||
+            identifierData instanceof ComplexIdentifiers ||
+            identifierData instanceof Aliased) {
+            return identifierData;
+        }
+
+        // Raw data - needs deserialization based on type
         switch (identifierData.type) {
             case 'SimpleIdentifiers':
                 return SimpleIdentifiers.deserialize(identifierData);
@@ -599,6 +784,7 @@ class FireNumber extends SimpleIdentifiers {
 
     /**
      * Deserialize FireNumber from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {FireNumber} Reconstructed FireNumber instance
      */
@@ -607,9 +793,9 @@ class FireNumber extends SimpleIdentifiers {
             throw new Error('Invalid FireNumber serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const fireNumber = new FireNumber(primaryAlias);
-        fireNumber.alternatives = Aliases.deserialize(data.alternatives);
+        fireNumber.alternatives = ensureDeserialized(data.alternatives, Aliases);
 
         return fireNumber;
     }
@@ -638,6 +824,7 @@ class PoBox extends SimpleIdentifiers {
 
     /**
      * Deserialize PoBox from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {PoBox} Reconstructed PoBox instance
      */
@@ -646,9 +833,9 @@ class PoBox extends SimpleIdentifiers {
             throw new Error('Invalid PoBox serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const poBox = new PoBox(primaryAlias);
-        poBox.alternatives = Aliases.deserialize(data.alternatives);
+        poBox.alternatives = ensureDeserialized(data.alternatives, Aliases);
 
         return poBox;
     }
@@ -679,6 +866,7 @@ class PID extends SimpleIdentifiers {
 
     /**
      * Deserialize PID from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {PID} Reconstructed PID instance
      */
@@ -687,9 +875,9 @@ class PID extends SimpleIdentifiers {
             throw new Error('Invalid PID serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const pid = new PID(primaryAlias);
-        pid.alternatives = Aliases.deserialize(data.alternatives);
+        pid.alternatives = ensureDeserialized(data.alternatives, Aliases);
 
         return pid;
     }
@@ -718,6 +906,7 @@ class ComplexIdentifiers extends Aliased {
 
     /**
      * Deserialize ComplexIdentifiers from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {ComplexIdentifiers} Reconstructed ComplexIdentifiers instance
      */
@@ -726,12 +915,15 @@ class ComplexIdentifiers extends Aliased {
             throw new Error('Invalid ComplexIdentifiers serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const identifier = new ComplexIdentifiers(primaryAlias);
-        identifier.alternatives = Aliases.deserialize(data.alternatives);
+        identifier.alternatives = ensureDeserialized(data.alternatives, Aliases);
 
         return identifier;
     }
+
+    // compareTo() method inherited from Aliased class
+    // Subclasses like Address can override for more sophisticated comparison
 }
 
 /**
@@ -758,6 +950,9 @@ class IndividualName extends ComplexIdentifiers {
         // Derived properties
         this.completeName = this._buildCompleteName();
         this.termOfAddress = this.completeName; // Initially matches completeName
+
+        // Initialize weighted comparison with proven weights
+        this.initializeWeightedComparison();
     }
 
     /**
@@ -805,6 +1000,16 @@ class IndividualName extends ComplexIdentifiers {
      * @returns {Object} Serialized representation
      */
     serialize() {
+        // COMMENTED OUT: Diagnostic logging - preserved for debugging if needed
+        // if (typeof window !== 'undefined') {
+        //     if (!window._serialize_count) window._serialize_count = 0;
+        //     if (window._serialize_count < 3) {
+        //         console.log(`[IndividualName.serialize #${window._serialize_count + 1}] comparisonWeights:`, this.comparisonWeights);
+        //         console.log(`[IndividualName.serialize #${window._serialize_count + 1}] comparisonCalculator:`, typeof this.comparisonCalculator);
+        //         window._serialize_count++;
+        //     }
+        // }
+
         return {
             type: 'IndividualName',
             primaryAlias: this.primaryAlias.serialize(),
@@ -815,12 +1020,14 @@ class IndividualName extends ComplexIdentifiers {
             lastName: this.lastName,
             suffix: this.suffix,
             completeName: this.completeName,
-            termOfAddress: this.termOfAddress
+            termOfAddress: this.termOfAddress,
+            comparisonWeights: this.comparisonWeights  // Weighted comparison architecture
         };
     }
 
     /**
      * Deserialize IndividualName from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {IndividualName} Reconstructed IndividualName instance
      */
@@ -829,7 +1036,7 @@ class IndividualName extends ComplexIdentifiers {
             throw new Error('Invalid IndividualName serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const individualName = new IndividualName(
             primaryAlias,
             data.title,
@@ -839,12 +1046,32 @@ class IndividualName extends ComplexIdentifiers {
             data.suffix
         );
 
-        individualName.alternatives = Aliases.deserialize(data.alternatives);
+        individualName.alternatives = ensureDeserialized(data.alternatives, Aliases);
         individualName.termOfAddress = data.termOfAddress;
+
+        // comparisonWeights already set by constructor calling initializeWeightedComparison()
+        // comparisonCalculator already set by Aliased constructor
+        // Do NOT overwrite with values from disk
 
         return individualName;
     }
+
+    /**
+     * Initialize weighted comparison for IndividualName with proven algorithm weights
+     * Sets proven weights from nameMatchingAnalysis insights
+     */
+    initializeWeightedComparison() {
+        // Set proven weights from nameMatchingAnalysis (lastName: 0.5, firstName: 0.4, otherNames: 0.1)
+        this.comparisonWeights = {
+            lastName: 0.5,      // Most important component (proven effective)
+            firstName: 0.4,     // Secondary importance (proven effective)
+            otherNames: 0.1     // Least important (proven effective)
+        };
+        // comparisonCalculator already set to defaultWeightedComparison in constructor inheritance
+    }
 }
+
+// Weighted comparison initialization is now handled directly in the IndividualName constructor above
 
 /**
  * HouseholdName class - subclass of ComplexIdentifiers for household names
@@ -933,6 +1160,7 @@ class HouseholdName extends ComplexIdentifiers {
 
     /**
      * Deserialize HouseholdName from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {HouseholdName} Reconstructed HouseholdName instance
      */
@@ -941,12 +1169,12 @@ class HouseholdName extends ComplexIdentifiers {
             throw new Error('Invalid HouseholdName serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const householdName = new HouseholdName(primaryAlias, data.fullHouseholdName || data.fullName);  // Support both old and new format
 
-        householdName.alternatives = Aliases.deserialize(data.alternatives);
+        householdName.alternatives = ensureDeserialized(data.alternatives, Aliases);
         householdName.memberNames = data.memberNames.map(memberData =>
-            IndividualName.deserialize(memberData)
+            ensureDeserialized(memberData, IndividualName)
         );
 
         return householdName;
@@ -1230,6 +1458,33 @@ class Address extends ComplexIdentifiers {
         // Processing metadata
         this.processingSource = null;   // AttributedTerm for "VisionAppraisal", "Bloomerang"
         this.processingTimestamp = null; // AttributedTerm for when parsed
+
+        // Initialize weighted comparison with address component weights
+        this.initializeWeightedComparison();
+    }
+
+    /**
+     * Initialize weighted comparison configuration for Address matching
+     * Uses addressWeightedComparison calculator which handles:
+     * - PO Box addresses (conditional logic based on zip/secUnitNum)
+     * - Block Island addresses (fire number-based comparison)
+     * - General street addresses (standard weighted comparison)
+     * Called from constructor to enable weighted Address.compareTo()
+     */
+    initializeWeightedComparison() {
+        // Note: comparisonWeights is not used by addressWeightedComparison
+        // The calculator implements its own conditional weighting logic
+        // We set it here for documentation/inspection purposes
+        this.comparisonWeights = {
+            streetNumber: 'conditional',
+            streetName: 'conditional',
+            secUnitNum: 'conditional',
+            city: 'conditional',
+            state: 'conditional',
+            zipCode: 'conditional'
+        };
+        this.comparisonCalculatorName = 'addressWeightedComparison';
+        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
     }
 
     /**
@@ -1453,12 +1708,14 @@ class Address extends ComplexIdentifiers {
             isBlockIslandAddress: this.isBlockIslandAddress ? this.isBlockIslandAddress.serialize() : null,
             cityNormalized: this.cityNormalized ? this.cityNormalized.serialize() : null,
             processingSource: this.processingSource ? this.processingSource.serialize() : null,
-            processingTimestamp: this.processingTimestamp ? this.processingTimestamp.serialize() : null
+            processingTimestamp: this.processingTimestamp ? this.processingTimestamp.serialize() : null,
+            comparisonWeights: this.comparisonWeights  // Weighted comparison architecture
         };
     }
 
     /**
      * Deserialize Address from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
      * @returns {Address} Reconstructed Address instance
      */
@@ -1467,26 +1724,26 @@ class Address extends ComplexIdentifiers {
             throw new Error('Invalid Address serialization format');
         }
 
-        const primaryAlias = AttributedTerm.deserialize(data.primaryAlias);
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const address = new Address(primaryAlias);
 
-        address.alternatives = Aliases.deserialize(data.alternatives);
+        address.alternatives = ensureDeserialized(data.alternatives, Aliases);
 
-        // Deserialize all components
-        if (data.originalAddress) address.originalAddress = AttributedTerm.deserialize(data.originalAddress);
-        if (data.recipientDetails) address.recipientDetails = AttributedTerm.deserialize(data.recipientDetails);
-        if (data.streetNumber) address.streetNumber = AttributedTerm.deserialize(data.streetNumber);
-        if (data.streetName) address.streetName = AttributedTerm.deserialize(data.streetName);
-        if (data.streetType) address.streetType = AttributedTerm.deserialize(data.streetType);
-        if (data.city) address.city = AttributedTerm.deserialize(data.city);
-        if (data.state) address.state = AttributedTerm.deserialize(data.state);
-        if (data.zipCode) address.zipCode = AttributedTerm.deserialize(data.zipCode);
-        if (data.secUnitType) address.secUnitType = AttributedTerm.deserialize(data.secUnitType);
-        if (data.secUnitNum) address.secUnitNum = AttributedTerm.deserialize(data.secUnitNum);
-        if (data.isBlockIslandAddress) address.isBlockIslandAddress = AttributedTerm.deserialize(data.isBlockIslandAddress);
-        if (data.cityNormalized) address.cityNormalized = AttributedTerm.deserialize(data.cityNormalized);
-        if (data.processingSource) address.processingSource = AttributedTerm.deserialize(data.processingSource);
-        if (data.processingTimestamp) address.processingTimestamp = AttributedTerm.deserialize(data.processingTimestamp);
+        // Deserialize all components - ensureDeserialized handles null/undefined
+        if (data.originalAddress) address.originalAddress = ensureDeserialized(data.originalAddress, AttributedTerm);
+        if (data.recipientDetails) address.recipientDetails = ensureDeserialized(data.recipientDetails, AttributedTerm);
+        if (data.streetNumber) address.streetNumber = ensureDeserialized(data.streetNumber, AttributedTerm);
+        if (data.streetName) address.streetName = ensureDeserialized(data.streetName, AttributedTerm);
+        if (data.streetType) address.streetType = ensureDeserialized(data.streetType, AttributedTerm);
+        if (data.city) address.city = ensureDeserialized(data.city, AttributedTerm);
+        if (data.state) address.state = ensureDeserialized(data.state, AttributedTerm);
+        if (data.zipCode) address.zipCode = ensureDeserialized(data.zipCode, AttributedTerm);
+        if (data.secUnitType) address.secUnitType = ensureDeserialized(data.secUnitType, AttributedTerm);
+        if (data.secUnitNum) address.secUnitNum = ensureDeserialized(data.secUnitNum, AttributedTerm);
+        if (data.isBlockIslandAddress) address.isBlockIslandAddress = ensureDeserialized(data.isBlockIslandAddress, AttributedTerm);
+        if (data.cityNormalized) address.cityNormalized = ensureDeserialized(data.cityNormalized, AttributedTerm);
+        if (data.processingSource) address.processingSource = ensureDeserialized(data.processingSource, AttributedTerm);
+        if (data.processingTimestamp) address.processingTimestamp = ensureDeserialized(data.processingTimestamp, AttributedTerm);
 
         return address;
     }
@@ -1501,6 +1758,32 @@ class Address extends ComplexIdentifiers {
         const location = [summary.city, summary.state, summary.zip].filter(Boolean).join(', ') || 'No location';
         const fireNum = summary.hasFireNumber ? ` (Fire #${summary.fireNumber})` : '';
         return `Address: ${street}, ${location}${fireNum}`;
+    }
+
+    /**
+     * Address-specific compareTo override using generic utility with exclusions
+     * Uses dynamic property iteration with automatic compareTo detection
+     * @param {Address} other - Other Address to compare
+     * @returns {number} 0 if addresses match, non-zero if different
+     * @throws {Error} If comparing with non-Address object or if utility not available
+     */
+    compareTo(other) {
+        // Check if generic utility is available
+        if (typeof genericObjectCompareTo === 'function') {
+            // Address-specific exclusions (properties that shouldn't affect address matching)
+            var addressExclusions = [
+                'processingTimestamp',  // Processing metadata shouldn't affect matching
+                'processingSource',     // Processing metadata shouldn't affect matching
+                'recipientDetails'      // Recipient info shouldn't affect address matching
+            ];
+
+            // Use generic utility with Address-specific exclusions
+            // This will automatically compare all Address properties using their compareTo methods
+            return genericObjectCompareTo(this, other, addressExclusions);
+        } else {
+            // Clear error message if dependency missing
+            throw new Error('genericObjectCompareTo utility not available - ensure utils.js is loaded first');
+        }
     }
 }
 

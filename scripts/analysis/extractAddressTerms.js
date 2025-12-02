@@ -37,7 +37,7 @@ async function extractAddressTermsFromEntities() {
                     if (primaryAddr.term) {
                         primaryAddressTerms.push({
                             entityIndex: index,
-                            entityType: entity.__type || 'Unknown',
+                            entityType: entity.type || 'Unknown',
                             PID: entity.PID,
                             term: primaryAddr.term
                         });
@@ -51,7 +51,7 @@ async function extractAddressTermsFromEntities() {
                         if (addr && addr.originalAddress && addr.originalAddress.term) {
                             secondaryAddressTerms.push({
                                 entityIndex: index,
-                                entityType: entity.__type || 'Unknown',
+                                entityType: entity.type || 'Unknown',
                                 PID: entity.PID,
                                 addressIndex: addrIndex,
                                 term: addr.originalAddress.term
