@@ -139,6 +139,12 @@ function setupActionButtons() {
     if (statsBtn) {
         statsBtn.addEventListener('click', showUnifiedStats);
     }
+
+    // Analyze Matches button
+    const analyzeMatchesBtn = document.getElementById('unifiedAnalyzeMatchesBtn');
+    if (analyzeMatchesBtn) {
+        analyzeMatchesBtn.addEventListener('click', analyzeSelectedEntityMatches);
+    }
 }
 
 // =============================================================================
@@ -848,8 +854,7 @@ function viewSelectedEntityDetails() {
         return;
     }
 
-    // This will use the generalized HTML presentation engine
-    // which will be implemented in entityRenderer.js
+    // Use the sophisticated entityRenderer display
     if (typeof renderEntityDetailsWindow === 'function') {
         renderEntityDetailsWindow(unifiedBrowser.selectedEntity);
     } else {
@@ -859,35 +864,1282 @@ function viewSelectedEntityDetails() {
 }
 
 /**
- * Basic entity details view (fallback)
+ * Dynamic recursive entity details view
+ * Renders entity properties with:
+ * - Null properties: property name + null indicator
+ * - Primitive properties: labeled values
+ * - Object properties: one level shown + expand button for recursive exploration
  * @param {Object} entityWrapper - Selected entity wrapper
  */
 function basicEntityDetailsView(entityWrapper) {
     const detailsWindow = window.open('', '_blank', 'width=1000,height=700,scrollbars=yes');
+
+    // Generate the CSS styles
+    const styles = generateEntityExplorerStyles();
+
+    // Reset the data store for this render
+    window._entityExplorerDataStore = {};
+    window._entityExplorerIdCounter = 0;
+
+    // Generate the initial entity content (this populates _entityExplorerDataStore)
+    const entityContent = renderObjectProperties(entityWrapper.entity, 'entity');
+
+    // Serialize the data store to pass to the new window
+    const dataStoreJson = JSON.stringify(window._entityExplorerDataStore, (key, value) => {
+        if (typeof value === 'function') return '[function]';
+        return value;
+    });
+
+    // Generate the JavaScript functions for the window
+    const scripts = generateEntityExplorerScripts(dataStoreJson);
+
     detailsWindow.document.write(`
         <html>
             <head>
-                <title>Entity Details: ${entityWrapper.key}</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    .source-info { background: #f0f0f0; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
-                    pre { background: #f4f4f4; padding: 15px; border-radius: 5px; overflow: auto; }
-                </style>
+                <title>Entity Explorer: ${entityWrapper.key}</title>
+                <style>${styles}</style>
             </head>
             <body>
-                <div class="source-info">
-                    <h2>Entity Information</h2>
-                    <p><strong>Source:</strong> ${entityWrapper.source}</p>
-                    <p><strong>Type:</strong> ${entityWrapper.entityType}</p>
-                    <p><strong>Key:</strong> ${entityWrapper.key}</p>
+                <div class="explorer-header">
+                    <h2>Entity Explorer</h2>
+                    <div class="entity-meta">
+                        <span class="meta-badge source-badge">${entityWrapper.source}</span>
+                        <span class="meta-badge type-badge">${entityWrapper.entityType}</span>
+                        <span class="meta-badge key-badge">${entityWrapper.key}</span>
+                    </div>
                 </div>
-                <h3>Complete Entity Data:</h3>
-                <pre>${JSON.stringify(entityWrapper.entity, null, 2)}</pre>
+                <div class="explorer-content">
+                    ${entityContent}
+                </div>
+                <script>${scripts}</script>
             </body>
         </html>
     `);
     detailsWindow.document.close();
 }
+
+/**
+ * Generate CSS styles for the entity explorer
+ * @returns {string} CSS styles
+ */
+function generateEntityExplorerStyles() {
+    return `
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+            background: #f5f7fa;
+            color: #333;
+        }
+        .explorer-header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .explorer-header h2 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+        }
+        .entity-meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .meta-badge {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .source-badge { background: #3498db; color: white; }
+        .type-badge { background: #27ae60; color: white; }
+        .key-badge { background: #7f8c8d; color: white; }
+
+        .explorer-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .property-row {
+            padding: 8px 12px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+        }
+        .property-row:last-child { border-bottom: none; }
+        .property-row:hover { background: #f8f9fa; }
+
+        .property-name {
+            font-weight: 600;
+            color: #2c3e50;
+            min-width: 150px;
+            flex-shrink: 0;
+        }
+        .property-value {
+            flex-grow: 1;
+            word-break: break-word;
+        }
+
+        /* Null values */
+        .value-null {
+            color: #95a5a6;
+            font-style: italic;
+        }
+
+        /* Primitive values */
+        .value-string { color: #27ae60; }
+        .value-number { color: #2980b9; }
+        .value-boolean { color: #8e44ad; }
+
+        /* Object container */
+        .object-container {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 5px;
+        }
+        .object-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .object-type-label {
+            font-size: 12px;
+            background: #e74c3c;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+        }
+        .expand-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        .expand-btn:hover { background: #2980b9; }
+
+        .object-preview {
+            font-size: 13px;
+            color: #666;
+        }
+        .object-preview .preview-property {
+            margin: 4px 0;
+            padding-left: 10px;
+            border-left: 2px solid #ddd;
+        }
+
+        /* Array styling */
+        .array-container {
+            background: #fff3e0;
+            border: 1px solid #ffcc80;
+        }
+        .array-type-label {
+            background: #ff9800;
+        }
+        .array-item {
+            padding: 8px;
+            border-bottom: 1px dashed #ffcc80;
+        }
+        .array-item:last-child { border-bottom: none; }
+        .array-index {
+            font-weight: 600;
+            color: #e65100;
+            margin-right: 10px;
+        }
+
+        /* Modal for expanded objects */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            min-width: 500px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        .modal-close {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .modal-close:hover { background: #c0392b; }
+    `;
+}
+
+/**
+ * Generate JavaScript functions for the entity explorer window
+ * @param {string} dataStoreJson - JSON string of the initial data store
+ * @returns {string} JavaScript code
+ */
+function generateEntityExplorerScripts(dataStoreJson) {
+    // Escape the JSON for embedding in a script tag
+    const escapedJson = dataStoreJson
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/<\/script>/gi, '<\\/script>');
+
+    return `
+        // Initialize data store with pre-rendered data
+        window.entityDataStore = JSON.parse('${escapedJson}');
+        console.log('Entity data store initialized with', Object.keys(window.entityDataStore).length, 'items');
+
+        // Expand an object into a modal
+        function expandObject(dataId, propertyName) {
+            const data = window.entityDataStore[dataId];
+            if (!data) {
+                console.error('Data not found for ID:', dataId, 'Available keys:', Object.keys(window.entityDataStore));
+                return;
+            }
+
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.onclick = function(e) {
+                if (e.target === overlay) {
+                    document.body.removeChild(overlay);
+                }
+            };
+
+            // Create modal content
+            const modal = document.createElement('div');
+            modal.className = 'modal-content';
+
+            // Determine type label
+            const isArray = Array.isArray(data);
+            const typeLabel = isArray ? 'Array[' + data.length + ']' : (data.constructor?.name || 'Object');
+
+            modal.innerHTML = \`
+                <div class="modal-header">
+                    <span class="modal-title">\${propertyName} <span class="object-type-label">\${typeLabel}</span></span>
+                    <button class="modal-close" onclick="this.closest('.modal-overlay').remove()">Close</button>
+                </div>
+                <div class="modal-body">
+                    \${renderObjectForModal(data)}
+                </div>
+            \`;
+
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+
+        // Render object content for modal
+        function renderObjectForModal(obj) {
+            if (obj === null) return '<span class="value-null">null</span>';
+            if (obj === undefined) return '<span class="value-null">undefined</span>';
+
+            const type = typeof obj;
+
+            // Primitives
+            if (type === 'string') return '<span class="value-string">"' + escapeHtml(obj) + '"</span>';
+            if (type === 'number') return '<span class="value-number">' + obj + '</span>';
+            if (type === 'boolean') return '<span class="value-boolean">' + obj + '</span>';
+
+            // Arrays
+            if (Array.isArray(obj)) {
+                if (obj.length === 0) return '<span class="value-null">[empty array]</span>';
+
+                let html = '<div class="object-container array-container">';
+                obj.forEach((item, index) => {
+                    html += '<div class="array-item">';
+                    html += '<span class="array-index">[' + index + ']</span>';
+                    html += renderValueForModal(item, 'item_' + index);
+                    html += '</div>';
+                });
+                html += '</div>';
+                return html;
+            }
+
+            // Objects
+            if (type === 'object') {
+                const keys = Object.keys(obj);
+                if (keys.length === 0) return '<span class="value-null">{empty object}</span>';
+
+                let html = '<div class="object-container">';
+                keys.forEach(key => {
+                    html += '<div class="property-row">';
+                    html += '<span class="property-name">' + escapeHtml(key) + '</span>';
+                    html += '<span class="property-value">' + renderValueForModal(obj[key], key) + '</span>';
+                    html += '</div>';
+                });
+                html += '</div>';
+                return html;
+            }
+
+            return '<span class="value-null">[unknown type]</span>';
+        }
+
+        // Render a single value for modal (with recursive expansion support)
+        function renderValueForModal(value, propName) {
+            if (value === null) return '<span class="value-null">null</span>';
+            if (value === undefined) return '<span class="value-null">undefined</span>';
+
+            const type = typeof value;
+
+            if (type === 'string') return '<span class="value-string">"' + escapeHtml(value) + '"</span>';
+            if (type === 'number') return '<span class="value-number">' + value + '</span>';
+            if (type === 'boolean') return '<span class="value-boolean">' + value + '</span>';
+
+            // For objects and arrays, create expand button
+            if (type === 'object') {
+                const dataId = 'modal_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                window.entityDataStore[dataId] = value;
+
+                const isArray = Array.isArray(value);
+                const typeLabel = isArray ? 'Array[' + value.length + ']' : (value.constructor?.name || 'Object');
+
+                // Show preview of first level
+                let preview = '';
+                if (isArray && value.length > 0) {
+                    preview = value.slice(0, 2).map((item, i) => {
+                        const itemPreview = typeof item === 'object' && item !== null
+                            ? (item.constructor?.name || 'Object')
+                            : String(item).substring(0, 30);
+                        return '[' + i + ']: ' + escapeHtml(itemPreview);
+                    }).join(', ');
+                    if (value.length > 2) preview += '...';
+                } else if (!isArray) {
+                    const keys = Object.keys(value).slice(0, 3);
+                    preview = keys.map(k => k + ': ' + getValuePreview(value[k])).join(', ');
+                    if (Object.keys(value).length > 3) preview += '...';
+                }
+
+                return \`
+                    <div class="object-container \${isArray ? 'array-container' : ''}">
+                        <div class="object-header">
+                            <span class="object-type-label \${isArray ? 'array-type-label' : ''}">\${typeLabel}</span>
+                            <button class="expand-btn" onclick="expandObject('\${dataId}', '\${escapeHtml(propName)}')">Expand</button>
+                        </div>
+                        <div class="object-preview">\${escapeHtml(preview)}</div>
+                    </div>
+                \`;
+            }
+
+            return '<span class="value-null">[unknown]</span>';
+        }
+
+        // Get a short preview of a value
+        function getValuePreview(value) {
+            if (value === null) return 'null';
+            if (value === undefined) return 'undefined';
+            const type = typeof value;
+            if (type === 'string') return '"' + value.substring(0, 20) + (value.length > 20 ? '...' : '') + '"';
+            if (type === 'number' || type === 'boolean') return String(value);
+            if (Array.isArray(value)) return 'Array[' + value.length + ']';
+            if (type === 'object') return value.constructor?.name || 'Object';
+            return '[' + type + ']';
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(str) {
+            if (typeof str !== 'string') return str;
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    `;
+}
+
+/**
+ * Render object properties for initial display
+ * @param {Object} obj - Object to render
+ * @param {string} prefix - Prefix for unique IDs
+ * @returns {string} HTML content
+ */
+function renderObjectProperties(obj, prefix) {
+    if (obj === null || obj === undefined) {
+        return '<div class="property-row"><span class="value-null">null</span></div>';
+    }
+
+    const keys = Object.keys(obj);
+    if (keys.length === 0) {
+        return '<div class="property-row"><span class="value-null">{empty object}</span></div>';
+    }
+
+    let html = '';
+
+    keys.forEach((key, index) => {
+        const value = obj[key];
+        const dataId = `${prefix}_${index}_${Date.now()}`;
+
+        html += '<div class="property-row">';
+        html += `<span class="property-name">${escapeHtmlForBrowser(key)}</span>`;
+        html += '<span class="property-value">';
+        html += renderPropertyValue(value, key, dataId);
+        html += '</span>';
+        html += '</div>';
+    });
+
+    return html;
+}
+
+/**
+ * Render a single property value
+ * @param {*} value - Value to render
+ * @param {string} propertyName - Name of the property
+ * @param {string} dataId - Unique ID for this value
+ * @returns {string} HTML content
+ */
+function renderPropertyValue(value, propertyName, dataId) {
+    // Null/undefined
+    if (value === null) {
+        return '<span class="value-null">null</span>';
+    }
+    if (value === undefined) {
+        return '<span class="value-null">undefined</span>';
+    }
+
+    const type = typeof value;
+
+    // Primitives
+    if (type === 'string') {
+        return `<span class="value-string">"${escapeHtmlForBrowser(value)}"</span>`;
+    }
+    if (type === 'number') {
+        return `<span class="value-number">${value}</span>`;
+    }
+    if (type === 'boolean') {
+        return `<span class="value-boolean">${value}</span>`;
+    }
+
+    // Functions (show indicator, not expandable)
+    if (type === 'function') {
+        return '<span class="value-null">[function]</span>';
+    }
+
+    // Arrays
+    if (Array.isArray(value)) {
+        return renderArrayPreview(value, propertyName, dataId);
+    }
+
+    // Objects
+    if (type === 'object') {
+        return renderObjectPreview(value, propertyName, dataId);
+    }
+
+    return '<span class="value-null">[unknown type]</span>';
+}
+
+/**
+ * Generate a unique ID for the data store
+ * @returns {string} Unique ID
+ */
+function generateDataStoreId() {
+    if (!window._entityExplorerIdCounter) {
+        window._entityExplorerIdCounter = 0;
+    }
+    return `data_${window._entityExplorerIdCounter++}`;
+}
+
+/**
+ * Render array with preview and expand button
+ * @param {Array} arr - Array to render
+ * @param {string} propertyName - Property name
+ * @param {string} dataId - Unique ID (unused, we generate our own)
+ * @returns {string} HTML content
+ */
+function renderArrayPreview(arr, propertyName, dataId) {
+    if (arr.length === 0) {
+        return '<span class="value-null">[empty array]</span>';
+    }
+
+    // Generate unique ID and store data
+    const storeId = generateDataStoreId();
+    if (!window._entityExplorerDataStore) {
+        window._entityExplorerDataStore = {};
+    }
+    window._entityExplorerDataStore[storeId] = arr;
+
+    // Generate preview of first few items
+    let previewItems = [];
+    const maxPreview = Math.min(3, arr.length);
+    for (let i = 0; i < maxPreview; i++) {
+        const item = arr[i];
+        previewItems.push(`<div class="preview-property">[${i}]: ${getValuePreviewStatic(item)}</div>`);
+    }
+    if (arr.length > maxPreview) {
+        previewItems.push(`<div class="preview-property">... and ${arr.length - maxPreview} more items</div>`);
+    }
+
+    return `
+        <div class="object-container array-container">
+            <div class="object-header">
+                <span class="object-type-label array-type-label">Array[${arr.length}]</span>
+                <button class="expand-btn" onclick="expandObject('${storeId}', '${escapeHtmlForBrowser(propertyName)}')">Expand</button>
+            </div>
+            <div class="object-preview">${previewItems.join('')}</div>
+        </div>
+    `;
+}
+
+/**
+ * Render object with preview and expand button
+ * @param {Object} obj - Object to render
+ * @param {string} propertyName - Property name
+ * @param {string} dataId - Unique ID (unused, we generate our own)
+ * @returns {string} HTML content
+ */
+function renderObjectPreview(obj, propertyName, dataId) {
+    const keys = Object.keys(obj);
+    if (keys.length === 0) {
+        return '<span class="value-null">{empty object}</span>';
+    }
+
+    // Get the constructor name for display
+    const typeName = obj.constructor?.name || 'Object';
+
+    // Generate unique ID and store data
+    const storeId = generateDataStoreId();
+    if (!window._entityExplorerDataStore) {
+        window._entityExplorerDataStore = {};
+    }
+    window._entityExplorerDataStore[storeId] = obj;
+
+    // Generate preview of first few properties
+    let previewItems = [];
+    const maxPreview = Math.min(4, keys.length);
+    for (let i = 0; i < maxPreview; i++) {
+        const key = keys[i];
+        const value = obj[key];
+        previewItems.push(`<div class="preview-property"><strong>${escapeHtmlForBrowser(key)}:</strong> ${getValuePreviewStatic(value)}</div>`);
+    }
+    if (keys.length > maxPreview) {
+        previewItems.push(`<div class="preview-property">... and ${keys.length - maxPreview} more properties</div>`);
+    }
+
+    return `
+        <div class="object-container">
+            <div class="object-header">
+                <span class="object-type-label">${escapeHtmlForBrowser(typeName)}</span>
+                <button class="expand-btn" onclick="expandObject('${storeId}', '${escapeHtmlForBrowser(propertyName)}')">Expand</button>
+            </div>
+            <div class="object-preview">${previewItems.join('')}</div>
+        </div>
+    `;
+}
+
+/**
+ * Get a short preview string for a value (static, no JS needed)
+ * @param {*} value - Value to preview
+ * @returns {string} Preview string
+ */
+function getValuePreviewStatic(value) {
+    if (value === null) return '<span class="value-null">null</span>';
+    if (value === undefined) return '<span class="value-null">undefined</span>';
+
+    const type = typeof value;
+
+    if (type === 'string') {
+        const truncated = value.length > 40 ? value.substring(0, 40) + '...' : value;
+        return `<span class="value-string">"${escapeHtmlForBrowser(truncated)}"</span>`;
+    }
+    if (type === 'number') {
+        return `<span class="value-number">${value}</span>`;
+    }
+    if (type === 'boolean') {
+        return `<span class="value-boolean">${value}</span>`;
+    }
+    if (type === 'function') {
+        return '<span class="value-null">[function]</span>';
+    }
+    if (Array.isArray(value)) {
+        return `<span class="value-null">Array[${value.length}]</span>`;
+    }
+    if (type === 'object') {
+        const typeName = value.constructor?.name || 'Object';
+        return `<span class="value-null">${escapeHtmlForBrowser(typeName)}</span>`;
+    }
+
+    return '<span class="value-null">[unknown]</span>';
+}
+
+/**
+ * Escape HTML characters for safe display in browser
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string
+ */
+function escapeHtmlForBrowser(str) {
+    if (typeof str !== 'string') return String(str);
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// =============================================================================
+// MATCH ANALYSIS FUNCTIONS
+// =============================================================================
+
+/**
+ * Analyze matching process for the selected entity
+ * Shows all comparisons with detailed breakdowns
+ */
+async function analyzeSelectedEntityMatches() {
+    if (!unifiedBrowser.selectedEntity) {
+        showUnifiedStatus('Please select an entity first', 'error');
+        return;
+    }
+
+    const entityWrapper = unifiedBrowser.selectedEntity;
+    const entity = entityWrapper.entity;
+
+    showUnifiedStatus('Analyzing matches... This may take a moment.', 'loading');
+
+    try {
+        // Load the universalEntityMatcher if not already loaded
+        if (typeof findBestMatches !== 'function') {
+            await loadScriptAsync('./scripts/matching/universalEntityMatcher.js');
+        }
+
+        // Also ensure utils.js is loaded for comparison functions
+        if (typeof levenshteinSimilarity !== 'function') {
+            await loadScriptAsync('./scripts/utils.js');
+        }
+
+        // Perform the match analysis
+        let matchResults;
+        if (typeof findBestMatches === 'function') {
+            matchResults = findBestMatches(entity);
+        } else {
+            // Fallback - perform basic matching here
+            matchResults = performBasicMatchAnalysis(entity, entityWrapper);
+        }
+
+        // Display results in a new window
+        displayMatchAnalysisResults(entityWrapper, matchResults);
+
+        showUnifiedStatus('Match analysis complete!', 'success');
+
+    } catch (error) {
+        console.error('Match analysis error:', error);
+        showUnifiedStatus(`Error analyzing matches: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Perform basic match analysis if universalEntityMatcher is not available
+ * @param {Object} entity - The entity to analyze
+ * @param {Object} entityWrapper - The entity wrapper with metadata
+ * @returns {Object} Match results
+ */
+function performBasicMatchAnalysis(entity, entityWrapper) {
+    const results = {
+        baseEntity: {
+            key: entityWrapper.key,
+            source: entityWrapper.source,
+            type: entityWrapper.entityType
+        },
+        comparisons: [],
+        summary: {
+            totalCompared: 0,
+            byType: {}
+        }
+    };
+
+    // Get all entities to compare against
+    const allEntities = getAllSelectedEntities();
+
+    // Compare against each entity (excluding self)
+    for (const targetWrapper of allEntities) {
+        if (targetWrapper.key === entityWrapper.key) continue; // Skip self
+
+        try {
+            let score = 0;
+            let details = null;
+
+            // Try to use compareTo if available
+            if (typeof entity.compareTo === 'function') {
+                const result = entity.compareTo(targetWrapper.entity, true);
+                score = typeof result === 'number' ? result : (result?.overallSimilarity || 0);
+                details = typeof result === 'object' ? result : null;
+            }
+
+            results.comparisons.push({
+                targetKey: targetWrapper.key,
+                targetSource: targetWrapper.source,
+                targetType: targetWrapper.entityType,
+                score: score,
+                details: details
+            });
+
+            // Update summary
+            results.summary.totalCompared++;
+            const typeBucket = targetWrapper.entityType;
+            if (!results.summary.byType[typeBucket]) {
+                results.summary.byType[typeBucket] = { count: 0, scores: [] };
+            }
+            results.summary.byType[typeBucket].count++;
+            results.summary.byType[typeBucket].scores.push(score);
+
+        } catch (error) {
+            console.warn(`Error comparing to ${targetWrapper.key}:`, error.message);
+        }
+    }
+
+    // Sort comparisons by score (highest first)
+    results.comparisons.sort((a, b) => b.score - a.score);
+
+    // Calculate percentiles for each type
+    for (const [type, data] of Object.entries(results.summary.byType)) {
+        data.scores.sort((a, b) => b - a);
+        data.p98 = data.scores[Math.floor(data.scores.length * 0.02)] || 0;
+        data.max = data.scores[0] || 0;
+        data.min = data.scores[data.scores.length - 1] || 0;
+        data.avg = data.scores.reduce((a, b) => a + b, 0) / data.scores.length || 0;
+    }
+
+    return results;
+}
+
+/**
+ * Display match analysis results in a new window
+ * @param {Object} entityWrapper - The base entity wrapper
+ * @param {Object} results - Match analysis results
+ */
+function displayMatchAnalysisResults(entityWrapper, results) {
+    const analysisWindow = window.open('', '_blank', 'width=1200,height=800,scrollbars=yes');
+
+    const styles = generateMatchAnalysisStyles();
+
+    // Generate content based on results structure
+    let resultsHtml = '';
+
+    if (results.bestMatchesByType) {
+        // Results from universalEntityMatcher (grouped by type)
+        resultsHtml = generateUniversalMatcherResultsHtml(results);
+    } else if (results.byType) {
+        // Alternative property name for universalEntityMatcher results
+        resultsHtml = generateUniversalMatcherResultsHtml(results);
+    } else if (results.comparisons) {
+        // Results from basic analysis
+        resultsHtml = generateBasicMatchResultsHtml(results);
+    }
+
+    const baseName = extractUnifiedEntityName(entityWrapper.entity);
+
+    analysisWindow.document.write(`
+        <html>
+            <head>
+                <title>Match Analysis: ${entityWrapper.key}</title>
+                <style>${styles}</style>
+            </head>
+            <body>
+                <div class="analysis-header">
+                    <h1>Entity Match Analysis</h1>
+                    <div class="base-entity-info">
+                        <span class="label">Base Entity:</span>
+                        <span class="entity-name">${escapeHtmlForBrowser(baseName)}</span>
+                        <span class="meta-badge source-badge">${entityWrapper.source}</span>
+                        <span class="meta-badge type-badge">${entityWrapper.entityType}</span>
+                        <span class="meta-badge key-badge">${entityWrapper.key}</span>
+                    </div>
+                </div>
+                <div class="analysis-content">
+                    ${resultsHtml}
+                </div>
+                <script>
+                    // Toggle detail visibility
+                    function toggleDetails(id) {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.style.display = el.style.display === 'none' ? 'block' : 'none';
+                        }
+                    }
+
+                    // Filter by score
+                    function filterByScore(minScore) {
+                        document.querySelectorAll('.match-row').forEach(row => {
+                            const score = parseFloat(row.dataset.score || 0);
+                            row.style.display = score >= minScore ? '' : 'none';
+                        });
+                    }
+                </script>
+            </body>
+        </html>
+    `);
+    analysisWindow.document.close();
+}
+
+/**
+ * Generate CSS styles for match analysis window
+ * @returns {string} CSS styles
+ */
+function generateMatchAnalysisStyles() {
+    return `
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+            background: #f5f7fa;
+            color: #333;
+        }
+        .analysis-header {
+            background: linear-gradient(135deg, #2c3e50, #3498db);
+            color: white;
+            padding: 25px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .analysis-header h1 {
+            margin: 0 0 15px 0;
+            font-size: 24px;
+        }
+        .base-entity-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .base-entity-info .label {
+            font-weight: 600;
+            opacity: 0.9;
+        }
+        .base-entity-info .entity-name {
+            font-size: 18px;
+            font-weight: 600;
+        }
+        .meta-badge {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .source-badge { background: rgba(255,255,255,0.2); }
+        .type-badge { background: rgba(39,174,96,0.8); }
+        .key-badge { background: rgba(127,140,141,0.6); }
+
+        .analysis-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .summary-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .summary-section h3 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        .summary-stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            padding: 10px 15px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #e0e0e0;
+        }
+        .stat-label { font-size: 12px; color: #666; }
+        .stat-value { font-size: 18px; font-weight: 600; color: #2c3e50; }
+
+        .filter-section {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #e8f4f8;
+            border-radius: 4px;
+        }
+        .filter-section label { margin-right: 10px; }
+        .filter-btn {
+            padding: 5px 12px;
+            margin-right: 5px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .filter-btn:hover { background: #2980b9; }
+
+        .type-section {
+            margin-top: 25px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .type-header {
+            background: #34495e;
+            color: white;
+            padding: 12px 15px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .type-stats {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        .match-row {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            transition: background 0.2s;
+        }
+        .match-row:last-child { border-bottom: none; }
+        .match-row:hover { background: #f8f9fa; }
+
+        .score-badge {
+            min-width: 60px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-align: center;
+            color: white;
+        }
+        .score-excellent { background: #27ae60; }
+        .score-good { background: #2ecc71; }
+        .score-moderate { background: #f39c12; }
+        .score-low { background: #e74c3c; }
+
+        .match-info {
+            flex-grow: 1;
+        }
+        .match-name { font-weight: 600; color: #2c3e50; }
+        .match-key { font-size: 12px; color: #7f8c8d; }
+
+        .match-source {
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            background: #ecf0f1;
+        }
+
+        .toggle-btn {
+            padding: 5px 10px;
+            background: #95a5a6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .toggle-btn:hover { background: #7f8c8d; }
+
+        .match-details {
+            background: #f4f4f4;
+            padding: 12px 15px;
+            margin-top: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            display: none;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px dotted #ddd;
+        }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: #666; }
+        .detail-value { font-weight: 500; }
+
+        .name-score-highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+    `;
+}
+
+/**
+ * Generate HTML for results from universalEntityMatcher
+ * @param {Object} results - Results grouped by type
+ * @returns {string} HTML content
+ */
+function generateUniversalMatcherResultsHtml(results) {
+    let html = '';
+
+    // Get the match data - support both property names for compatibility
+    const matchesByType = results.bestMatchesByType || results.byType || {};
+
+    // Summary section
+    html += `
+        <div class="summary-section">
+            <h3>Match Summary</h3>
+            <div class="summary-stats">
+    `;
+
+    // Count totals
+    let totalMatches = 0;
+    const typeCounts = {};
+    for (const [type, matches] of Object.entries(matchesByType)) {
+        const count = matches?.bestMatches?.length || 0;
+        totalMatches += count;
+        typeCounts[type] = count;
+    }
+
+    html += `<div class="stat-item"><div class="stat-label">Total Best Matches</div><div class="stat-value">${totalMatches}</div></div>`;
+
+    for (const [type, count] of Object.entries(typeCounts)) {
+        html += `<div class="stat-item"><div class="stat-label">${type}</div><div class="stat-value">${count}</div></div>`;
+    }
+
+    html += `</div></div>`;
+
+    // Filter section
+    html += `
+        <div class="filter-section">
+            <label>Filter by minimum score:</label>
+            <button class="filter-btn" onclick="filterByScore(0)">All</button>
+            <button class="filter-btn" onclick="filterByScore(0.5)">≥50%</button>
+            <button class="filter-btn" onclick="filterByScore(0.7)">≥70%</button>
+            <button class="filter-btn" onclick="filterByScore(0.9)">≥90%</button>
+            <button class="filter-btn" onclick="filterByScore(0.95)">≥95%</button>
+        </div>
+    `;
+
+    // Results by type
+    for (const [type, typeData] of Object.entries(matchesByType)) {
+        const matches = typeData?.bestMatches || [];
+        if (matches.length === 0) continue;
+
+        const percentile = typeData?.percentile98 || 0;
+
+        html += `
+            <div class="type-section">
+                <div class="type-header">
+                    <span>${type} (${matches.length} matches)</span>
+                    <span class="type-stats">98th percentile: ${(percentile * 100).toFixed(1)}%</span>
+                </div>
+        `;
+
+        matches.forEach((match, idx) => {
+            const score = match.score || 0;
+            const scoreClass = score >= 0.95 ? 'score-excellent' :
+                               score >= 0.8 ? 'score-good' :
+                               score >= 0.5 ? 'score-moderate' : 'score-low';
+
+            const detailId = `detail_${type}_${idx}`;
+            const entityName = match.entityName || match.targetKey || 'Unknown';
+            const nameScore = match.details?.components?.name?.similarity;
+            const hasHighNameScore = nameScore && nameScore > 0.985;
+
+            html += `
+                <div class="match-row" data-score="${score}">
+                    <span class="score-badge ${scoreClass}">${(score * 100).toFixed(1)}%</span>
+                    <div class="match-info">
+                        <div class="match-name">
+                            ${escapeHtmlForBrowser(entityName)}
+                            ${hasHighNameScore ? `<span class="name-score-highlight">Name: ${(nameScore * 100).toFixed(1)}%</span>` : ''}
+                        </div>
+                        <div class="match-key">${match.targetKey || ''}</div>
+                    </div>
+                    <span class="match-source">${match.targetSource || ''}</span>
+                    ${match.details ? `<button class="toggle-btn" onclick="toggleDetails('${detailId}')">Details</button>` : ''}
+                </div>
+            `;
+
+            if (match.details) {
+                html += `<div class="match-details" id="${detailId}">`;
+                html += renderMatchDetails(match.details);
+                html += `</div>`;
+            }
+        });
+
+        html += `</div>`;
+    }
+
+    return html;
+}
+
+/**
+ * Generate HTML for results from basic match analysis
+ * @param {Object} results - Basic analysis results
+ * @returns {string} HTML content
+ */
+function generateBasicMatchResultsHtml(results) {
+    let html = '';
+
+    // Summary section
+    html += `
+        <div class="summary-section">
+            <h3>Match Summary</h3>
+            <div class="summary-stats">
+                <div class="stat-item"><div class="stat-label">Total Compared</div><div class="stat-value">${results.summary?.totalCompared || 0}</div></div>
+    `;
+
+    for (const [type, data] of Object.entries(results.summary?.byType || {})) {
+        html += `
+            <div class="stat-item">
+                <div class="stat-label">${type}</div>
+                <div class="stat-value">${data.count}</div>
+            </div>
+        `;
+    }
+
+    html += `</div></div>`;
+
+    // Filter section
+    html += `
+        <div class="filter-section">
+            <label>Filter by minimum score:</label>
+            <button class="filter-btn" onclick="filterByScore(0)">All</button>
+            <button class="filter-btn" onclick="filterByScore(0.5)">≥50%</button>
+            <button class="filter-btn" onclick="filterByScore(0.7)">≥70%</button>
+            <button class="filter-btn" onclick="filterByScore(0.9)">≥90%</button>
+        </div>
+    `;
+
+    // Group by type
+    const byType = {};
+    for (const comp of (results.comparisons || [])) {
+        const type = comp.targetType || 'Unknown';
+        if (!byType[type]) byType[type] = [];
+        byType[type].push(comp);
+    }
+
+    // Render each type
+    for (const [type, matches] of Object.entries(byType)) {
+        // Only show top 20 per type to avoid overwhelming display
+        const topMatches = matches.slice(0, 20);
+
+        html += `
+            <div class="type-section">
+                <div class="type-header">
+                    <span>${type} (${matches.length} total, showing top ${topMatches.length})</span>
+                </div>
+        `;
+
+        topMatches.forEach((match, idx) => {
+            const score = match.score || 0;
+            const scoreClass = score >= 0.95 ? 'score-excellent' :
+                               score >= 0.8 ? 'score-good' :
+                               score >= 0.5 ? 'score-moderate' : 'score-low';
+
+            const detailId = `detail_${type}_${idx}`;
+
+            html += `
+                <div class="match-row" data-score="${score}">
+                    <span class="score-badge ${scoreClass}">${(score * 100).toFixed(1)}%</span>
+                    <div class="match-info">
+                        <div class="match-name">${match.targetKey}</div>
+                        <div class="match-key">${match.targetType}</div>
+                    </div>
+                    <span class="match-source">${match.targetSource}</span>
+                    ${match.details ? `<button class="toggle-btn" onclick="toggleDetails('${detailId}')">Details</button>` : ''}
+                </div>
+            `;
+
+            if (match.details) {
+                html += `<div class="match-details" id="${detailId}">`;
+                html += renderMatchDetails(match.details);
+                html += `</div>`;
+            }
+        });
+
+        html += `</div>`;
+    }
+
+    return html;
+}
+
+/**
+ * Render detailed match component breakdown
+ * @param {Object} details - Match details object
+ * @returns {string} HTML content
+ */
+function renderMatchDetails(details) {
+    let html = '';
+
+    if (details.overallSimilarity !== undefined) {
+        html += `<div class="detail-row"><span class="detail-label">Overall Similarity</span><span class="detail-value">${(details.overallSimilarity * 100).toFixed(2)}%</span></div>`;
+    }
+
+    if (details.components) {
+        html += `<div style="margin-top: 8px; font-weight: 600;">Component Breakdown:</div>`;
+        for (const [compName, compData] of Object.entries(details.components)) {
+            const similarity = compData.similarity || compData;
+            const weight = compData.weight;
+            const contribution = compData.contribution;
+
+            html += `<div class="detail-row">`;
+            html += `<span class="detail-label">${compName}</span>`;
+            html += `<span class="detail-value">`;
+
+            if (typeof similarity === 'number') {
+                html += `${(similarity * 100).toFixed(2)}%`;
+            }
+            if (weight !== undefined) {
+                html += ` (weight: ${(weight * 100).toFixed(1)}%)`;
+            }
+            if (contribution !== undefined) {
+                html += ` → ${(contribution * 100).toFixed(2)}%`;
+            }
+
+            html += `</span></div>`;
+        }
+    }
+
+    if (details.checkSum !== undefined) {
+        html += `<div class="detail-row"><span class="detail-label">Checksum</span><span class="detail-value">${details.checkSum}</span></div>`;
+    }
+
+    return html;
+}
+
+// =============================================================================
+// EXPORT FUNCTIONS
+// =============================================================================
 
 /**
  * Export current results

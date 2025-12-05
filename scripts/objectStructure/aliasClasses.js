@@ -126,10 +126,11 @@ class AttributedTerm {
     }
 
     /**
-     * Serialize AttributedTerm to JSON-compatible object
+     * LEGACY: Serialize AttributedTerm to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'AttributedTerm',
             term: this.term,
@@ -370,15 +371,16 @@ class Aliases {
     }
 
     /**
-     * Serialize Aliases to JSON-compatible object
+     * LEGACY: Serialize Aliases to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'Aliases',
-            homonyms: this.homonyms.map(term => term.serialize()),
-            synonyms: this.synonyms.map(term => term.serialize()),
-            candidates: this.candidates.map(term => term.serialize())
+            homonyms: this.homonyms.map(term => term.legacySerialize()),
+            synonyms: this.synonyms.map(term => term.legacySerialize()),
+            candidates: this.candidates.map(term => term.legacySerialize())
         };
     }
 
@@ -504,14 +506,15 @@ class Aliased {
     // }
 
     /**
-     * Serialize Aliased to JSON-compatible object
+     * LEGACY: Serialize Aliased to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'Aliased',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize(),
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize(),
             comparisonWeights: this.comparisonWeights,
             comparisonCalculatorName: this.comparisonCalculatorName
         };
@@ -597,14 +600,15 @@ class SimpleIdentifiers extends Aliased {
     }
 
     /**
-     * Serialize SimpleIdentifiers to JSON-compatible object
+     * LEGACY: Serialize SimpleIdentifiers to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'SimpleIdentifiers',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize()
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize()
         };
     }
 
@@ -639,13 +643,14 @@ class IndicativeData {
     }
 
     /**
-     * Serialize IndicativeData to JSON-compatible object
+     * LEGACY: Serialize IndicativeData to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'IndicativeData',
-            identifier: this.identifier.serialize()
+            identifier: this.identifier.legacySerialize()
         };
     }
 
@@ -725,13 +730,14 @@ class IdentifyingData {
     }
 
     /**
-     * Serialize IdentifyingData to JSON-compatible object
+     * LEGACY: Serialize IdentifyingData to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'IdentifyingData',
-            identifier: this.identifier.serialize()
+            identifier: this.identifier.legacySerialize()
         };
     }
 
@@ -771,14 +777,15 @@ class FireNumber extends SimpleIdentifiers {
     }
 
     /**
-     * Serialize FireNumber to JSON-compatible object
+     * LEGACY: Serialize FireNumber to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'FireNumber',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize()
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize()
         };
     }
 
@@ -811,14 +818,15 @@ class PoBox extends SimpleIdentifiers {
     }
 
     /**
-     * Serialize PoBox to JSON-compatible object
+     * LEGACY: Serialize PoBox to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'PoBox',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize()
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize()
         };
     }
 
@@ -853,14 +861,15 @@ class PID extends SimpleIdentifiers {
     }
 
     /**
-     * Serialize PID to JSON-compatible object
+     * LEGACY: Serialize PID to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'PID',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize()
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize()
         };
     }
 
@@ -893,14 +902,15 @@ class ComplexIdentifiers extends Aliased {
     }
 
     /**
-     * Serialize ComplexIdentifiers to JSON-compatible object
+     * LEGACY: Serialize ComplexIdentifiers to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'ComplexIdentifiers',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize()
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize()
         };
     }
 
@@ -996,24 +1006,15 @@ class IndividualName extends ComplexIdentifiers {
     }
 
     /**
-     * Serialize IndividualName to JSON-compatible object
+     * LEGACY: Serialize IndividualName to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
-        // COMMENTED OUT: Diagnostic logging - preserved for debugging if needed
-        // if (typeof window !== 'undefined') {
-        //     if (!window._serialize_count) window._serialize_count = 0;
-        //     if (window._serialize_count < 3) {
-        //         console.log(`[IndividualName.serialize #${window._serialize_count + 1}] comparisonWeights:`, this.comparisonWeights);
-        //         console.log(`[IndividualName.serialize #${window._serialize_count + 1}] comparisonCalculator:`, typeof this.comparisonCalculator);
-        //         window._serialize_count++;
-        //     }
-        // }
-
+    legacySerialize() {
         return {
             type: 'IndividualName',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize(),
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize(),
             title: this.title,
             firstName: this.firstName,
             otherNames: this.otherNames,
@@ -1145,16 +1146,17 @@ class HouseholdName extends ComplexIdentifiers {
     }
 
     /**
-     * Serialize HouseholdName to JSON-compatible object
+     * LEGACY: Serialize HouseholdName to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'HouseholdName',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize(),
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize(),
             fullHouseholdName: this.fullHouseholdName,
-            memberNames: this.memberNames.map(member => member.serialize())
+            memberNames: this.memberNames.map(member => member.legacySerialize())
         };
     }
 
@@ -1219,10 +1221,11 @@ class FireNumberTerm extends AttributedTerm {
     }
 
     /**
-     * Serialize FireNumberTerm to JSON-compatible object
+     * LEGACY: Serialize FireNumberTerm to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'FireNumberTerm',
             term: this.term,
@@ -1294,10 +1297,11 @@ class AccountNumberTerm extends AttributedTerm {
     }
 
     /**
-     * Serialize AccountNumberTerm to JSON-compatible object
+     * LEGACY: Serialize AccountNumberTerm to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'AccountNumberTerm',
             term: this.term,
@@ -1389,10 +1393,11 @@ class EmailTerm extends AttributedTerm {
     }
 
     /**
-     * Serialize EmailTerm to JSON-compatible object
+     * LEGACY: Serialize EmailTerm to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'EmailTerm',
             term: this.term,
@@ -1687,28 +1692,29 @@ class Address extends ComplexIdentifiers {
     }
 
     /**
-     * Serialize Address to JSON-compatible object
+     * LEGACY: Serialize Address to JSON-compatible object
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         return {
             type: 'Address',
-            primaryAlias: this.primaryAlias.serialize(),
-            alternatives: this.alternatives.serialize(),
-            originalAddress: this.originalAddress ? this.originalAddress.serialize() : null,
-            recipientDetails: this.recipientDetails ? this.recipientDetails.serialize() : null,
-            streetNumber: this.streetNumber ? this.streetNumber.serialize() : null,
-            streetName: this.streetName ? this.streetName.serialize() : null,
-            streetType: this.streetType ? this.streetType.serialize() : null,
-            city: this.city ? this.city.serialize() : null,
-            state: this.state ? this.state.serialize() : null,
-            zipCode: this.zipCode ? this.zipCode.serialize() : null,
-            secUnitType: this.secUnitType ? this.secUnitType.serialize() : null,
-            secUnitNum: this.secUnitNum ? this.secUnitNum.serialize() : null,
-            isBlockIslandAddress: this.isBlockIslandAddress ? this.isBlockIslandAddress.serialize() : null,
-            cityNormalized: this.cityNormalized ? this.cityNormalized.serialize() : null,
-            processingSource: this.processingSource ? this.processingSource.serialize() : null,
-            processingTimestamp: this.processingTimestamp ? this.processingTimestamp.serialize() : null,
+            primaryAlias: this.primaryAlias.legacySerialize(),
+            alternatives: this.alternatives.legacySerialize(),
+            originalAddress: this.originalAddress ? this.originalAddress.legacySerialize() : null,
+            recipientDetails: this.recipientDetails ? this.recipientDetails.legacySerialize() : null,
+            streetNumber: this.streetNumber ? this.streetNumber.legacySerialize() : null,
+            streetName: this.streetName ? this.streetName.legacySerialize() : null,
+            streetType: this.streetType ? this.streetType.legacySerialize() : null,
+            city: this.city ? this.city.legacySerialize() : null,
+            state: this.state ? this.state.legacySerialize() : null,
+            zipCode: this.zipCode ? this.zipCode.legacySerialize() : null,
+            secUnitType: this.secUnitType ? this.secUnitType.legacySerialize() : null,
+            secUnitNum: this.secUnitNum ? this.secUnitNum.legacySerialize() : null,
+            isBlockIslandAddress: this.isBlockIslandAddress ? this.isBlockIslandAddress.legacySerialize() : null,
+            cityNormalized: this.cityNormalized ? this.cityNormalized.legacySerialize() : null,
+            processingSource: this.processingSource ? this.processingSource.legacySerialize() : null,
+            processingTimestamp: this.processingTimestamp ? this.processingTimestamp.legacySerialize() : null,
             comparisonWeights: this.comparisonWeights  // Weighted comparison architecture
         };
     }

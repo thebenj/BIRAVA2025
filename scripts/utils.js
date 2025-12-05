@@ -278,8 +278,8 @@ function defaultWeightedComparison(otherObject) {
     // Calculate final weighted similarity (0-1 range)
     const finalSimilarity = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
 
-    // Round to 2 decimal places for clean output
-    return Math.round(finalSimilarity * 100) / 100;
+    // Round to 10 decimal places for precision
+    return Math.round(finalSimilarity * 10000000000) / 10000000000;
 }
 
 // =============================================================================
@@ -461,14 +461,14 @@ function comparePOBoxAddresses(addr1, addr2) {
         const secUnitSim = getComponentSimilarity(addr1.secUnitNum, addr2.secUnitNum);
 
         if (zipSim === 1) {
-            return Math.round(secUnitSim * 100) / 100;
+            return Math.round(secUnitSim * 10000000000) / 10000000000;
         }
 
         // Zip between 0.74 and 1: weighted calculation including city/state
         const citySim = getComponentSimilarity(addr1.city, addr2.city);
         const stateSim = getStateSimilarity(addr1.state, addr2.state);
         const result = 0.3 * zipSim + 0.3 * secUnitSim + 0.2 * citySim + 0.2 * stateSim;
-        return Math.round(result * 100) / 100;
+        return Math.round(result * 10000000000) / 10000000000;
     } else {
         // No zip code - use secUnitNum, city, state
         const secUnitSim = getComponentSimilarity(addr1.secUnitNum, addr2.secUnitNum);
@@ -483,12 +483,12 @@ function comparePOBoxAddresses(addr1, addr2) {
         if (secUnitSim === 1) {
             // Return 50/50 city/state
             const result = 0.5 * citySim + 0.5 * stateSim;
-            return Math.round(result * 100) / 100;
+            return Math.round(result * 10000000000) / 10000000000;
         }
 
         // secUnitNum between 0.8 and 1: weighted calculation
         const result = 0.6 * secUnitSim + 0.2 * citySim + 0.2 * stateSim;
-        return Math.round(result * 100) / 100;
+        return Math.round(result * 10000000000) / 10000000000;
     }
 }
 
@@ -507,12 +507,12 @@ function compareBlockIslandAddresses(addr1, addr2) {
         const streetNameSim = getComponentSimilarity(addr1.streetName, addr2.streetName);
 
         const result = 0.85 * streetNumSim + 0.15 * streetNameSim;
-        return Math.round(result * 100) / 100;
+        return Math.round(result * 10000000000) / 10000000000;
     } else {
         // No zip but confirmed BI via street database + city
         // Only compare street number
         const streetNumSim = getComponentSimilarity(addr1.streetNumber, addr2.streetNumber);
-        return Math.round(streetNumSim * 100) / 100;
+        return Math.round(streetNumSim * 10000000000) / 10000000000;
     }
 }
 
@@ -552,7 +552,7 @@ function compareGeneralStreetAddresses(addr1, addr2) {
         const stateSim = getStateSimilarityOrZero(addr1.state, addr2.state);
 
         const totalScore = (streetNumSim * 0.3) + (streetNameSim * 0.2) + (zipSim * 0.4) + (stateSim * 0.1);
-        return Math.round(totalScore * 100) / 100;
+        return Math.round(totalScore * 10000000000) / 10000000000;
     } else {
         // Without zip (both sides): streetNumber 0.3, streetName 0.2, city 0.25, state 0.25
         // All weights always applied - missing fields contribute 0 similarity
@@ -562,7 +562,7 @@ function compareGeneralStreetAddresses(addr1, addr2) {
         const stateSim = getStateSimilarityOrZero(addr1.state, addr2.state);
 
         const totalScore = (streetNumSim * 0.3) + (streetNameSim * 0.2) + (citySim * 0.25) + (stateSim * 0.25);
-        return Math.round(totalScore * 100) / 100;
+        return Math.round(totalScore * 10000000000) / 10000000000;
     }
 }
 
@@ -646,9 +646,10 @@ function getEmailString(emailValue) {
  *    that category gets 0.9 weight, others get 0.05 each
  *
  * @param {ContactInfo} otherObject - The other ContactInfo to compare against
- * @returns {number} Similarity score 0-1
+ * @param {boolean} detailed - If true, returns detailed breakdown object instead of number
+ * @returns {number|Object} Similarity score 0-1, or detailed breakdown object if detailed=true
  */
-function contactInfoWeightedComparison(otherObject) {
+function contactInfoWeightedComparison(otherObject, detailed = false) {
     const thisCI = this;
     const otherCI = otherObject;
 
@@ -749,31 +750,87 @@ function contactInfoWeightedComparison(otherObject) {
 
     // Step 5: Apply weighting only to components with data
     // Base weights: primary 0.6, secondary 0.2, email 0.2
+    const baseWeights = { primaryAddress: 0.6, secondaryAddress: 0.2, email: 0.2 };
     let totalWeight = 0;
     let weightedSum = 0;
 
     if (hasPrimaryData) {
-        weightedSum += 0.6 * primarySimilarity;
-        totalWeight += 0.6;
+        weightedSum += baseWeights.primaryAddress * primarySimilarity;
+        totalWeight += baseWeights.primaryAddress;
     }
     if (hasSecondaryData) {
-        weightedSum += 0.2 * secondarySimilarity;
-        totalWeight += 0.2;
+        weightedSum += baseWeights.secondaryAddress * secondarySimilarity;
+        totalWeight += baseWeights.secondaryAddress;
     }
     if (hasEmailData) {
-        weightedSum += 0.2 * emailSimilarity;
-        totalWeight += 0.2;
+        weightedSum += baseWeights.email * emailSimilarity;
+        totalWeight += baseWeights.email;
     }
 
     // If no components have data, return 0
     if (totalWeight === 0) {
-        return 0;
+        return detailed ? { overallSimilarity: 0, components: {}, checkSum: 0 } : 0;
     }
 
-    // Normalize by total weight (so missing data doesn't penalize)
-    const result = weightedSum / totalWeight;
+    // Precision: 10 decimal places
+    const PRECISION = 10000000000; // 10^10
+    const round10 = (val) => Math.round(val * PRECISION) / PRECISION;
 
-    return Math.round(result * 100) / 100;
+    // Normalize by total weight (so missing data doesn't penalize)
+    const overallSimilarity = round10(weightedSum / totalWeight);
+
+    if (!detailed) {
+        return overallSimilarity;
+    }
+
+    // Build detailed breakdown - only include components with weight
+    const components = {};
+    let weightedValueSum = 0;
+
+    if (hasPrimaryData) {
+        const actualWeight = round10(baseWeights.primaryAddress / totalWeight);
+        const similarity = round10(primarySimilarity);
+        const weightedValue = round10(actualWeight * similarity);
+        components.primaryAddress = {
+            actualWeight: actualWeight,
+            similarity: similarity,
+            weightedValue: weightedValue
+        };
+        weightedValueSum += weightedValue;
+    }
+
+    if (hasSecondaryData) {
+        const actualWeight = round10(baseWeights.secondaryAddress / totalWeight);
+        const similarity = round10(secondarySimilarity);
+        const weightedValue = round10(actualWeight * similarity);
+        components.secondaryAddress = {
+            actualWeight: actualWeight,
+            similarity: similarity,
+            weightedValue: weightedValue
+        };
+        weightedValueSum += weightedValue;
+    }
+
+    if (hasEmailData) {
+        const actualWeight = round10(baseWeights.email / totalWeight);
+        const similarity = round10(emailSimilarity);
+        const weightedValue = round10(actualWeight * similarity);
+        components.email = {
+            actualWeight: actualWeight,
+            similarity: similarity,
+            weightedValue: weightedValue
+        };
+        weightedValueSum += weightedValue;
+    }
+
+    // checkSum: overallSimilarity minus sum of weightedValues (should be 0 for validation)
+    const checkSum = round10(overallSimilarity - weightedValueSum);
+
+    return {
+        overallSimilarity: overallSimilarity,
+        components: components,
+        checkSum: checkSum
+    };
 }
 
 /**
@@ -788,9 +845,10 @@ function contactInfoWeightedComparison(otherObject) {
  * Only weights components where BOTH sides have data, then normalizes.
  *
  * @param {Entity} otherObject - The other entity to compare against
- * @returns {number} Similarity score 0-1
+ * @param {boolean} detailed - If true, returns detailed breakdown object instead of number
+ * @returns {number|Object} Similarity score 0-1, or detailed breakdown object if detailed=true
  */
-function entityWeightedComparison(otherObject) {
+function entityWeightedComparison(otherObject, detailed = false) {
     const thisEntity = this;
     const otherEntity = otherObject;
 
@@ -820,38 +878,28 @@ function entityWeightedComparison(otherObject) {
         contactInfoSimilarity = thisEntity.contactInfo.compareTo(otherEntity.contactInfo);
     }
 
-    // Apply weight boost logic:
-    // - If one of name/contactInfo is 100% and other isn't: +12% to the perfect one
-    // - If one is >95% (but <100%) and other is <95%: +6% to the high one
+    // Apply weight boost logic (NAME ONLY):
+    // - If name is 100%: +12% to name weight
+    // - If name is >95% (but <100%): +6% to name weight
     // Boost is taken proportionally from other categories
     let weights = { ...baseWeights };
     let boostAmount = 0;
-    let boostTarget = null;
 
-    if (nameSimilarity !== null && contactInfoSimilarity !== null) {
-        // Check for 100% perfect match boost (12%)
-        if (nameSimilarity === 1.0 && contactInfoSimilarity !== 1.0) {
+    if (nameSimilarity !== null) {
+        // Check for 100% perfect name match boost (12%)
+        if (nameSimilarity === 1.0) {
             boostAmount = 0.12;
-            boostTarget = 'name';
-        } else if (contactInfoSimilarity === 1.0 && nameSimilarity !== 1.0) {
-            boostAmount = 0.12;
-            boostTarget = 'contactInfo';
         }
-        // Check for >95% high match boost (6%) - only if no perfect match boost applied
-        else if (nameSimilarity > 0.95 && contactInfoSimilarity <= 0.95) {
+        // Check for >95% high name match boost (6%)
+        else if (nameSimilarity > 0.95) {
             boostAmount = 0.06;
-            boostTarget = 'name';
-        } else if (contactInfoSimilarity > 0.95 && nameSimilarity <= 0.95) {
-            boostAmount = 0.06;
-            boostTarget = 'contactInfo';
         }
     }
 
     // Apply boost by redistributing from other categories proportionally
-    if (boostAmount > 0 && boostTarget) {
-        // Calculate total weight of non-boosted categories
-        const otherCategory = boostTarget === 'name' ? 'contactInfo' : 'name';
-        const nonBoostCategories = ['otherInfo', 'legacyInfo', otherCategory];
+    if (boostAmount > 0) {
+        // All non-name categories contribute to the boost
+        const nonBoostCategories = ['contactInfo', 'otherInfo', 'legacyInfo'];
         const totalNonBoostWeight = nonBoostCategories.reduce((sum, cat) => sum + weights[cat], 0);
 
         if (totalNonBoostWeight > 0) {
@@ -860,8 +908,8 @@ function entityWeightedComparison(otherObject) {
                 const proportion = weights[cat] / totalNonBoostWeight;
                 weights[cat] -= boostAmount * proportion;
             });
-            // Add boost to target
-            weights[boostTarget] += boostAmount;
+            // Add boost to name
+            weights.name += boostAmount;
         }
     }
 
@@ -899,13 +947,194 @@ function entityWeightedComparison(otherObject) {
 
     // If no components have data, return 0
     if (totalWeight === 0) {
-        return 0;
+        return detailed ? { overallSimilarity: 0, components: {}, checkSum: 0 } : 0;
     }
 
-    // Normalize by total weight (so missing data doesn't penalize)
-    const result = weightedSum / totalWeight;
+    // Precision: 10 decimal places
+    const PRECISION = 10000000000; // 10^10
+    const round10 = (val) => Math.round(val * PRECISION) / PRECISION;
 
-    return Math.round(result * 100) / 100;
+    // Normalize by total weight (so missing data doesn't penalize)
+    const overallSimilarity = round10(weightedSum / totalWeight);
+
+    if (!detailed) {
+        return overallSimilarity;
+    }
+
+    // Build detailed breakdown - only include components with weight
+    const components = {};
+    let weightedValueSum = 0;
+
+    if (hasNameData) {
+        const actualWeight = round10(weights.name / totalWeight);
+        const similarity = round10(nameSimilarity);
+        const weightedValue = round10(actualWeight * similarity);
+        components.name = {
+            actualWeight: actualWeight,
+            similarity: similarity,
+            weightedValue: weightedValue
+        };
+        weightedValueSum += weightedValue;
+    }
+
+    if (hasContactInfoData) {
+        const actualWeight = round10(weights.contactInfo / totalWeight);
+        const similarity = round10(contactInfoSimilarity);
+        const weightedValue = round10(actualWeight * similarity);
+        components.contactInfo = {
+            actualWeight: actualWeight,
+            similarity: similarity,
+            weightedValue: weightedValue
+        };
+        weightedValueSum += weightedValue;
+    }
+
+    if (hasOtherInfoData) {
+        const otherInfoSimilarity = thisEntity.otherInfo.compareTo(otherEntity.otherInfo);
+        const actualWeight = round10(weights.otherInfo / totalWeight);
+        const similarity = round10(otherInfoSimilarity);
+        const weightedValue = round10(actualWeight * similarity);
+        components.otherInfo = {
+            actualWeight: actualWeight,
+            similarity: similarity,
+            weightedValue: weightedValue
+        };
+        weightedValueSum += weightedValue;
+    }
+
+    if (hasLegacyInfoData) {
+        const legacyInfoSimilarity = thisEntity.legacyInfo.compareTo(otherEntity.legacyInfo);
+        const actualWeight = round10(weights.legacyInfo / totalWeight);
+        const similarity = round10(legacyInfoSimilarity);
+        const weightedValue = round10(actualWeight * similarity);
+        components.legacyInfo = {
+            actualWeight: actualWeight,
+            similarity: similarity,
+            weightedValue: weightedValue
+        };
+        weightedValueSum += weightedValue;
+    }
+
+    // checkSum: overallSimilarity minus sum of weightedValues (should be 0 for validation)
+    const checkSum = round10(overallSimilarity - weightedValueSum);
+
+    return {
+        overallSimilarity: overallSimilarity,
+        components: components,
+        checkSum: checkSum
+    };
+}
+
+// =============================================================================
+// HOUSEHOLD INFORMATION WEIGHTED COMPARISON
+// Compares HouseholdInformation objects for individual entity matching
+// =============================================================================
+
+/**
+ * HouseholdInformation weighted comparison calculator
+ * Compares household relationship data between two HouseholdInformation instances
+ *
+ * CONDITIONAL Weight Logic (based on THIS object's state):
+ * - isInHousehold=false: isInHousehold gets 100%
+ * - isInHousehold=true + householdIdentifier present: householdIdentifier 70%, isHeadOfHousehold 30%
+ * - isInHousehold=true + no householdIdentifier: householdName 70%, isHeadOfHousehold 30%
+ *
+ * @param {HouseholdInformation} otherObject - The other HouseholdInformation to compare against
+ * @param {boolean} detailed - If true, returns detailed breakdown object instead of number
+ * @returns {number|Object} Similarity score 0-1, or detailed breakdown object if detailed=true
+ */
+function householdInformationWeightedComparison(otherObject, detailed = false) {
+    const thisInfo = this;
+    const otherInfo = otherObject;
+
+    // Precision: 10 decimal places
+    const PRECISION = 10000000000; // 10^10
+    const round10 = (val) => Math.round(val * PRECISION) / PRECISION;
+
+    let totalSimilarity = 0;
+    const components = {};
+
+    // Determine which weight mode to use based on THIS object's state
+    const thisInHousehold = thisInfo.isInHousehold;
+    const thisHasIdentifier = thisInfo.householdIdentifier && thisInfo.householdIdentifier.trim() !== '';
+
+    if (!thisInHousehold) {
+        // Mode 1: isInHousehold=false → isInHousehold gets 100%
+        const inHouseholdSim = thisInfo.isInHousehold === otherInfo.isInHousehold ? 1 : 0;
+        totalSimilarity = inHouseholdSim;
+        components.isInHousehold = {
+            similarity: inHouseholdSim,
+            weight: 1.0,
+            contribution: round10(inHouseholdSim)
+        };
+    } else if (thisHasIdentifier) {
+        // Mode 2: isInHousehold=true + householdIdentifier present → identifier 70%, isHeadOfHousehold 30%
+        let identifierSim = 0;
+        if (thisInfo.householdIdentifier === otherInfo.householdIdentifier) {
+            identifierSim = 1;
+        } else if (otherInfo.householdIdentifier) {
+            identifierSim = levenshteinSimilarity(thisInfo.householdIdentifier, otherInfo.householdIdentifier);
+        }
+        const identifierContribution = round10(identifierSim * 0.7);
+        totalSimilarity += identifierContribution;
+        components.householdIdentifier = {
+            similarity: round10(identifierSim),
+            weight: 0.7,
+            contribution: identifierContribution
+        };
+
+        const headSim = thisInfo.isHeadOfHousehold === otherInfo.isHeadOfHousehold ? 1 : 0;
+        const headContribution = round10(headSim * 0.3);
+        totalSimilarity += headContribution;
+        components.isHeadOfHousehold = {
+            similarity: headSim,
+            weight: 0.3,
+            contribution: headContribution
+        };
+    } else {
+        // Mode 3: isInHousehold=true + no householdIdentifier → householdName 70%, isHeadOfHousehold 30%
+        let nameSim = 0;
+        if (thisInfo.householdName === otherInfo.householdName) {
+            nameSim = 1;
+        } else if (thisInfo.householdName && otherInfo.householdName) {
+            nameSim = levenshteinSimilarity(thisInfo.householdName, otherInfo.householdName);
+        }
+        const nameContribution = round10(nameSim * 0.7);
+        totalSimilarity += nameContribution;
+        components.householdName = {
+            similarity: round10(nameSim),
+            weight: 0.7,
+            contribution: nameContribution
+        };
+
+        const headSim = thisInfo.isHeadOfHousehold === otherInfo.isHeadOfHousehold ? 1 : 0;
+        const headContribution = round10(headSim * 0.3);
+        totalSimilarity += headContribution;
+        components.isHeadOfHousehold = {
+            similarity: headSim,
+            weight: 0.3,
+            contribution: headContribution
+        };
+    }
+
+    const overallSimilarity = round10(totalSimilarity);
+
+    if (!detailed) {
+        return overallSimilarity;
+    }
+
+    // Calculate checksum for validation
+    let weightedValueSum = 0;
+    Object.values(components).forEach(comp => {
+        weightedValueSum += comp.contribution;
+    });
+    const checkSum = round10(overallSimilarity - weightedValueSum);
+
+    return {
+        overallSimilarity: overallSimilarity,
+        components: components,
+        checkSum: checkSum
+    };
 }
 
 // =============================================================================
@@ -927,7 +1156,8 @@ const COMPARISON_CALCULATOR_REGISTRY = Object.freeze({
     'defaultWeightedComparison': defaultWeightedComparison,
     'addressWeightedComparison': addressWeightedComparison,
     'contactInfoWeightedComparison': contactInfoWeightedComparison,
-    'entityWeightedComparison': entityWeightedComparison
+    'entityWeightedComparison': entityWeightedComparison,
+    'householdInformationWeightedComparison': householdInformationWeightedComparison
 });
 
 /**
@@ -1268,11 +1498,10 @@ async function testStructuralEnhancements() {
                householdOtherInfo instanceof HouseholdOtherInfo;
     });
 
-    runTest('IndividualOtherInfo extends OtherInfo', () => {
-        const individualOtherInfo = new IndividualOtherInfo();
-        return individualOtherInfo instanceof Info &&
-               individualOtherInfo instanceof OtherInfo &&
-               individualOtherInfo instanceof IndividualOtherInfo;
+    runTest('OtherInfo has householdInformation', () => {
+        const otherInfo = new OtherInfo();
+        return otherInfo.hasOwnProperty('householdInformation') &&
+               otherInfo.householdInformation instanceof HouseholdInformation;
     });
 
     runTest('Entity has otherInfo property', () => {

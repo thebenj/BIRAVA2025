@@ -26,6 +26,7 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
             './scripts/validation/case31Validator.js',
             './scripts/dataSources/visionAppraisal.js',
             './scripts/dataSources/visionAppraisalNameParser.js',
+            './scripts/dataSources/fireNumberCollisionHandler.js',
             './scripts/address/addressProcessing.js',
             './scripts/utils/classSerializationUtils.js'
         ];
@@ -75,6 +76,14 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
             console.warn('⚠️ loadBlockIslandStreetsFromDrive function not available');
         }
 
+        // Initialize fire number collision registry
+        if (typeof initializeRegistry !== 'undefined') {
+            initializeRegistry();
+            console.log('✅ Fire number collision registry initialized');
+        } else {
+            console.warn('⚠️ Fire number collision handler not loaded - skipping collision detection');
+        }
+
         // Track cases and their entities
         const caseEntityMap = new Map(); // case number -> [entities]
         const allEntities = []; // Collect all entities for Google Drive saving
@@ -93,7 +102,14 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
                 LegalConstruct: 0,
                 NonHuman: 0
             },
-            errors: []
+            errors: [],
+            // Fire number collision stats
+            fireNumberCollisions: {
+                registered: 0,
+                merged: 0,
+                suffixed: 0,
+                noFireNumber: 0
+            }
         };
 
         console.log('\n🏭 Processing all records through production parser...\n');
@@ -145,8 +161,38 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
                     totalProcessed++;
                     processingStats.successful++;
 
-                    // Collect all entities for Google Drive saving
-                    allEntities.push(entity);
+                    // Handle fire number collisions if handler is available
+                    let shouldAddEntity = true;
+                    if (typeof handleFireNumberCollision !== 'undefined' && record.fireNumber) {
+                        const collisionResult = handleFireNumberCollision(entity, record.fireNumber);
+
+                        switch (collisionResult.action) {
+                            case 'REGISTERED':
+                                // First use of this fire number - add entity normally
+                                processingStats.fireNumberCollisions.registered++;
+                                break;
+                            case 'MERGED':
+                                // Same owner - entity was merged into existing, don't add
+                                shouldAddEntity = false;
+                                processingStats.fireNumberCollisions.merged++;
+                                break;
+                            case 'CREATED_WITH_SUFFIX':
+                                // Different owner - entity has suffixed fire number
+                                processingStats.fireNumberCollisions.suffixed++;
+                                break;
+                            case 'NO_FIRE_NUMBER':
+                                // No fire number on record
+                                processingStats.fireNumberCollisions.noFireNumber++;
+                                break;
+                        }
+                    } else if (!record.fireNumber) {
+                        processingStats.fireNumberCollisions.noFireNumber++;
+                    }
+
+                    // Collect entity for Google Drive saving (unless merged)
+                    if (shouldAddEntity) {
+                        allEntities.push(entity);
+                    }
 
                     // Track if address processing worked
                     if (entity.contactInfo && (entity.contactInfo.primaryAddress || (entity.contactInfo.secondaryAddress && entity.contactInfo.secondaryAddress.length > 0))) {
@@ -220,6 +266,18 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
         console.log('\n📊 Entity Type Statistics:');
         for (const [entityType, count] of Object.entries(entityTypeCounts)) {
             console.log(`  ${entityType}: ${count} entities`);
+        }
+
+        // Display fire number collision stats
+        console.log('\n🔥 === FIRE NUMBER COLLISION RESOLUTION ===');
+        console.log(`  Registered (first use): ${processingStats.fireNumberCollisions.registered}`);
+        console.log(`  Merged (same owner): ${processingStats.fireNumberCollisions.merged}`);
+        console.log(`  Suffixed (different owner): ${processingStats.fireNumberCollisions.suffixed}`);
+        console.log(`  No fire number: ${processingStats.fireNumberCollisions.noFireNumber}`);
+        console.log(`  Unique entities in output: ${allEntities.length}`);
+        if (typeof getRegistryStats !== 'undefined') {
+            const registryStats = getRegistryStats();
+            console.log(`  Fire numbers with multiple owners: ${registryStats.fireNumbersWithMultipleOwners}`);
         }
 
         // Display first two entities from each case (only if detailed results requested)

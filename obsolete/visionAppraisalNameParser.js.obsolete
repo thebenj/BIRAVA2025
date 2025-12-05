@@ -1147,7 +1147,7 @@ const VisionAppraisalNameParser = {
         household.mblu = new AttributedTerm(record.mblu || '', 'VISION_APPRAISAL', index, record.pid);
         household.fireNumber = record.fireNumber || null;
         household.googleFileId = record.googleFileId || '';
-        household.source = 'VISION_APPRAISAL';
+        househocreateAggregateHouseholdld.source = 'VISION_APPRAISAL';
 
         return household;
     },

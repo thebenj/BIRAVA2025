@@ -25,10 +25,11 @@ class Info {
      * Compare this Info to another Info of the same type
      * Uses the registered comparison calculator for matching
      * @param {Info} other - Info to compare against
-     * @returns {number} Similarity score 0-1 (1 = identical, 0 = completely different)
+     * @param {boolean} detailed - If true, returns detailed breakdown object instead of number
+     * @returns {number|Object} Similarity score 0-1, or detailed breakdown object if detailed=true
      * @throws {Error} If comparing with incompatible object type
      */
-    compareTo(other) {
+    compareTo(other, detailed = false) {
         // Type checking - must be same class
         if (!other || other.constructor !== this.constructor) {
             throw new Error(`Cannot compare ${this.constructor.name} with ${other ? other.constructor.name : 'null'}`);
@@ -36,7 +37,7 @@ class Info {
 
         // Use the comparison calculator if available
         if (this.comparisonCalculator && typeof this.comparisonCalculator === 'function') {
-            return this.comparisonCalculator.call(this, other);
+            return this.comparisonCalculator.call(this, other, detailed);
         }
 
         // Fallback to generic comparison
@@ -89,11 +90,12 @@ class Info {
     }
 
     /**
-     * Generic serialize method for Info subclasses
+     * LEGACY: Generic serialize method for Info subclasses
+     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * Iterates over properties automatically (no hardcoded property lists)
      * @returns {Object} Serialized representation
      */
-    serialize() {
+    legacySerialize() {
         const serialized = {
             type: this.constructor.name
         };
@@ -105,13 +107,17 @@ class Info {
                 if (propertyName === 'comparisonWeights' || propertyName === 'comparisonCalculatorName') {
                     // Serialize these directly (plain values, not IndicativeData)
                     serialized[propertyName] = this[propertyName];
+                } else if (propertyName === 'subdivision') {
+                    // Subdivision is a plain object {pid: serializedEntityJSON, ...}
+                    // Serialize directly (already contains JSON strings)
+                    serialized[propertyName] = this[propertyName];
                 } else if (Array.isArray(this[propertyName])) {
-                    // Handle arrays (like secondaryAddress) - map each element through serialize
+                    // Handle arrays (like secondaryAddress) - map each element through legacySerialize
                     serialized[propertyName] = this[propertyName].map(item =>
-                        item && typeof item.serialize === 'function' ? item.serialize() : item
+                        item && typeof item.legacySerialize === 'function' ? item.legacySerialize() : item
                     );
                 } else {
-                    serialized[propertyName] = this[propertyName] ? this[propertyName].serialize() : null;
+                    serialized[propertyName] = this[propertyName] ? this[propertyName].legacySerialize() : null;
                 }
             }
         });
@@ -145,6 +151,13 @@ class Info {
                 } else if (key === 'comparisonWeights') {
                     // Restore weights directly (plain object)
                     instance.comparisonWeights = data[key];
+                } else if (key === 'subdivision') {
+                    // Subdivision is a plain object {pid: serializedEntityJSON, ...}
+                    // Restore directly (contains JSON strings, not objects)
+                    instance.subdivision = data[key];
+                } else if (key === 'householdInformation') {
+                    // HouseholdInformation object - deserialize to class instance
+                    instance[key] = HouseholdInformation.deserialize(data[key]);
                 } else if (key === 'primaryAddress') {
                     // Address object - handle already-transformed instances
                     instance[key] = ensureDeserialized(data[key], Address);
@@ -374,10 +387,8 @@ class ContactInfo extends Info {
         };
     }
 
-    // NOTE: ContactInfo uses the inherited Info.serialize() method which iterates
-    // over all properties automatically. No custom serialize() method needed here.
-    // The base class handles comparisonWeights, comparisonCalculatorName, and
-    // calls .serialize() on nested objects like primaryAddress and secondaryAddress.
+    // NOTE: ContactInfo inherits Info.legacySerialize() but it is not called.
+    // serializeWithTypes() handles serialization automatically via JSON.stringify replacer.
 
     /**
      * Deserialize ContactInfo from JSON object
@@ -410,8 +421,64 @@ class OtherInfo extends Info {
     constructor() {
         super(); // Call parent constructor
 
-        // This base class can be extended by specific OtherInfo subclasses
-        // Properties will be added by subclasses based on entity type
+        // householdInformation: tracks household membership and role
+        // Initialized with default values (isInHousehold=false)
+        this.householdInformation = HouseholdInformation.createDefault();
+
+        // Subdivision: holds PIDs of properties at same fire number with same owner
+        // Structure: { pid: serializedEntityJSON, pid2: serializedEntityJSON, ... }
+        // Used by fire number collision handler to consolidate multiple PIDs under one entity
+        this.subdivision = null;
+    }
+
+    /**
+     * Add a PID and its entity data to the subdivision
+     * Called when fire number collision handler determines same owner for multiple PIDs
+     * @param {string} pid - Property ID
+     * @param {Entity} entity - The entity that would have been created for this PID
+     */
+    addSubdivisionEntry(pid, entity) {
+        if (!this.subdivision) {
+            this.subdivision = {};
+        }
+        // Serialize the entity to JSON string for storage using serializeWithTypes
+        this.subdivision[pid] = serializeWithTypes(entity);
+    }
+
+    /**
+     * Get all subdivision PIDs
+     * @returns {string[]} Array of PIDs in the subdivision
+     */
+    getSubdivisionPids() {
+        return this.subdivision ? Object.keys(this.subdivision) : [];
+    }
+
+    /**
+     * Get a specific subdivision entity (deserialized)
+     * @param {string} pid - Property ID
+     * @returns {Object|null} Deserialized entity data or null
+     */
+    getSubdivisionEntity(pid) {
+        if (!this.subdivision || !this.subdivision[pid]) {
+            return null;
+        }
+        return JSON.parse(this.subdivision[pid]);
+    }
+
+    /**
+     * Check if this OtherInfo has any subdivision entries
+     * @returns {boolean} True if subdivision has entries
+     */
+    hasSubdivision() {
+        return this.subdivision !== null && Object.keys(this.subdivision).length > 0;
+    }
+
+    /**
+     * Get count of PIDs in subdivision
+     * @returns {number} Number of PIDs in subdivision
+     */
+    getSubdivisionCount() {
+        return this.subdivision ? Object.keys(this.subdivision).length : 0;
     }
 
     /**
@@ -453,39 +520,6 @@ class HouseholdOtherInfo extends OtherInfo {
      * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
      * @param {Object} data - Serialized data object
      * @returns {HouseholdOtherInfo} Reconstructed instance
-     */
-    static fromSerializedData(data) {
-        return this.deserialize(data);
-    }
-}
-
-/**
- * IndividualOtherInfo class - holds individual-specific OtherInfo
- * Used for additional information specific to individual entities
- * Extends OtherInfo base class
- */
-class IndividualOtherInfo extends OtherInfo {
-    constructor() {
-        super(); // Call parent constructor
-
-        // Individual-specific other information fields
-        // These will be populated based on requirements specifications
-    }
-
-    /**
-     * Deserialize IndividualOtherInfo from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {IndividualOtherInfo} Reconstructed IndividualOtherInfo instance
-     */
-    static deserialize(data) {
-        return Info.deserializeBase(data, IndividualOtherInfo);
-    }
-
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {IndividualOtherInfo} Reconstructed instance
      */
     static fromSerializedData(data) {
         return this.deserialize(data);
@@ -602,5 +636,5 @@ class LegacyInfo extends Info {
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Info, ContactInfo, OtherInfo, HouseholdOtherInfo, IndividualOtherInfo, LegacyInfo };
+    module.exports = { Info, ContactInfo, OtherInfo, HouseholdOtherInfo, LegacyInfo };
 }

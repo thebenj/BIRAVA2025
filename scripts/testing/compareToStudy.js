@@ -61,41 +61,29 @@ function getEntityComparisonBreakdown(entity1, entity2) {
         contactInfoSimilarity = entity1.contactInfo.compareTo(entity2.contactInfo);
     }
 
-    // Apply weight boost logic (same as entityWeightedComparison):
-    // - If one of name/contactInfo is 100% and other isn't: +12% to the perfect one
-    // - If one is >95% (but <100%) and other is <95%: +6% to the high one
+    // Apply weight boost logic (NAME ONLY - same as entityWeightedComparison):
+    // - If name is 100%: +12% to name weight
+    // - If name is >95% (but <100%): +6% to name weight
     // Boost is taken proportionally from other categories
     let weights = { ...baseWeights };
     let boostAmount = 0;
-    let boostTarget = null;
 
-    if (nameSimilarity !== null && contactInfoSimilarity !== null) {
-        // Check for 100% perfect match boost (12%)
-        if (nameSimilarity === 1.0 && contactInfoSimilarity !== 1.0) {
+    if (nameSimilarity !== null) {
+        // Check for 100% perfect name match boost (12%)
+        if (nameSimilarity === 1.0) {
             boostAmount = 0.12;
-            boostTarget = 'name';
             breakdown.note = 'Perfect name match: +12% weight boost';
-        } else if (contactInfoSimilarity === 1.0 && nameSimilarity !== 1.0) {
-            boostAmount = 0.12;
-            boostTarget = 'contactInfo';
-            breakdown.note = 'Perfect contactInfo match: +12% weight boost';
         }
-        // Check for >95% high match boost (6%) - only if no perfect match boost applied
-        else if (nameSimilarity > 0.95 && contactInfoSimilarity <= 0.95) {
+        // Check for >95% high name match boost (6%)
+        else if (nameSimilarity > 0.95) {
             boostAmount = 0.06;
-            boostTarget = 'name';
             breakdown.note = 'High name match (>95%): +6% weight boost';
-        } else if (contactInfoSimilarity > 0.95 && nameSimilarity <= 0.95) {
-            boostAmount = 0.06;
-            boostTarget = 'contactInfo';
-            breakdown.note = 'High contactInfo match (>95%): +6% weight boost';
         }
     }
 
     // Apply boost by redistributing from other categories proportionally
-    if (boostAmount > 0 && boostTarget) {
-        const otherCategory = boostTarget === 'name' ? 'contactInfo' : 'name';
-        const nonBoostCategories = ['otherInfo', 'legacyInfo', otherCategory];
+    if (boostAmount > 0) {
+        const nonBoostCategories = ['contactInfo', 'otherInfo', 'legacyInfo'];
         const totalNonBoostWeight = nonBoostCategories.reduce((sum, cat) => sum + weights[cat], 0);
 
         if (totalNonBoostWeight > 0) {
@@ -103,7 +91,7 @@ function getEntityComparisonBreakdown(entity1, entity2) {
                 const proportion = weights[cat] / totalNonBoostWeight;
                 weights[cat] -= boostAmount * proportion;
             });
-            weights[boostTarget] += boostAmount;
+            weights.name += boostAmount;
         }
     }
 

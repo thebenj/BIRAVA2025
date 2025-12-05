@@ -797,6 +797,16 @@ async function processRowToEntity(row, dataSource, households) {
 
         // Add additional data fields
         entity.additionalData = createAdditionalData(fields, fieldMap, rowIndex, accountNumber, dataSource);
+
+        // Step 6: For Individual entities, create OtherInfo and move householdInformation there
+        // Note: Use entity.constructor.name instead of entityType because processHouseholdMember
+        // returns Individual entities even when entityType === 'AggregateHousehold'
+        if (entity.constructor.name === 'Individual' && entity.additionalData && entity.additionalData.householdData) {
+            const otherInfo = new OtherInfo();
+            // Copy the HouseholdInformation from additionalData to otherInfo
+            otherInfo.householdInformation = entity.additionalData.householdData;
+            entity.addOtherInfo(otherInfo);
+        }
     }
 
     return entity;
@@ -1289,15 +1299,11 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
             // Individual has location data
             if (isPrimary) {
                 // Primary household member - update household location and upgrade placeholders
-                console.log(`Row ${rowIndex}: Primary household member found, updating household location`);
-
-                // Update household location identifier
                 existingHousehold.locationIdentifier = individualLocationIdentifier;
 
                 // Upgrade any individuals with placeholder location identifiers
                 for (const householdMember of existingHousehold.individuals) {
                     if (isPlaceholderLocationIdentifier(householdMember.locationIdentifier)) {
-                        console.log(`Upgrading placeholder location for household member`);
                         householdMember.locationIdentifier = individualLocationIdentifier;
                     }
                 }
@@ -1330,8 +1336,6 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
 
         // Store household in map
         households.set(householdName, household);
-
-        console.log(`Row ${rowIndex}: Created new household '${householdName}' with ${locationIdentifier ? 'actual' : 'placeholder'} location`);
 
         return individual;
     }
@@ -2573,14 +2577,15 @@ function createAdditionalData(fields, fieldMap, rowIndex, accountNumber, dataSou
 
     // === HOUSEHOLD RELATIONSHIP DATA (Fields 9, 29-30) ===
     // Essential for household-level communication management
-    additionalData.householdData = {
-        // Field 9: Is in a Household - Boolean indicator for household membership
+    // Now uses HouseholdInformation class instance instead of plain object
+    const rawHouseholdData = {
         isInHousehold: (fields[fieldMap.isInHousehold] || '').trim(),
-        // Field 29: Household Name - Name of the household entity
         householdName: (fields[fieldMap.householdName] || '').trim(),
-        // Field 30: Is Head of Household - Leadership designation for household communications
         isHeadOfHousehold: (fields[fieldMap.isHeadOfHousehold] || '').trim()
     };
+    // Create HouseholdInformation instance using factory method
+    // accountNumber passed as householdIdentifier (will be used to link to household entity later)
+    additionalData.householdData = HouseholdInformation.fromBloomerangData(rawHouseholdData, '');
 
     return additionalData;
 }

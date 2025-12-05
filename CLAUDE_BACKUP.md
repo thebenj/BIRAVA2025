@@ -14,8 +14,8 @@ CRITICAL_FIRST_READ_REQUIREMENT: COMPLETION_VERIFICATION_RULE_must_be_processed_
 ```yaml
 document_type: ai_continuity_knowledge_base
 target_audience: claude_code_ai
-last_updated: 2025-12-01
-version: 10.0.0___all_4_phases_working_entity_compareto_with_weight_boost
+last_updated: 2025-12-05
+version: 19.0.0___analyze_matches_button_fixed
 purpose: session_continuity_for_ai_agent
 structure_source: realClaude_instructions_plus_CLAUDE_data_structures
 ```
@@ -155,57 +155,84 @@ WHY_THIS_MATTERS:
 
 ## AI_IMMEDIATE_TASK
 ```yaml
-# PRIORITY 1: Add detailed breakdown parameter to compareTo functions
-task_type_1: COMPARETO_DETAILED_BREAKDOWN_PARAMETER
-task_name_1: Add optional parameter to compareTo that returns detailed breakdown object
-task_priority_1: NEXT_ENHANCEMENT
-task_status_1: PLANNED
+# PRIORITY 1: Universal Entity Matcher - IMPLEMENTED AND READY FOR ANALYSIS
+task_type_1: UNIVERSAL_ENTITY_MATCHING_ANALYSIS
+task_name_1: Run full entity analysis and validate threshold settings
+task_priority_1: NEXT_ACTION
+task_status_1: READY_FOR_FULL_ANALYSIS
 description: |
-  For certain compareTo functions, add an optional parameter (e.g., `detailed = false`).
-  When `detailed = true`, return an object containing:
-  - overallSimilarity: the final similarity score (number 0-1)
-  - components: object with subobjects for each component, each containing:
-    - actualWeight: the effective weight of that component in the score
-    - similarity: the raw similarity value of that component
-    - weightedValue: actualWeight * similarity (contribution to total)
+  Universal Entity Matcher (universalEntityMatcher.js) is now IMPLEMENTED (Dec 5, 2025):
+  - Cross-type comparison working (Individual to Business, Individual to Household, etc.)
+  - Fixed cross-type name comparison using extractNameString() and crossTypeNameComparison() helpers
+  - Results grouped by entity type with configurable thresholds
+  - CSV export for spreadsheet analysis
+blocking_issue: NONE
+script_location: scripts/matching/universalEntityMatcher.js
 
-  Example return structure when detailed=true:
-  {
-    overallSimilarity: 0.72,
-    components: {
-      name: { actualWeight: 0.62, similarity: 0.85, weightedValue: 0.527 },
-      contactInfo: { actualWeight: 0.228, similarity: 0.45, weightedValue: 0.103 },
-      ...
-    }
-  }
+# CURRENT MATCH CONFIGURATION
+match_config:
+  percentileThreshold: 98
+  minimumGroupSize: 10
+  minimumScoreDefault: 0.31
+  nameScoreOverride: 0.985  # Applies to ALL comparison types now
+  individualToIndividual:
+    minimumCutoff: 0.91  # Floor cutoff - MAX(98th percentile, this value)
+    minimumScore: 0.50
+  individualToHousehold:
+    minimumScore: 0.50
 
-target_functions:
-  - entityWeightedComparison (utils.js)
-  - contactInfoWeightedComparison (utils.js) - potentially
-  - addressWeightedComparison (utils.js) - potentially
-  - defaultWeightedComparison (utils.js) - potentially
+# BEST MATCH SELECTION LOGIC
+best_match_selection_rules:
+  individual_to_individual:
+    primary_cutoff: MAX(98th_percentile, 0.91)
+    minimum_score: 0.50
+    name_override: ">98.5% nameScore included if score >= 0.50"
+  individual_to_household:
+    primary_cutoff: "98th percentile OR top 10"
+    minimum_score: 0.50
+    name_override: ">98.5% nameScore included if score >= 0.50"
+  all_other_comparisons:
+    primary_cutoff: "98th percentile OR top 10"
+    minimum_score: 0.31
+    name_override: ">98.5% nameScore included if score >= 0.31"
 
-implementation_approach:
-  step_1: Modify function signature to accept optional `detailed` boolean parameter
-  step_2: When detailed=false (default), return number as before (backwards compatible)
-  step_3: When detailed=true, return object with overallSimilarity and components
-  step_4: Update any dependent code if necessary
+next_action: |
+  Run full analysis with: analyzeEntities({ limit: null, entityTypes: 'all', download: true, storeInMemory: true });
+  Then analyze results and propose final thresholds
 
-# PRIORITY 2: CSV Study already parameterized - READY FOR USE
-task_type_2: CSV_STUDY_COMPLETE
-task_name_2: compareToStudy.js is parameterized and includes breakdown columns
-task_priority_2: AVAILABLE
-task_status_2: READY_FOR_USE
-available_functions:
-  - entityCompareToStudy(sampleSize): Entity-level comparison CSV
-  - contactInfoCompareToStudy(sampleSize): ContactInfo comparison CSV
-  - nameCompareToStudy(sampleSize): IndividualName comparison CSV
-csv_includes:
-  - Distribution buckets (5% increments)
-  - 98th percentile analysis with perfect match handling
-  - Best match breakdown columns showing similarity, weight, contribution per component
+# Fire Number Collision Handler - Steps 1-4 CODED, Temporarily Disabled
+fire_number_collision_handler:
+  overall_status: CODED_BUT_DISABLED_DUE_TO_CROSS_TYPE_COMPARISON_ISSUE
+  disable_flag_location: fireNumberCollisionHandler.js line 10 - COLLISION_HANDLER_DISABLED = true
+  note: Cross-type comparison is now solved in universalEntityMatcher.js - could be ported back to collision handler
 
 user_reminder_note: "Remember this: 98th percentile, unless that number is less than 10, then the top 10. Also, when 98th percentile includes some perfect matches make a list that is the top X where X is the number that were in the 98th percentile plus the number of 100% matches that were found."
+
+# COMPLETED: CSV Study (Dec 2, 2025)
+completed_task_csv_study:
+  status: USER_VERIFIED_WORKING
+  test_results: User confirmed "I did the csv study and it worked"
+
+# COMPLETED: Detailed Breakdown Parameter (Dec 2, 2025)
+completed_task_detailed_breakdown:
+  status: USER_VERIFIED_WORKING
+  implementation:
+    - entityWeightedComparison: accepts detailed=true, returns {overallSimilarity, components, checkSum}
+    - contactInfoWeightedComparison: accepts detailed=true, returns {overallSimilarity, components, checkSum}
+    - Entity.compareTo: passes detailed parameter to calculator
+    - Info.compareTo: passes detailed parameter to calculator
+  precision_change: All comparison functions now use 10 decimal places (was 2)
+  test_results: 20 entity tests passed, 9 contactInfo tests passed, all checkSum values = 0
+
+# COMPLETED: Weight Boost Rule Change (Dec 2, 2025)
+completed_task_weight_boost_change:
+  status: USER_VERIFIED_IMPLEMENTED
+  previous_rule: boost name OR contactInfo if either had perfect/high match
+  new_rule: boost NAME ONLY (never contactInfo)
+  rationale: User requested applying boost only to name similarity score
+  files_changed:
+    - scripts/utils.js: entityWeightedComparison weight boost logic
+    - scripts/testing/compareToStudy.js: getEntityComparisonBreakdown mirrored change
 ```
 
 ### FOUR_PHASE_COMPARETO_PLAN
@@ -262,44 +289,58 @@ phase_4_entity:
   household_weights: {name: 0.4, contactInfo: 0.4, otherInfo: 0.15, legacyInfo: 0.05}
   test_script: scripts/testing/testCompareToPhase4.js
   weight_boost_feature:
-    description: Dynamic weight adjustment for high-similarity components
-    perfect_match_boost: +12% weight if name OR contactInfo is exactly 100% and other is not
-    high_match_boost: +6% weight if name OR contactInfo is >95% (but <100%) and other is <=95%
-    boost_source: Proportionally deducted from non-boosted categories
-    example: "If name=100%, contactInfo=70%: name weight goes from 0.5 to 0.62"
+    description: Dynamic weight adjustment for high NAME similarity (NAME ONLY - never contactInfo)
+    perfect_match_boost: +12% weight if name is exactly 100%
+    high_match_boost: +6% weight if name is >95% (but <100%)
+    boost_source: Proportionally deducted from contactInfo, otherInfo, legacyInfo
+    example: "If name=100%: name weight goes from 0.5 to 0.62"
+    rule_change_dec_2: Changed from "name OR contactInfo" to "NAME ONLY" per user request
 ```
 
 ### NEXT_SESSION_TASK_LIST
 ```yaml
 # Immediate priorities for next session
 
-priority_1_detailed_breakdown_parameter:
-  task: Add optional `detailed` parameter to compareTo functions
-  status: PLANNED
-  target_file: scripts/utils.js
-  target_functions: [entityWeightedComparison, contactInfoWeightedComparison, addressWeightedComparison, defaultWeightedComparison]
-  steps:
-    1. Modify entityWeightedComparison signature: function(otherObject, detailed = false)
-    2. When detailed=false, return number (backwards compatible)
-    3. When detailed=true, return {overallSimilarity, components: {name: {actualWeight, similarity, weightedValue}, ...}}
-    4. Test with existing code to ensure backwards compatibility
-    5. Optionally extend to other comparison functions
+priority_1_cross_type_comparison_planning:
+  task: Plan with user how to handle cross-type name comparisons
+  status: NEEDS_USER_DISCUSSION
+  context: |
+    Fire number collision handler is CODED and INTEGRATED but DISABLED.
+    The handler works for same-type comparisons but fails when comparing:
+    - HouseholdName vs IndividualName
+    - HouseholdName vs SimpleIdentifiers
+    - IndividualName vs SimpleIdentifiers
+  user_preference: User explicitly said "We need to proceed differently... analyze this issue together"
+  possible_approaches:
+    - Return 0 similarity for cross-type comparisons (silently - no error)
+    - Return a special value indicating incomparable types
+    - Extract common fields and compare those
+    - Skip collision detection for cross-type entities
+  handler_location: scripts/dataSources/fireNumberCollisionHandler.js
+  disable_flag: COLLISION_HANDLER_DISABLED = true (line ~10)
 
-priority_2_csv_study_ready:
-  task: compareToStudy.js is now parameterized - ready to generate CSV studies
-  status: READY_FOR_USE
-  usage:
-    - entityCompareToStudy(50) for quick entity study
-    - entityCompareToStudy() for full entity study
-    - nameCompareToStudy(100) for name study
-    - contactInfoCompareToStudy(100) for contactInfo study
+priority_2_re_enable_collision_handler:
+  task: Re-enable collision handler after cross-type issue resolved
+  status: BLOCKED_BY_PRIORITY_1
+  action: Set COLLISION_HANDLER_DISABLED = false in fireNumberCollisionHandler.js
+  then: Run full integration test with "Create Entities From Processed Data" button
+
+priority_3_main_goal_integration:
+  task: Match VisionAppraisal entities to Bloomerang for deduplication/enrichment
+  status: BLOCKED_UNTIL_FIRE_NUMBER_HANDLER_COMPLETE
+  approach: Use Entity.compareTo() to match VA entities to Bloomerang entities
 
 code_state_summary:
+  fire_number_handler: CODED_BUT_DISABLED - Steps 1-4 complete, blocked by cross-type comparison
+  integration_file: processAllVisionAppraisalRecords.js (NOT visionAppraisalNameParser.js)
   phase_1: TESTED_WORKING - IndividualName.compareTo with defaultWeightedComparison
   phase_2: TESTED_WORKING - Address.compareTo with addressWeightedComparison (fixed weights, no renormalization)
   phase_3: TESTED_WORKING - ContactInfo.compareTo with contactInfoWeightedComparison (10/11 tests)
-  phase_4: TESTED_WORKING - Entity.compareTo with entityWeightedComparison (10/10 tests, includes weight boost)
-  csv_study: READY - compareToStudy.js parameterized with breakdown columns
+  phase_4: TESTED_WORKING - Entity.compareTo with entityWeightedComparison (10/10 tests)
+  weight_boost: NAME_ONLY - +12% for 100% match, +6% for >95% match (changed Dec 2)
+  detailed_breakdown: TESTED_WORKING - entityWeightedComparison and contactInfoWeightedComparison accept detailed=true
+  precision: ALL_FUNCTIONS_USE_10_DECIMAL_PLACES
+  csv_study: TESTED_WORKING - user confirmed "it worked"
 ```
 
 ### READY_RESOURCES
@@ -350,60 +391,70 @@ ready_test_infrastructure:
 
 ## AI_CURRENT_STATUS
 ```yaml
-session_status: ALL_4_PHASES_COMPARETO_TESTED_WORKING
-project_phase: COMPARETO_COMPLETE_READY_FOR_DETAILED_BREAKDOWN_ENHANCEMENT
-completion_status: PHASES_1_2_3_4_TESTS_PASSING_USER_VERIFIED
-performance_achievement: 4105_ENTITIES_LOAD_SUCCESSFULLY
+session_status: ANALYZE_MATCHES_BUTTON_AND_MAP_DISPLAY_FIXED
+project_phase: UNIFIED_BROWSER_MATCH_ANALYSIS
+completion_status: USER_CONFIRMED_PROMISING_RESULTS_NEEDS_FULL_TESTING
+performance_achievement: MATCH_ANALYSIS_WINDOW_NOW_DISPLAYS_RESULTS
 ```
 
 ### JUST_COMPLETED_THIS_SESSION
 ```yaml
-# Current session: December 1, 2025 - Phase 4 verified, address fix, weight boost, CSV parameterization
-last_session_summary: ALL_4_PHASES_WORKING_ENHANCEMENTS_ADDED
+# Current session: December 5, 2025 - Analyze Matches Button and Map Display Fixed
+last_session_summary: FIXED_THREE_ISSUES_MAP_DISPLAY_DOUBLE_TRIGGER_PROPERTY_NAME_MISMATCH
 
 session_work_completed:
-  phase_4_entity_verification:
-    - Verified Phase 4 was already implemented in entityClasses.js
-    - Individual and AggregateHousehold have initializeWeightedComparison()
-    - entityWeightedComparison registered in COMPARISON_CALCULATOR_REGISTRY
-    - Ran testCompareToPhase4.js: ALL 10 TESTS PASSING
+  issue_1_map_display_in_entity_explorer:
+    status: USER_VERIFIED_FIXED
+    problem: sourceMap showed "(all properties are null)" when expanding in entity details
+    root_cause: JSON.stringify() destroys Map objects - converts them to "{}" (empty object)
+    solution: Use serializeWithTypes() instead of JSON.stringify() when storing objects for expansion
+    files_modified:
+      - scripts/entityRenderer.js: generatePropertyRow, renderObjectForModal, renderPropertyRowForModal
+    changes:
+      - generatePropertyRow: Uses serializeWithTypes() for arrays, Maps, and objects (lines 1816, 1832, 1850)
+      - renderObjectForModal: Added handler for serialized Map format {type:"Map", __data:[...]} (lines 2062-2077)
+      - renderPropertyRowForModal: Added handler for serialized Map format (lines 2149-2160)
+    key_lesson: |
+      AI diagnosis was initially wrong (assumed Map objects weren't being handled).
+      User pushed back, prompting deeper investigation that found the real issue:
+      JSON.stringify() was destroying Maps during storage for later expansion.
+      Solution: Use existing serializeWithTypes/deserializeWithTypes infrastructure.
 
-  address_comparison_fix:
-    - Fixed compareGeneralStreetAddresses() in utils.js
-    - Changed from conditional weight accumulation to FIXED weights
-    - Missing fields now contribute 0 similarity (not skipped)
-    - Fixed case where partial address (only streetName) was scoring 100%
-    - Example: Emilia Lapham with only streetName now scores 20% instead of 100%
+  issue_2_double_trigger_analyze_matches_button:
+    status: FIXED
+    problem: "Analyze Matches" button opened TWO windows
+    root_cause: Button had BOTH onclick="analyzeSelectedEntityMatches()" AND addEventListener('click')
+    solution: Removed onclick attribute from HTML, kept addEventListener in JS
+    file_modified: index.html line 559
+    before: '<button id="unifiedAnalyzeMatchesBtn" class="action-button" onclick="analyzeSelectedEntityMatches()"...'
+    after: '<button id="unifiedAnalyzeMatchesBtn" class="action-button"...'
 
-  entity_weight_boost_feature:
-    - Added +12% weight boost for perfect match (100%) on name OR contactInfo
-    - Added +6% weight boost for high match (>95%) on name OR contactInfo
-    - Boost is proportionally deducted from other categories
-    - Implemented in entityWeightedComparison() in utils.js
-    - Mirrored in getEntityComparisonBreakdown() in compareToStudy.js
-
-  csv_study_parameterization:
-    - Parameterized compareToStudy.js for name, contactInfo, or entity comparison
-    - Added breakdown columns showing similarity, weight, contribution per component
-    - Added extractTermValue() helper for AttributedTerm display
-    - Functions: entityCompareToStudy(), contactInfoCompareToStudy(), nameCompareToStudy()
+  issue_3_blank_analysis_window:
+    status: USER_SAYS_PROMISING_NEEDS_FULL_TESTING
+    problem: Match analysis window was blank after fixing double trigger
+    root_cause: Property name mismatch - displayMatchAnalysisResults checked for results.byType but findBestMatches returns results.bestMatchesByType
+    solution: Updated both displayMatchAnalysisResults and generateUniversalMatcherResultsHtml
+    files_modified:
+      - scripts/unifiedEntityBrowser.js: displayMatchAnalysisResults (line 1655), generateUniversalMatcherResultsHtml (line 1913)
+    changes:
+      - displayMatchAnalysisResults: Now checks results.bestMatchesByType first, then results.byType
+      - generateUniversalMatcherResultsHtml: Uses matchesByType = results.bestMatchesByType || results.byType || {}
 
 session_code_changes:
-  - scripts/utils.js:
-    - Rewrote compareGeneralStreetAddresses() with fixed weights and getSimilarityOrZero()
-    - Rewrote entityWeightedComparison() with weight boost logic (+12% perfect, +6% high)
-  - scripts/testing/compareToStudy.js:
-    - Added extractTermValue() for AttributedTerm fields
-    - Added COMPARISON_CONFIGS for name/contactInfo/entity comparison types
-    - Added getEntityComparisonBreakdown() with boost logic
-    - Added getNameComparisonBreakdown() and getContactInfoComparisonBreakdown()
-    - Added formatBreakdownForCSV() and getBreakdownHeaders()
-    - Updated CSV to include Best Match Name, Score, and component breakdown columns
+  files_modified:
+    - scripts/entityRenderer.js: Map serialization fix for entity explorer
+    - index.html: Removed duplicate onclick trigger (line 559)
+    - scripts/unifiedEntityBrowser.js: Property name mismatch fix (lines 1655, 1913)
 
-test_results:
-  - testCompareToPhase4.js: 10/10 tests passing
-  - Address fix verified: partial addresses no longer score 100%
-  - Weight boost working: Notes column shows when boost applied
+key_lessons_learned:
+  - When diagnosis seems wrong, step back and question ALL assumptions
+  - Double triggers: Check BOTH onclick attributes AND addEventListener calls
+  - Property name mismatches: Check BOTH what function returns AND what consumer expects
+  - User feedback "looks promising" = feature works but needs full validation
+
+next_session_priority:
+  - User to fully test match analysis results
+  - If working, proceed with full entity analysis run
 ```
 
 ---
@@ -496,6 +547,46 @@ server_architecture:
     port: 3000
     purpose: api_endpoints_csv_file_access
     url_pattern: http://127.0.0.99:3000/csv-file?file=filename.json
+```
+
+### STANDARD_BROWSER_TEST_PROTOCOL
+```yaml
+# MANDATORY: AI must follow this protocol when running any browser-based test
+
+AI_MUST_PROVIDE_BEFORE_EVERY_TEST:
+  1_browser_refresh: YES_or_NO - Does user need to refresh the browser?
+  2_entity_regeneration:
+    - visionappraisal: YES_or_NO - Does user need to regenerate VisionAppraisal entities?
+    - bloomerang: YES_or_NO - Does user need to regenerate Bloomerang entities?
+  3_entity_loading: YES_or_NO - Does user need to click "Load All Entities Into Memory" button?
+  4_console_command: The exact command(s) to run the test
+
+AI_MUST_ENSURE_BEFORE_GIVING_TEST_INSTRUCTIONS:
+  server_running: If server not started, AI starts it first using Bash tool
+  dependencies_loaded: Test command should load any required script dependencies
+
+STANDARD_TEST_COMMAND_PATTERN:
+  single_script_test: |
+    fetch('./scripts/testing/testName.js').then(r => r.text()).then(eval)
+  with_dependencies: |
+    (async () => {
+      await fetch('./scripts/dependency1.js').then(r => r.text()).then(eval);
+      await fetch('./scripts/testing/testName.js').then(r => r.text()).then(eval);
+    })()
+
+TYPICAL_ANSWERS_BY_TEST_TYPE:
+  test_uses_existing_entities:
+    browser_refresh: NO (unless code files changed)
+    entity_regeneration: NO
+    entity_loading: YES (if not already loaded)
+  test_requires_fresh_entities:
+    browser_refresh: YES (to get updated code)
+    entity_regeneration: YES (specify which source)
+    entity_loading: YES (after regeneration)
+  test_only_reads_code_no_entities:
+    browser_refresh: YES (if code changed)
+    entity_regeneration: NO
+    entity_loading: NO
 ```
 
 ### CRITICAL_TECHNICAL_PATTERNS
@@ -666,6 +757,7 @@ best_practices: update_status_after_milestones, provide_specific_next_steps, tra
 ## REFERENCE_KNOWLEDGE_SYSTEM
 ```yaml
 available_references:
+  - reference_projectOverview.md: HIGH_LEVEL_PROJECT_GOALS_AND_MULTILEVEL_PLAN_HIERARCHY
   - reference_sessionHistory.md: historical_achievements_and_discoveries
   - reference_technicalPatterns.md: address_processing_architecture_and_removed_patterns
   - reference_blockIslandMigrationPlan.md: 7_phase_migration_plan
@@ -678,12 +770,67 @@ available_references:
   - reference_compareToTransitionPlan.md: OUTDATED_parallel_testing_approach_superseded
   - reference_algorithmToCompareToMapping.md: architecture_design_still_valid_algorithm_source_changed
   - reference_compareToDirectImplementationPlan.md: NEW_direct_implementation_using_vowel_weighted_levenshtein
+  - reference_fireNumberCollisionPlan.md: CURRENT_fire_number_collision_handler_implementation_plan
+  - reference_serializationArchitecture.md: CRITICAL_serialization_patterns_no_custom_serialize_only_fromSerializedData
+
+serialization_architecture_summary:
+  CRITICAL_PATTERN: |
+    Classes should NOT have custom serialize() methods.
+    serializeWithTypes() in classSerializationUtils.js handles serialization automatically by iterating properties.
+    Classes only need static fromSerializedData(data) method for deserialization.
+    Classes must be registered in CLASS_REGISTRY for deserialization to work.
+  see_full_details: reference_serializationArchitecture.md
 ```
 
 ---
 
 ## BLOCKING_STATUS_TRACKER
 ```yaml
+# RESOLVED: Cross-Type Name Comparison (Dec 5, 2025)
+cross_type_name_comparison:
+  status: RESOLVED_IN_UNIVERSAL_ENTITY_MATCHER
+  previous_error: "Cannot compare objects of different types: HouseholdName vs IndividualName"
+  affected_types:
+    - HouseholdName vs IndividualName
+    - HouseholdName vs SimpleIdentifiers
+    - IndividualName vs SimpleIdentifiers
+  solution_implemented: |
+    Created helper functions in universalEntityMatcher.js:
+    - extractNameString(nameObj): Extracts comparable string from any name type
+    - crossTypeNameComparison(name1, name2): Uses levenshteinSimilarity on extracted strings
+    Detection of different name types triggers cross-type comparison instead of native compareTo
+  location: scripts/matching/universalEntityMatcher.js lines 62-116
+  note: This solution could be ported back to fireNumberCollisionHandler.js to re-enable it
+
+# VERIFIED WORKING: HouseholdInformation (Dec 3, 2025)
+householdInformation_status:
+  status: USER_VERIFIED_WORKING
+  verification_date: December_3_2025
+  test_results:
+    bloomerang_individuals: 1356/1356 proper HouseholdInformation class instances
+    va_individuals_in_households: 940/940 proper HouseholdInformation class instances
+    plain_objects: 0 (deserialization fully working)
+  serialization: WORKING
+  deserialization: WORKING
+  class_registry: HouseholdInformation properly registered in CLASS_REGISTRY
+  info_deserializeBase: Properly handles householdInformation property (line 157-159 contactInfo.js)
+
+# Fire Number Collision Handler - Steps 1-4 CODED
+fire_number_collision_handler:
+  status: CODED_BUT_DISABLED_AWAITING_CROSS_TYPE_RESOLUTION
+  plan_location: reference_fireNumberCollisionPlan.md
+  implementation_files:
+    handler_file: scripts/dataSources/fireNumberCollisionHandler.js (CREATED)
+    test_file: scripts/testing/testFireNumberCollisionHandler.js (50 tests)
+    modified_otherinfo: scripts/objectStructure/contactInfo.js (subdivision property added)
+    integration_file: scripts/dataSources/processAllVisionAppraisalRecords.js (INTEGRATED)
+  CRITICAL_CORRECTION: Integration is in processAllVisionAppraisalRecords.js NOT visionAppraisalNameParser.js
+  disable_flag: COLLISION_HANDLER_DISABLED = true in handleFireNumberCollision()
+  numeric_firenumber_bug: FIXED - added String() conversion in getBaseFireNumber() and getSuffix()
+  same_owner_thresholds: overall>92% OR name>95% OR contactInfo>95%
+  special_rule: SECONDARY_ADDRESSES_ONLY_for_contactInfo_comparison
+  test_result_disabled: 2317 entities created (1689 registered, 628 no fire number) - CORRECT
+
 # PARTIALLY RESOLVED: Household Individuals Population (Dec 1)
 household_individuals_population:
   status: PARTIALLY_RESOLVED
@@ -824,23 +971,29 @@ knowledge_cutoff: january_2025
 
 ## AI_SESSION_METADATA
 ```yaml
-last_updated: December_1_2025
-update_session: ALL_4_PHASES_COMPLETE_WITH_ENHANCEMENTS
-document_version: AI_OPTIMIZED_20.0_ALL_PHASES_WORKING_CSV_PARAMETERIZED
-previous_update: December_1_2025_Phases_2_3_session
+last_updated: December_5_2025_analyze_matches_and_map_display_fixed
+update_session: FIXED_MAP_DISPLAY_DOUBLE_TRIGGER_PROPERTY_MISMATCH
+document_version: AI_OPTIMIZED_30.0_MATCH_ANALYSIS_WORKING
+previous_update: December_5_2025_unified_browser_fallback_modified
 work_this_session:
-  - Verified Phase 4 already implemented (entityWeightedComparison)
-  - Ran testCompareToPhase4.js: ALL 10 TESTS PASSING
-  - Fixed compareGeneralStreetAddresses(): fixed weights, no renormalization
-  - Added weight boost to entityWeightedComparison: +12% perfect, +6% high match
-  - Parameterized compareToStudy.js for name/contactInfo/entity comparison
-  - Added breakdown columns to CSV showing similarity, weight, contribution
-  - Added extractTermValue() helper for AttributedTerm display
+  - Fixed Map object display in entity explorer (sourceMap was showing "all properties are null")
+  - Fixed double trigger on "Analyze Matches" button (was opening two windows)
+  - Fixed property name mismatch (bestMatchesByType vs byType) causing blank analysis window
 key_discoveries:
-  - Phase 4 was already implemented (Individual/AggregateHousehold have initializeWeightedComparison)
-  - Address comparison was renormalizing weights when fields missing (fixed)
-  - AttributedTerm fields need .term extraction for display (extractTermValue helper)
-  - Weight boost improves discrimination for near-matches
-next_priority: Add optional `detailed` parameter to compareTo functions for breakdown object return
-# Current and previous session achievements - see reference_sessionHistory.md
+  - JSON.stringify() destroys Map objects - use serializeWithTypes() instead
+  - Double triggers caused by BOTH onclick attribute AND addEventListener on same button
+  - Property name mismatches between producer (findBestMatches) and consumer (displayMatchAnalysisResults)
+  - User feedback on AI debugging: "consider possibilities that your original diagnosis was wrong"
+code_changes_summary:
+  entityRenderer_js:
+    generatePropertyRow: Uses serializeWithTypes() instead of JSON.stringify()
+    renderObjectForModal: Handles serialized Map format {type:"Map", __data:[...]}
+    renderPropertyRowForModal: Handles serialized Map format
+  index_html:
+    line_559: Removed onclick="analyzeSelectedEntityMatches()" (kept addEventListener)
+  unifiedEntityBrowser_js:
+    displayMatchAnalysisResults: Checks bestMatchesByType first, then byType
+    generateUniversalMatcherResultsHtml: Uses bestMatchesByType || byType || {}
+next_priority: User to fully test match analysis results, then run full entity analysis
+# Previous session: Unified browser fallback search modified
 ```

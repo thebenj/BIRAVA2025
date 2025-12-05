@@ -51,8 +51,13 @@ const CLASS_REGISTRY = {
     'ContactInfo': typeof ContactInfo !== 'undefined' ? ContactInfo : null,
     'OtherInfo': typeof OtherInfo !== 'undefined' ? OtherInfo : null,
     'HouseholdOtherInfo': typeof HouseholdOtherInfo !== 'undefined' ? HouseholdOtherInfo : null,
-    'IndividualOtherInfo': typeof IndividualOtherInfo !== 'undefined' ? IndividualOtherInfo : null,
     'LegacyInfo': typeof LegacyInfo !== 'undefined' ? LegacyInfo : null,
+    'HouseholdInformation': typeof HouseholdInformation !== 'undefined' ? HouseholdInformation : null,
+
+    // Comparison Participant Classes
+    'ParentDescription': typeof ParentDescription !== 'undefined' ? ParentDescription : null,
+    'ParticipantDescription': typeof ParticipantDescription !== 'undefined' ? ParticipantDescription : null,
+    'ComparisonParticipants': typeof ComparisonParticipants !== 'undefined' ? ComparisonParticipants : null,
 
     // Built-in Classes
     'Map': Map,

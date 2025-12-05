@@ -148,11 +148,10 @@
                        householdOtherInfo instanceof HouseholdOtherInfo;
             }, section3);
 
-            test('IndividualOtherInfo extends OtherInfo', () => {
-                const individualOtherInfo = new IndividualOtherInfo();
-                return individualOtherInfo instanceof Info &&
-                       individualOtherInfo instanceof OtherInfo &&
-                       individualOtherInfo instanceof IndividualOtherInfo;
+            test('OtherInfo has householdInformation', () => {
+                const otherInfo = new OtherInfo();
+                return otherInfo.hasOwnProperty('householdInformation') &&
+                       otherInfo.householdInformation instanceof HouseholdInformation;
             }, section3);
 
             test('Entity has otherInfo property', () => {

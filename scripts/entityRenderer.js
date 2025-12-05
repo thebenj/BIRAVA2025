@@ -354,6 +354,154 @@ function getUniversalEntityStyles(sourceKey) {
         }
 
         /* =============================================================================
+         * INTERACTIVE EXPLORER STYLES
+         * ============================================================================= */
+
+        .explorer-section {
+            margin-top: 15px;
+        }
+
+        .explorer-property {
+            display: flex;
+            align-items: flex-start;
+            padding: 8px 12px;
+            border-bottom: 1px solid #e9ecef;
+            gap: 10px;
+        }
+
+        .explorer-property:last-child {
+            border-bottom: none;
+        }
+
+        .explorer-property-name {
+            font-weight: 600;
+            color: #495057;
+            min-width: 150px;
+            flex-shrink: 0;
+        }
+
+        .explorer-property-value {
+            color: #212529;
+            word-break: break-word;
+            flex: 1;
+        }
+
+        .explorer-property-value.null-value {
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .explorer-property-value.primitive-value {
+            font-family: 'Courier New', monospace;
+            background-color: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+
+        .expand-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .expand-btn:hover {
+            background: #0056b3;
+        }
+
+        .expand-btn.array-btn {
+            background: #28a745;
+        }
+
+        .expand-btn.array-btn:hover {
+            background: #1e7e34;
+        }
+
+        .object-type-indicator {
+            color: #6c757d;
+            font-size: 0.8rem;
+            margin-left: 8px;
+        }
+
+        /* Modal styles for expanded objects */
+        .expand-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .expand-modal {
+            background: white;
+            border-radius: 12px;
+            max-width: 90%;
+            max-height: 90%;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            min-width: 500px;
+        }
+
+        .expand-modal-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .expand-modal-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #495057;
+        }
+
+        .expand-modal-close {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .expand-modal-close:hover {
+            background: #c82333;
+        }
+
+        .expand-modal-content {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: 70vh;
+        }
+
+        .breadcrumb-path {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-bottom: 15px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* =============================================================================
          * RESPONSIVE DESIGN
          * ============================================================================= */
 
@@ -1042,7 +1190,9 @@ function generateHouseholdMembersSection(entityWrapper) {
 
     console.log('🏠 Finding household members for:', entityWrapper.key);
 
-    const householdMembers = findHouseholdMembers(entityWrapper);
+    const result = findHouseholdMembers(entityWrapper);
+    const householdMembers = result.members;
+    const foundViaFallback = result.foundViaFallback;
 
     if (householdMembers.length === 0) {
         return `
@@ -1060,6 +1210,13 @@ function generateHouseholdMembersSection(entityWrapper) {
         `;
     }
 
+    // Add fallback notice if members were found via location identifier search
+    const fallbackNotice = foundViaFallback ? `
+        <div class="fallback-notice" style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 8px 12px; margin-bottom: 12px; font-size: 0.9rem; color: #856404;">
+            <strong>Note:</strong> Members found via Fire Number/PID match (not stored in household.individuals array)
+        </div>
+    ` : '';
+
     return `
         <div class="entity-section">
             <div class="section-title">
@@ -1067,6 +1224,7 @@ function generateHouseholdMembersSection(entityWrapper) {
                 Household Members (${householdMembers.length})
             </div>
             <div class="section-content">
+                ${fallbackNotice}
                 ${householdMembers.map((member, index) => `
                     <div class="household-member">
                         <div class="member-header">
@@ -1087,7 +1245,7 @@ function generateHouseholdMembersSection(entityWrapper) {
 /**
  * Find individual members that belong to the given household
  * @param {Object} householdWrapper - Household entity wrapper
- * @returns {Array} Array of individual entity wrappers
+ * @returns {Object} Object with { members: Array, foundViaFallback: boolean }
  */
 function findHouseholdMembers(householdWrapper) {
     const members = [];
@@ -1107,28 +1265,33 @@ function findHouseholdMembers(householdWrapper) {
             });
         });
         console.log(`🏠 Found ${members.length} household members from individuals array`);
-        return members;
+        return { members: members, foundViaFallback: false };
     }
 
-    // FALLBACK: Search for related individuals by location/address (for households without individuals array)
+    // FALLBACK: Search for related individuals by location identifier ONLY (Fire Number/PID)
     // Access the loaded entities from the global workingLoadedEntities
     if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
         console.warn('⚠️ Cannot find household members - workingLoadedEntities not loaded');
-        return [];
+        return { members: [], foundViaFallback: false };
     }
 
-    // Get household location identifier for matching
+    // Get household location identifier for matching (Fire Number/PID only - no address matching)
     const householdLocationId = getEntityLocationIdentifier(household);
-    const householdAddress = getEntityPrimaryAddress(household);
 
-    console.log('🏠 Fallback search - looking for members with location:', householdLocationId);
-    console.log('🏠 Fallback search - looking for members with address:', householdAddress);
+    if (!householdLocationId) {
+        console.log('🏠 No location identifier for household - cannot perform fallback search');
+        return { members: [], foundViaFallback: false };
+    }
+
+    console.log('🏠 Fallback search - looking for members with location ID:', householdLocationId);
 
     // Search VisionAppraisal individuals
     if (workingLoadedEntities.visionAppraisal.loaded && workingLoadedEntities.visionAppraisal.entities) {
         workingLoadedEntities.visionAppraisal.entities.forEach((entity, index) => {
             if (getEntityType(entity) === 'Individual') {
-                if (isEntityRelatedToHousehold(entity, household, householdLocationId, householdAddress)) {
+                const individualLocationId = getEntityLocationIdentifier(entity);
+                if (individualLocationId && householdLocationId === individualLocationId) {
+                    console.log('✅ Match by location ID:', individualLocationId);
                     members.push({
                         source: 'VisionAppraisal',
                         sourceKey: 'visionappraisal',
@@ -1147,7 +1310,9 @@ function findHouseholdMembers(householdWrapper) {
         workingLoadedEntities.bloomerang.individuals && workingLoadedEntities.bloomerang.individuals.entities) {
 
         Object.entries(workingLoadedEntities.bloomerang.individuals.entities).forEach(([key, entity]) => {
-            if (isEntityRelatedToHousehold(entity, household, householdLocationId, householdAddress)) {
+            const individualLocationId = getEntityLocationIdentifier(entity);
+            if (individualLocationId && householdLocationId === individualLocationId) {
+                console.log('✅ Match by location ID:', individualLocationId);
                 members.push({
                     source: 'Bloomerang',
                     sourceKey: 'bloomerang',
@@ -1160,34 +1325,8 @@ function findHouseholdMembers(householdWrapper) {
         });
     }
 
-    console.log(`🏠 Found ${members.length} household members via fallback search`);
-    return members;
-}
-
-/**
- * Check if an individual entity is related to a household
- * @param {Object} individual - Individual entity
- * @param {Object} household - Household entity
- * @param {string} householdLocationId - Household location identifier
- * @param {string} householdAddress - Household primary address string
- * @returns {boolean} True if individual belongs to household
- */
-function isEntityRelatedToHousehold(individual, household, householdLocationId, householdAddress) {
-    // Method 1: Match by location identifier (Fire Number, PID)
-    const individualLocationId = getEntityLocationIdentifier(individual);
-    if (householdLocationId && individualLocationId && householdLocationId === individualLocationId) {
-        console.log('✅ Match by location ID:', individualLocationId);
-        return true;
-    }
-
-    // Method 2: Match by primary address similarity
-    const individualAddress = getEntityPrimaryAddress(individual);
-    if (householdAddress && individualAddress && addressesSimilar(householdAddress, individualAddress)) {
-        console.log('✅ Match by address similarity:', individualAddress);
-        return true;
-    }
-
-    return false;
+    console.log(`🏠 Found ${members.length} household members via fallback search (location ID match)`);
+    return { members: members, foundViaFallback: members.length > 0 };
 }
 
 /**
@@ -1252,6 +1391,32 @@ function addressesSimilar(addr1, addr2) {
 
     // Contains match (one is substring of other)
     if (clean1.includes(clean2) || clean2.includes(clean1)) return true;
+
+    return false;
+}
+
+/**
+ * Check if an individual entity is related to a household
+ * @param {Object} individual - Individual entity
+ * @param {Object} household - Household entity
+ * @param {string} householdLocationId - Household location identifier
+ * @param {string} householdAddress - Household primary address string
+ * @returns {boolean} True if individual belongs to household
+ */
+function isEntityRelatedToHousehold(individual, household, householdLocationId, householdAddress) {
+    // Method 1: Match by location identifier (Fire Number, PID)
+    const individualLocationId = getEntityLocationIdentifier(individual);
+    if (householdLocationId && individualLocationId && householdLocationId === individualLocationId) {
+        console.log('✅ Match by location ID:', individualLocationId);
+        return true;
+    }
+
+    // Method 2: Match by primary address similarity
+    const individualAddress = getEntityPrimaryAddress(individual);
+    if (householdAddress && individualAddress && addressesSimilar(householdAddress, individualAddress)) {
+        console.log('✅ Match by address similarity:', individualAddress);
+        return true;
+    }
 
     return false;
 }
@@ -1535,14 +1700,25 @@ function generateUniversalMetadataSection(entityWrapper) {
 // =============================================================================
 
 /**
- * Generate raw data section with collapsible JSON display
+ * Generate raw data section with collapsible JSON display AND interactive explorer
  * @param {Object} entityWrapper - Entity wrapper
  * @returns {string} HTML for raw data section
  */
 function generateUniversalRawDataSection(entityWrapper) {
+    // Generate the interactive explorer for top-level properties
+    const explorerHTML = generateInteractiveExplorer(entityWrapper.entity, 'entity');
+
     return `
         <div class="card">
             <div class="card-title">Complete Entity Data</div>
+
+            <!-- Interactive Explorer Section -->
+            <div class="explorer-section">
+                <div class="card-subtitle">Interactive Explorer</div>
+                ${explorerHTML}
+            </div>
+
+            <!-- Raw JSON Toggle Section -->
             <div class="raw-data-section">
                 <button class="raw-data-toggle" onclick="toggleRawData()">
                     Show/Hide Raw JSON Data
@@ -1555,6 +1731,156 @@ ${JSON.stringify(entityWrapper.entity, null, 2)}
             </div>
         </div>
     `;
+}
+
+/**
+ * Generate interactive explorer HTML for an object's properties
+ * Shows one level with Expand buttons for nested objects/arrays
+ * @param {Object} obj - Object to explore
+ * @param {string} pathPrefix - Path prefix for data store IDs
+ * @returns {string} HTML for interactive explorer
+ */
+function generateInteractiveExplorer(obj, pathPrefix) {
+    if (obj === null || obj === undefined) {
+        return '<div class="explorer-property"><span class="explorer-property-value null-value">null</span></div>';
+    }
+
+    if (typeof obj !== 'object') {
+        return `<div class="explorer-property"><span class="explorer-property-value primitive-value">${escapeHTML(String(obj))}</span></div>`;
+    }
+
+    // Handle Map objects - convert to entries for iteration
+    if (obj instanceof Map) {
+        if (obj.size === 0) {
+            return '<div class="explorer-property"><span class="explorer-property-value null-value">(empty Map)</span></div>';
+        }
+        let html = '';
+        obj.forEach((value, key) => {
+            const fullPath = `${pathPrefix}[${key}]`;
+            html += generatePropertyRow(String(key), value, fullPath);
+        });
+        return html;
+    }
+
+    const entries = Object.entries(obj);
+    if (entries.length === 0) {
+        return '<div class="explorer-property"><span class="explorer-property-value null-value">(empty object)</span></div>';
+    }
+
+    let html = '';
+    entries.forEach(([key, value]) => {
+        const fullPath = `${pathPrefix}.${key}`;
+        html += generatePropertyRow(key, value, fullPath);
+    });
+
+    return html;
+}
+
+/**
+ * Generate a single property row for the explorer
+ * @param {string} key - Property name
+ * @param {*} value - Property value
+ * @param {string} path - Full path for data store
+ * @returns {string} HTML for property row
+ */
+function generatePropertyRow(key, value, path) {
+    const escapedKey = escapeHTML(key);
+
+    // Handle null/undefined
+    if (value === null || value === undefined) {
+        return `
+            <div class="explorer-property">
+                <span class="explorer-property-name">${escapedKey}</span>
+                <span class="explorer-property-value null-value">null</span>
+            </div>
+        `;
+    }
+
+    // Handle primitives (string, number, boolean)
+    if (typeof value !== 'object') {
+        const displayValue = typeof value === 'string' && value.length > 100
+            ? value.substring(0, 100) + '...'
+            : String(value);
+        return `
+            <div class="explorer-property">
+                <span class="explorer-property-name">${escapedKey}</span>
+                <span class="explorer-property-value primitive-value">${escapeHTML(displayValue)}</span>
+            </div>
+        `;
+    }
+
+    // Handle arrays
+    if (Array.isArray(value)) {
+        const dataId = generateDataId();
+        // Use serializeWithTypes to preserve Maps and other special types within arrays
+        const serialized = typeof serializeWithTypes === 'function' ? serializeWithTypes(value) : JSON.stringify(value);
+        return `
+            <div class="explorer-property">
+                <span class="explorer-property-name">${escapedKey}</span>
+                <button class="expand-btn array-btn" onclick="expandObject('${dataId}', '${escapeHTML(path)}')">
+                    Expand Array (${value.length} items)
+                </button>
+                <script>window.entityDataStore = window.entityDataStore || {}; window.entityDataStore['${dataId}'] = ${serialized};</script>
+            </div>
+        `;
+    }
+
+    // Handle Map objects
+    if (value instanceof Map) {
+        const dataId = generateDataId();
+        // Serialize Map using serializeWithTypes which converts to {type: "Map", __data: [...]}
+        const serialized = typeof serializeWithTypes === 'function' ? serializeWithTypes(value) : JSON.stringify(Array.from(value.entries()));
+        return `
+            <div class="explorer-property">
+                <span class="explorer-property-name">${escapedKey}</span>
+                <button class="expand-btn" onclick="expandObject('${dataId}', '${escapeHTML(path)}')">
+                    Expand
+                </button>
+                <span class="object-type-indicator">Map (${value.size} entries)</span>
+                <script>window.entityDataStore = window.entityDataStore || {}; window.entityDataStore['${dataId}'] = ${serialized};</script>
+            </div>
+        `;
+    }
+
+    // Handle objects
+    const typeName = value.constructor?.name || value.type || 'Object';
+    const dataId = generateDataId();
+    const propCount = value instanceof Map ? value.size : Object.keys(value).length;
+    // Use serializeWithTypes to preserve Maps and other special types within objects
+    const serialized = typeof serializeWithTypes === 'function' ? serializeWithTypes(value) : JSON.stringify(value);
+    return `
+        <div class="explorer-property">
+            <span class="explorer-property-name">${escapedKey}</span>
+            <button class="expand-btn" onclick="expandObject('${dataId}', '${escapeHTML(path)}')">
+                Expand
+            </button>
+            <span class="object-type-indicator">${typeName} (${propCount} properties)</span>
+            <script>window.entityDataStore = window.entityDataStore || {}; window.entityDataStore['${dataId}'] = ${serialized};</script>
+        </div>
+    `;
+}
+
+/**
+ * Generate a unique data ID for storing object references
+ * @returns {string} Unique ID
+ */
+function generateDataId() {
+    return 'data_' + Math.random().toString(36).substr(2, 9);
+}
+
+/**
+ * Escape HTML special characters
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string
+ */
+function escapeHTML(str) {
+    if (typeof str !== 'string') return str;
+    return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 // =============================================================================
@@ -1613,6 +1939,9 @@ function extractUniversalEntityName(entity) {
  */
 function getUniversalEntityScripts() {
     return `
+        // Initialize data store
+        window.entityDataStore = window.entityDataStore || {};
+
         function toggleRawData() {
             const content = document.getElementById('rawDataContent');
             if (content) {
@@ -1620,9 +1949,248 @@ function getUniversalEntityScripts() {
             }
         }
 
+        /**
+         * Expand an object/array in a modal overlay
+         * @param {string} dataId - ID in entityDataStore
+         * @param {string} path - Property path for breadcrumb
+         */
+        function expandObject(dataId, path) {
+            const data = window.entityDataStore[dataId];
+            if (data === undefined) {
+                alert('Data not found for ID: ' + dataId);
+                return;
+            }
+
+            // Create modal overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'expand-modal-overlay';
+            overlay.onclick = function(e) {
+                if (e.target === overlay) {
+                    document.body.removeChild(overlay);
+                }
+            };
+
+            // Create modal content
+            const modal = document.createElement('div');
+            modal.className = 'expand-modal';
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'expand-modal-header';
+
+            const title = document.createElement('span');
+            title.className = 'expand-modal-title';
+            title.textContent = Array.isArray(data) ? 'Array Contents' : 'Object Contents';
+
+            const closeBtn = document.createElement('button');
+            closeBtn.className = 'expand-modal-close';
+            closeBtn.textContent = 'Close';
+            closeBtn.onclick = function() {
+                document.body.removeChild(overlay);
+            };
+
+            header.appendChild(title);
+            header.appendChild(closeBtn);
+
+            // Content
+            const content = document.createElement('div');
+            content.className = 'expand-modal-content';
+
+            // Breadcrumb path
+            const breadcrumb = document.createElement('div');
+            breadcrumb.className = 'breadcrumb-path';
+            breadcrumb.textContent = path;
+            content.appendChild(breadcrumb);
+
+            // Render the object properties
+            const propertiesHTML = renderObjectForModal(data, path);
+            const propertiesDiv = document.createElement('div');
+            propertiesDiv.innerHTML = propertiesHTML;
+            content.appendChild(propertiesDiv);
+
+            modal.appendChild(header);
+            modal.appendChild(content);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+        }
+
+        /**
+         * Render an object's properties for modal display
+         * NOTE: Null properties are suppressed in expanded views
+         * @param {*} obj - Object to render
+         * @param {string} pathPrefix - Path prefix for nested expansion
+         * @returns {string} HTML string
+         */
+        function renderObjectForModal(obj, pathPrefix) {
+            if (obj === null || obj === undefined) {
+                return '<div class="explorer-property"><span class="explorer-property-value null-value">null</span></div>';
+            }
+
+            if (typeof obj !== 'object') {
+                return '<div class="explorer-property"><span class="explorer-property-value primitive-value">' + escapeHTMLInWindow(String(obj)) + '</span></div>';
+            }
+
+            // Handle arrays
+            if (Array.isArray(obj)) {
+                if (obj.length === 0) {
+                    return '<div class="explorer-property"><span class="explorer-property-value null-value">(empty array)</span></div>';
+                }
+
+                let html = '';
+                obj.forEach(function(item, index) {
+                    const fullPath = pathPrefix + '[' + index + ']';
+                    html += renderPropertyRowForModal('[' + index + ']', item, fullPath);
+                });
+                return html;
+            }
+
+            // Handle Map objects - convert to entries for iteration
+            if (obj instanceof Map) {
+                if (obj.size === 0) {
+                    return '<div class="explorer-property"><span class="explorer-property-value null-value">(empty Map)</span></div>';
+                }
+                let html = '';
+                obj.forEach(function(value, key) {
+                    if (value !== null && value !== undefined) {
+                        const fullPath = pathPrefix + '[' + key + ']';
+                        html += renderPropertyRowForModal(String(key), value, fullPath);
+                    }
+                });
+                return html || '<div class="explorer-property"><span class="explorer-property-value null-value">(all Map entries are null)</span></div>';
+            }
+
+            // Handle serialized Map format {type: "Map", __data: [...]} from serializeWithTypes
+            if (obj.type === 'Map' && Array.isArray(obj.__data)) {
+                if (obj.__data.length === 0) {
+                    return '<div class="explorer-property"><span class="explorer-property-value null-value">(empty Map)</span></div>';
+                }
+                let html = '';
+                obj.__data.forEach(function(entry) {
+                    const key = entry[0];
+                    const value = entry[1];
+                    if (value !== null && value !== undefined) {
+                        const fullPath = pathPrefix + '[' + key + ']';
+                        html += renderPropertyRowForModal(String(key), value, fullPath);
+                    }
+                });
+                return html || '<div class="explorer-property"><span class="explorer-property-value null-value">(all Map entries are null)</span></div>';
+            }
+
+            // Handle objects - filter out null/undefined properties
+            const entries = Object.entries(obj).filter(function(entry) {
+                return entry[1] !== null && entry[1] !== undefined;
+            });
+            if (entries.length === 0) {
+                return '<div class="explorer-property"><span class="explorer-property-value null-value">(all properties are null)</span></div>';
+            }
+
+            let html = '';
+            entries.forEach(function(entry) {
+                const key = entry[0];
+                const value = entry[1];
+                const fullPath = pathPrefix + '.' + key;
+                html += renderPropertyRowForModal(key, value, fullPath);
+            });
+            return html;
+        }
+
+        /**
+         * Render a single property row for modal display
+         * NOTE: Null values return empty string (suppressed in expanded views)
+         * @param {string} key - Property name
+         * @param {*} value - Property value
+         * @param {string} path - Full path
+         * @returns {string} HTML string
+         */
+        function renderPropertyRowForModal(key, value, path) {
+            const escapedKey = escapeHTMLInWindow(key);
+
+            // Suppress null/undefined in expanded views - return empty string
+            if (value === null || value === undefined) {
+                return '';
+            }
+
+            // Handle primitives
+            if (typeof value !== 'object') {
+                const displayValue = typeof value === 'string' && value.length > 100
+                    ? value.substring(0, 100) + '...'
+                    : String(value);
+                return '<div class="explorer-property">' +
+                    '<span class="explorer-property-name">' + escapedKey + '</span>' +
+                    '<span class="explorer-property-value primitive-value">' + escapeHTMLInWindow(displayValue) + '</span>' +
+                    '</div>';
+            }
+
+            // Handle arrays
+            if (Array.isArray(value)) {
+                const dataId = 'modal_' + Math.random().toString(36).substr(2, 9);
+                window.entityDataStore[dataId] = value;
+                return '<div class="explorer-property">' +
+                    '<span class="explorer-property-name">' + escapedKey + '</span>' +
+                    '<button class="expand-btn array-btn" onclick="expandObject(\\'' + dataId + '\\', \\'' + escapeHTMLInWindow(path) + '\\')">' +
+                    'Expand Array (' + value.length + ' items)' +
+                    '</button>' +
+                    '</div>';
+            }
+
+            // Handle Map objects
+            if (value instanceof Map) {
+                const dataId = 'modal_' + Math.random().toString(36).substr(2, 9);
+                window.entityDataStore[dataId] = value;
+                return '<div class="explorer-property">' +
+                    '<span class="explorer-property-name">' + escapedKey + '</span>' +
+                    '<button class="expand-btn" onclick="expandObject(\\'' + dataId + '\\', \\'' + escapeHTMLInWindow(path) + '\\')">' +
+                    'Expand' +
+                    '</button>' +
+                    '<span class="object-type-indicator">Map (' + value.size + ' entries)</span>' +
+                    '</div>';
+            }
+
+            // Handle serialized Map format {type: "Map", __data: [...]} from serializeWithTypes
+            if (value.type === 'Map' && Array.isArray(value.__data)) {
+                const dataId = 'modal_' + Math.random().toString(36).substr(2, 9);
+                window.entityDataStore[dataId] = value;
+                return '<div class="explorer-property">' +
+                    '<span class="explorer-property-name">' + escapedKey + '</span>' +
+                    '<button class="expand-btn" onclick="expandObject(\\'' + dataId + '\\', \\'' + escapeHTMLInWindow(path) + '\\')">' +
+                    'Expand' +
+                    '</button>' +
+                    '<span class="object-type-indicator">Map (' + value.__data.length + ' entries)</span>' +
+                    '</div>';
+            }
+
+            // Handle objects
+            const typeName = (value.constructor && value.constructor.name) || value.type || 'Object';
+            const dataId = 'modal_' + Math.random().toString(36).substr(2, 9);
+            window.entityDataStore[dataId] = value;
+            const propCount = Object.keys(value).length;
+            return '<div class="explorer-property">' +
+                '<span class="explorer-property-name">' + escapedKey + '</span>' +
+                '<button class="expand-btn" onclick="expandObject(\\'' + dataId + '\\', \\'' + escapeHTMLInWindow(path) + '\\')">' +
+                'Expand' +
+                '</button>' +
+                '<span class="object-type-indicator">' + typeName + ' (' + propCount + ' properties)</span>' +
+                '</div>';
+        }
+
+        /**
+         * Escape HTML special characters (in-window version)
+         * @param {string} str - String to escape
+         * @returns {string} Escaped string
+         */
+        function escapeHTMLInWindow(str) {
+            if (typeof str !== 'string') return str;
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         // Initialize any interactive elements
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('Entity details window loaded');
+            console.log('Entity details window loaded with interactive explorer');
         });
     `;
 }
