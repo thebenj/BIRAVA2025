@@ -855,6 +855,144 @@ runPhase3Tests();
 
 ---
 
-**Last Updated**: December 1, 2025
-**Status**: Phase 1, 2, 3 TESTED WORKING - Ready for Phase 4 (Entity-level matching)
-**Next Action**: Implement Phase 4 Entity-level compareTo, then create parameterized CSV study
+---
+
+## DETAILED PARAMETER ENHANCEMENT (December 7, 2025)
+
+### Overview
+
+Extended the entire compareTo call chain to support a `detailed` parameter that returns breakdown objects instead of simple numbers.
+
+### Problem Solved
+
+The `detailed=true` parameter was not reaching the comparison calculator functions:
+- `name.compareTo(other)` returned: `0.7153110049`
+- `name.compareTo(other, true)` also returned: `0.7153110049` (should return breakdown object)
+
+**Root Cause**: `genericObjectCompareTo` called `comparisonCalculator.call(obj1, obj2)` with only 2 arguments.
+
+### Solution Implemented
+
+Updated the entire call chain to pass the `detailed` parameter:
+
+```
+compareTo(other, detailed=false)
+  └── genericObjectCompareTo(obj1, obj2, excludedProperties, detailed=false)
+        └── comparisonCalculator.call(obj1, obj2, detailed)
+              └── Returns breakdown object when detailed=true
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `scripts/utils.js` | `genericObjectCompareTo` now accepts 4th param `detailed`, passes to comparisonCalculator |
+| `scripts/utils.js` | `comparePOBoxAddresses(addr1, addr2, detailed=false)` returns breakdown object |
+| `scripts/utils.js` | `compareBlockIslandAddresses(addr1, addr2, detailed=false)` returns breakdown object |
+| `scripts/utils.js` | `compareGeneralStreetAddresses(addr1, addr2, detailed=false)` returns breakdown object |
+| `scripts/utils.js` | `contactInfoWeightedComparison` includes `subordinateDetails` in components |
+| `scripts/objectStructure/aliasClasses.js` | `Aliased.compareTo(other, detailed=false)` passes detailed |
+| `scripts/objectStructure/contactInfo.js` | `Info.compareTo` fallback passes detailed |
+| `scripts/objectStructure/entityClasses.js` | `Entity.compareTo` fallback passes detailed |
+
+### Signature Pattern
+
+All comparison calculators now have signature:
+```javascript
+function calculatorName(otherObject, detailed = false) {
+    // ... calculation logic ...
+
+    if (detailed) {
+        return {
+            overallSimilarity: finalScore,
+            method: 'calculatorName',
+            components: { /* breakdown by property */ }
+        };
+    }
+    return finalScore;
+}
+```
+
+### Return Formats
+
+**detailed=false** (default):
+```javascript
+name.compareTo(other) // Returns: 0.7153110049
+```
+
+**detailed=true**:
+```javascript
+name.compareTo(other, true)
+// Returns: {
+//   overallSimilarity: 0.7153110049,
+//   method: 'weighted',
+//   weightedScore: 0.7153110049,
+//   permutationScore: 0.6406220096,
+//   isIndividualName: true,
+//   components: {
+//     lastName: { weight: 0.5, baseValue: "Smith", targetValue: "Jones", similarity: 0.4, weightedValue: 0.2 },
+//     firstName: { weight: 0.4, baseValue: "John", targetValue: "Jane", similarity: 0.75, weightedValue: 0.3 },
+//     otherNames: { weight: 0.1, baseValue: "", targetValue: "", similarity: 1.0, weightedValue: 0.1 }
+//   }
+// }
+```
+
+**Address detailed return**:
+```javascript
+address.compareTo(other, true)
+// Returns: {
+//   overallSimilarity: 0.85,
+//   method: 'pobox' | 'blockIsland' | 'generalStreet',
+//   components: {
+//     streetName: { weight: 0.3, baseValue: "Main St", targetValue: "Main Street", similarity: 0.95, weightedValue: 0.285 },
+//     // ... other components
+//   }
+// }
+```
+
+**ContactInfo detailed return**:
+```javascript
+contactInfo.compareTo(other, true)
+// Returns: {
+//   overallSimilarity: 0.75,
+//   method: 'standard' | 'perfectMatchOverride',
+//   components: {
+//     primaryAddress: {
+//       actualWeight: 0.6,
+//       similarity: 0.85,
+//       weightedValue: 0.51,
+//       baseValue: "123 Main St, City, ST 12345",
+//       targetValue: "123 Main Street, City, ST 12345",
+//       matchDirection: 'forward',
+//       subordinateDetails: { /* address breakdown */ }
+//     },
+//     // ... other components
+//   }
+// }
+```
+
+### Test Results
+
+```javascript
+// Name Comparison
+name1.compareTo(name2)       // Returns: 0.7153110049
+name1.compareTo(name2, true) // Returns: {overallSimilarity: 0.7153110049, method: 'weighted', ...}
+
+// Entity Comparison
+entity1.compareTo(entity2, true) // Returns: {overallSimilarity: 0.5502392345, components: {...}, ...}
+```
+
+### Status
+
+- **Step 1 (defaultWeightedComparison)**: TESTED WORKING
+- **Step 2 (addressWeightedComparison)**: CODED
+- **Step 3 (contactInfoWeightedComparison)**: CODED
+- **Step 4 (entityWeightedComparison)**: VERIFIED (already passed detailed)
+- **Step 5 (displayReconciliationModal)**: PENDING
+- **Step 6 (CSS styling)**: PENDING
+
+---
+
+**Last Updated**: December 7, 2025
+**Status**: All 4 Phases TESTED WORKING, Detailed parameter enhancement Steps 1-4 working
+**Next Action**: Steps 5-6 - Enhance displayReconciliationModal rendering and CSS styling

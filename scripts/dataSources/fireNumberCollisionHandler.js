@@ -15,6 +15,11 @@
  * IMPORTANT: When a collision is detected, the new entity is compared against ALL
  * existing entities for that fire number (not just the first one). This ensures
  * that if owners A, B exist and a new record matches B, it merges with B correctly.
+ *
+ * DEPENDENCIES:
+ * - Requires utils.js to be loaded first (for crossTypeNameComparison, extractNameString)
+ * - These functions handle cross-type name comparison (IndividualName vs HouseholdName vs SimpleIdentifiers)
+ * - (December 8, 2025: Moved shared functions to utils.js for code reuse with universalEntityMatcher.js)
  */
 
 // ============================================================================
@@ -22,7 +27,7 @@
 // ============================================================================
 
 const SAME_OWNER_THRESHOLDS = {
-    overall: 0.92,      // Overall similarity > 92%
+    overall: 0.75,      // Overall similarity > 75%
     name: 0.95,         // OR name similarity > 95%
     contactInfo: 0.95   // OR contactInfo similarity > 95%
 };
@@ -136,14 +141,26 @@ function getNextAvailableSuffix(fireNumber) {
     }
 
     const usedSuffixes = entry.suffixesUsed;
+
+    // First try single letters A-Z
     for (const suffix of SUFFIX_SEQUENCE) {
         if (!usedSuffixes.includes(suffix)) {
             return suffix;
         }
     }
 
-    // Fallback if all 26 suffixes used (very unlikely)
-    return `${SUFFIX_SEQUENCE.length + 1}`;
+    // If all 26 single letters used, use double letters AA, AB, AC, etc.
+    for (const first of SUFFIX_SEQUENCE) {
+        for (const second of SUFFIX_SEQUENCE) {
+            const doubleSuffix = first + second;
+            if (!usedSuffixes.includes(doubleSuffix)) {
+                return doubleSuffix;
+            }
+        }
+    }
+
+    // Fallback if all 702 suffixes used (A-Z + AA-ZZ) - extremely unlikely
+    return `_${usedSuffixes.length + 1}`;
 }
 
 /**
@@ -215,9 +232,9 @@ function getBaseFireNumber(fireNumber) {
     // Reject empty strings after conversion
     if (!fireNumberStr) return '';
 
-    // Fire numbers are typically numeric; suffix is a trailing letter
-    // e.g., "1234A" -> "1234", "1234" -> "1234"
-    const match = fireNumberStr.match(/^(\d+)([A-Z])?$/);
+    // Fire numbers are typically numeric; suffix is one or two trailing letters
+    // e.g., "1234A" -> "1234", "1234AA" -> "1234", "1234" -> "1234"
+    const match = fireNumberStr.match(/^(\d+)([A-Z]{1,2})?$/);
     if (match) {
         return match[1];
     }
@@ -240,7 +257,10 @@ function getSuffix(fireNumber, baseFireNumber) {
     if (fireNumberStr === baseFireNumberStr) return null;
 
     const suffix = fireNumberStr.slice(baseFireNumberStr.length);
-    return suffix.length === 1 && /[A-Z]/.test(suffix) ? suffix : null;
+    // Accept single letters (A-Z) or double letters (AA-ZZ)
+    if (suffix.length === 1 && /^[A-Z]$/.test(suffix)) return suffix;
+    if (suffix.length === 2 && /^[A-Z]{2}$/.test(suffix)) return suffix;
+    return null;
 }
 
 // ============================================================================
@@ -291,19 +311,25 @@ function compareSecondaryAddressesOnly(contactInfo1, contactInfo2) {
 
 /**
  * Compare two entities for fire number collision resolution
- * Uses standard name comparison but modified contactInfo comparison
+ * Uses cross-type name comparison (from utils.js) and modified contactInfo comparison
  * (secondary addresses only, excluding primary)
+ *
+ * IMPORTANT: Uses crossTypeNameComparison() from utils.js instead of native compareTo()
+ * because entities at the same fire number may have different name types
+ * (IndividualName, HouseholdName, SimpleIdentifiers) that cannot be directly compared.
  *
  * @param {Entity} entity1 - Existing entity using the fire number
  * @param {Entity} entity2 - New entity attempting to use same fire number
  * @returns {Object} Comparison result with similarity scores and decision
  */
 function compareForFireNumberCollision(entity1, entity2) {
-    // 1. Get name similarity using standard compareTo
+    // 1. Get name similarity using cross-type comparison (from utils.js)
+    // This handles IndividualName vs HouseholdName vs SimpleIdentifiers
     let nameSimilarity = 0;
     try {
         if (entity1.name && entity2.name) {
-            nameSimilarity = entity1.name.compareTo(entity2.name);
+            // Use crossTypeNameComparison from utils.js (handles all name types)
+            nameSimilarity = crossTypeNameComparison(entity1.name, entity2.name);
         }
     } catch (e) {
         console.warn('Name comparison failed:', e.message);
@@ -430,7 +456,7 @@ function buildReasoningString(overall, name, contactInfo, isSameOwner) {
 function handleFireNumberCollision(newEntity, fireNumber) {
     // TEMPORARY: Disable collision handler while we analyze cross-type comparison issue
     // Set to false to re-enable collision detection
-    const COLLISION_HANDLER_DISABLED = true;
+    const COLLISION_HANDLER_DISABLED = false;
     if (COLLISION_HANDLER_DISABLED) {
         return {
             action: 'REGISTERED',
@@ -473,10 +499,36 @@ function handleFireNumberCollision(newEntity, fireNumber) {
         // SAME OWNER FOUND: Merge new entity's PID into the matching entity's otherInfo.subdivision
         const matchedEntity = matchResult.matchedRecord.entity;
         const newPid = extractPidFromEntity(newEntity);
+        const comparison = matchResult.comparison;
 
-        // Add to subdivision
-        if (matchedEntity.otherInfo) {
-            matchedEntity.otherInfo.addSubdivisionEntry(newPid, newEntity);
+        // Add to subdivision - create otherInfo if it doesn't exist
+        if (!matchedEntity.otherInfo) {
+            matchedEntity.otherInfo = new OtherInfo();
+        }
+        matchedEntity.otherInfo.addSubdivisionEntry(newPid, newEntity);
+
+        // PRESERVE OWNER ADDRESS: If match was due to high name score but low contactInfo,
+        // add the discarded entity's owner address to the surviving entity's secondary addresses.
+        // This prevents losing potentially valuable address data.
+        let addressPreserved = false;
+        if (comparison.nameSimilarity > SAME_OWNER_THRESHOLDS.name &&
+            comparison.contactInfoSimilarity < SAME_OWNER_THRESHOLDS.contactInfo) {
+            // Match was primarily due to name - preserve the discarded entity's owner address
+            const newEntityOwnerAddress = newEntity.contactInfo?.primaryAddress;
+            if (newEntityOwnerAddress && matchedEntity.contactInfo) {
+                // Initialize secondaryAddress array if needed
+                if (!matchedEntity.contactInfo.secondaryAddress) {
+                    matchedEntity.contactInfo.secondaryAddress = [];
+                }
+                // Add to secondary addresses (avoid duplicates by checking if already present)
+                const isDuplicate = matchedEntity.contactInfo.secondaryAddress.some(addr =>
+                    addr && newEntityOwnerAddress.compareTo(addr) > 0.95
+                );
+                if (!isDuplicate) {
+                    matchedEntity.contactInfo.secondaryAddress.push(newEntityOwnerAddress);
+                    addressPreserved = true;
+                }
+            }
         }
 
         return {
@@ -487,7 +539,8 @@ function handleFireNumberCollision(newEntity, fireNumber) {
             mergedPid: newPid,
             comparison: matchResult.comparison,
             allComparisons: matchResult.allComparisons,
-            message: `Merged PID ${newPid} into entity with fire number ${matchResult.matchedRecord.fireNumber}`
+            addressPreserved: addressPreserved,
+            message: `Merged PID ${newPid} into entity with fire number ${matchResult.matchedRecord.fireNumber}${addressPreserved ? ' (owner address preserved as secondary)' : ''}`
         };
     } else {
         // NO MATCHING OWNER: Create with suffix
@@ -523,26 +576,31 @@ function handleFireNumberCollision(newEntity, fireNumber) {
  * @returns {string|null} PID or null
  */
 function extractPidFromEntity(entity) {
-    // PID is typically in locationIdentifier
+    // VisionAppraisal entities store PID directly on entity.pid
+    if (entity.pid) {
+        return String(entity.pid);
+    }
+
+    // Fallback: check locationIdentifier structures
     if (entity.locationIdentifier) {
         // Check for pid property
         if (entity.locationIdentifier.pid) {
             // Could be IndicativeData or SimpleIdentifier structure
             if (entity.locationIdentifier.pid.identifier?.primaryAlias?.term) {
-                return entity.locationIdentifier.pid.identifier.primaryAlias.term;
+                return String(entity.locationIdentifier.pid.identifier.primaryAlias.term);
             }
-            if (typeof entity.locationIdentifier.pid === 'string') {
-                return entity.locationIdentifier.pid;
+            if (typeof entity.locationIdentifier.pid === 'string' || typeof entity.locationIdentifier.pid === 'number') {
+                return String(entity.locationIdentifier.pid);
             }
         }
 
         // Check for propertyId
         if (entity.locationIdentifier.propertyId) {
             if (entity.locationIdentifier.propertyId.identifier?.primaryAlias?.term) {
-                return entity.locationIdentifier.propertyId.identifier.primaryAlias.term;
+                return String(entity.locationIdentifier.propertyId.identifier.primaryAlias.term);
             }
-            if (typeof entity.locationIdentifier.propertyId === 'string') {
-                return entity.locationIdentifier.propertyId;
+            if (typeof entity.locationIdentifier.propertyId === 'string' || typeof entity.locationIdentifier.propertyId === 'number') {
+                return String(entity.locationIdentifier.propertyId);
             }
         }
     }
@@ -552,18 +610,19 @@ function extractPidFromEntity(entity) {
 
 /**
  * Modify entity's fire number display to include suffix
- * This only modifies the display value, not the underlying data
+ * This modifies both the locationIdentifier and the direct fireNumber property
  * @param {Entity} entity - Entity to modify
  * @param {string} newFireNumber - New fire number with suffix
  */
 function modifyEntityFireNumberDisplay(entity, newFireNumber) {
-    if (entity.locationIdentifier?.fireNumber) {
-        // Check structure and modify appropriately
-        if (entity.locationIdentifier.fireNumber.identifier?.primaryAlias?.term) {
-            entity.locationIdentifier.fireNumber.identifier.primaryAlias.term = newFireNumber;
-        } else if (typeof entity.locationIdentifier.fireNumber === 'string') {
-            entity.locationIdentifier.fireNumber = newFireNumber;
-        }
+    // Modify locationIdentifier - it IS a FireNumber object directly
+    if (entity.locationIdentifier?.primaryAlias?.term !== undefined) {
+        entity.locationIdentifier.primaryAlias.term = newFireNumber;
+    }
+
+    // Also modify the direct fireNumber property on the entity
+    if (entity.fireNumber !== undefined) {
+        entity.fireNumber = newFireNumber;
     }
 }
 

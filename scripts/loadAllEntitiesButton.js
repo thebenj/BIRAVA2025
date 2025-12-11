@@ -149,6 +149,10 @@ async function loadAllEntitiesIntoMemory() {
 
         workingLoadedEntities.status = 'loaded';
 
+        // Step 7: Build entity lookup index by source + locationIdentifier
+        console.log('\n🔑 Building entity lookup index...');
+        buildEntityLookupIndex();
+
         return {
             success: true,
             visionAppraisal: vaCount,
@@ -161,6 +165,367 @@ async function loadAllEntitiesIntoMemory() {
         workingLoadedEntities.status = 'error';
         throw error;
     }
+}
+
+/**
+ * Check if an entity is from Bloomerang by looking at the sourceMap in locationIdentifier
+ * @param {Entity} entity
+ * @returns {boolean}
+ */
+function isBloomerangEntity(entity) {
+    const sourceMap = entity.locationIdentifier?.primaryAlias?.sourceMap;
+    if (!sourceMap) {
+        return false;
+    }
+    // sourceMap is a Map - check if any key contains "bloomerang" (case insensitive)
+    if (sourceMap instanceof Map) {
+        for (const key of sourceMap.keys()) {
+            if (String(key).toLowerCase().includes('bloomerang')) {
+                return true;
+            }
+        }
+    }
+    // Handle deserialized Map (has __data array)
+    if (sourceMap.__data) {
+        return sourceMap.__data.some(entry => String(entry[0]).toLowerCase().includes('bloomerang'));
+    }
+    return false;
+}
+
+/**
+ * Extract Bloomerang account number from an entity
+ * @param {Entity} entity
+ * @returns {string|null} The account number or null if not found
+ */
+function getBloomerangAccountNumber(entity) {
+    if (!entity.accountNumber) {
+        return null;
+    }
+    // Account number stored in SimpleIdentifiers pattern: primaryAlias.term
+    if (entity.accountNumber.primaryAlias?.term) {
+        return String(entity.accountNumber.primaryAlias.term);
+    }
+    // Alternative: direct term property
+    if (entity.accountNumber.term) {
+        return String(entity.accountNumber.term);
+    }
+    return null;
+}
+
+/**
+ * Extract entity key information from an entity
+ * For Bloomerang: includes accountNumber AND headStatus to ensure uniqueness
+ * For VisionAppraisal: uses locationIdentifier type and value (no collisions within same type)
+ *
+ * @param {Entity} entity
+ * @returns {Object|null} Object with source-appropriate key info, or null if key cannot be determined
+ *   Bloomerang: { source: 'bloomerang', accountNumber: string, locationType: string, locationValue: string, headStatus: string }
+ *   VisionAppraisal: { source: 'visionAppraisal', locationType: string, locationValue: string }
+ */
+function getEntityKeyInfo(entity) {
+    // Get locationIdentifier info (needed for both sources)
+    let locationType = null;
+    let locationValue = null;
+
+    if (entity.locationIdentifier) {
+        const locId = entity.locationIdentifier;
+        locationType = locId.constructor?.name || 'Unknown';
+
+        if (locId.primaryAlias?.term) {
+            locationValue = String(locId.primaryAlias.term);
+        } else if (locId.toString && typeof locId.toString === 'function') {
+            locationValue = locId.toString();
+        }
+    }
+
+    // Determine household head status
+    // Only applies to Individual entities in Bloomerang that are in a household
+    let headStatus = 'na';
+    const entityType = entity.constructor?.name;
+    if (entityType === 'Individual') {
+        const householdInfo = entity.contactInfo?.householdInformation;
+        if (householdInfo && householdInfo.isInHousehold) {
+            headStatus = householdInfo.isHeadOfHousehold ? 'head' : 'member';
+        }
+    }
+
+    // Bloomerang entities: include accountNumber AND headStatus to ensure uniqueness
+    if (isBloomerangEntity(entity)) {
+        let accountNumber = getBloomerangAccountNumber(entity);
+        if (!accountNumber) {
+            console.warn('⚠️ Bloomerang entity missing accountNumber:', entity);
+            return null;
+        }
+        // Append "AH" to accountNumber for AggregateHousehold entities to prevent collision
+        // with Individual entities that share the same account number
+        if (entityType === 'AggregateHousehold') {
+            accountNumber = accountNumber + 'AH';
+        }
+        return {
+            source: 'bloomerang',
+            accountNumber,
+            locationType: locationType || 'NoLocation',
+            locationValue: locationValue || 'NoValue',
+            headStatus
+        };
+    }
+
+    // VisionAppraisal entities: use locationIdentifier type + value
+    if (!locationValue) {
+        return null;
+    }
+
+    return { source: 'visionAppraisal', locationType, locationValue };
+}
+
+/**
+ * Build entity index key from key info
+ * Key formats:
+ *   Bloomerang: bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>
+ *   VisionAppraisal: visionAppraisal:<locationType>:<locationValue>
+ * @param {Object} keyInfo - Result from getEntityKeyInfo()
+ * @returns {string} The index key
+ */
+function buildEntityIndexKey(keyInfo) {
+    if (keyInfo.source === 'bloomerang') {
+        return `bloomerang:${keyInfo.accountNumber}:${keyInfo.locationType}:${keyInfo.locationValue}:${keyInfo.headStatus}`;
+    } else {
+        return `visionAppraisal:${keyInfo.locationType}:${keyInfo.locationValue}`;
+    }
+}
+
+/**
+ * Extract locationIdentifier type, value, and household head status from an entity
+ * @param {Entity} entity
+ * @returns {Object|null} Object with { type, value, headStatus } or null if no locationIdentifier
+ * @deprecated Use getEntityKeyInfo() instead - this function is kept for backwards compatibility
+ */
+function getLocationIdentifierTypeAndValue(entity) {
+    if (!entity.locationIdentifier) {
+        return null;
+    }
+
+    // Get the type from the constructor name
+    const locId = entity.locationIdentifier;
+    const type = locId.constructor?.name || 'Unknown';
+
+    // Get the value
+    let value = null;
+    if (locId.primaryAlias?.term) {
+        value = String(locId.primaryAlias.term);
+    } else if (locId.toString && typeof locId.toString === 'function') {
+        value = locId.toString();
+    }
+
+    if (!value) {
+        return null;
+    }
+
+    // Determine household head status
+    // Only applies to Individual entities in Bloomerang that are in a household
+    let headStatus = 'na';
+    const entityType = entity.constructor?.name;
+    if (entityType === 'Individual') {
+        const householdInfo = entity.contactInfo?.householdInformation;
+        if (householdInfo && householdInfo.isInHousehold) {
+            headStatus = householdInfo.isHeadOfHousehold ? 'head' : 'member';
+        }
+    }
+
+    return { type, value, headStatus };
+}
+
+/**
+ * Extract locationIdentifier value from an entity (legacy compatibility)
+ * @param {Entity} entity
+ * @returns {string} The locationIdentifier value
+ * @deprecated Use getLocationIdentifierTypeAndValue() instead
+ */
+function getLocationIdentifierValue(entity) {
+    const result = getLocationIdentifierTypeAndValue(entity);
+    return result ? result.value : null;
+}
+
+/**
+ * Build the entity lookup index mapping unique key → entity
+ * Key formats:
+ *   Bloomerang: bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>
+ *   VisionAppraisal: visionAppraisal:<locationType>:<locationValue>
+ * Examples:
+ *   visionAppraisal:FireNumber:53
+ *   bloomerang:1917:SimpleIdentifiers:PO Box 1382, Block Island, RI, 02807:head
+ *   bloomerang:1917:SimpleIdentifiers:PO Box 1382, Block Island, RI, 02807:na (AggregateHousehold with same account)
+ * This index enables direct entity lookup without searching or fallback logic
+ */
+function buildEntityLookupIndex() {
+    workingLoadedEntities.entityIndex = {};
+    let indexedCount = 0;
+    let duplicateCount = 0;
+    let missingKeyCount = 0;
+
+    // Index VisionAppraisal entities
+    if (workingLoadedEntities.visionAppraisal?.entities) {
+        workingLoadedEntities.visionAppraisal.entities.forEach((entity, arrayIndex) => {
+            const keyInfo = getEntityKeyInfo(entity);
+            if (!keyInfo) {
+                missingKeyCount++;
+                console.warn(`⚠️ VisionAppraisal entity at index ${arrayIndex} has no valid key info`);
+                return;
+            }
+            const key = buildEntityIndexKey(keyInfo);
+            if (workingLoadedEntities.entityIndex[key]) {
+                duplicateCount++;
+                console.error(`🚨 DUPLICATE key in VisionAppraisal: ${key}`, {
+                    existing: workingLoadedEntities.entityIndex[key],
+                    duplicate: entity
+                });
+            }
+            workingLoadedEntities.entityIndex[key] = entity;
+            indexedCount++;
+        });
+    }
+
+    // Index Bloomerang entities (all collections)
+    if (workingLoadedEntities.bloomerang) {
+        for (const collection of ['individuals', 'households', 'nonhuman']) {
+            const entities = workingLoadedEntities.bloomerang[collection]?.entities;
+            if (entities) {
+                for (const [storageKey, entity] of Object.entries(entities)) {
+                    const keyInfo = getEntityKeyInfo(entity);
+                    if (!keyInfo) {
+                        missingKeyCount++;
+                        console.warn(`⚠️ Bloomerang ${collection} entity (key: ${storageKey}) has no valid key info`);
+                        continue;
+                    }
+                    const key = buildEntityIndexKey(keyInfo);
+                    if (workingLoadedEntities.entityIndex[key]) {
+                        duplicateCount++;
+                        console.error(`🚨 DUPLICATE key in Bloomerang: ${key}`, {
+                            existing: workingLoadedEntities.entityIndex[key],
+                            duplicate: entity
+                        });
+                    }
+                    workingLoadedEntities.entityIndex[key] = entity;
+                    indexedCount++;
+                }
+            }
+        }
+    }
+
+    console.log(`✅ Entity index built: ${indexedCount} entities indexed`);
+    if (duplicateCount > 0) {
+        console.warn(`⚠️ ${duplicateCount} duplicate keys found (see errors above)`);
+    }
+    if (missingKeyCount > 0) {
+        console.warn(`⚠️ ${missingKeyCount} entities without valid key info`);
+    }
+}
+
+/**
+ * Look up an entity by its key info object
+ * This is the RECOMMENDED way to look up entities - no fallbacks, no searching
+ *
+ * @param {Object} keyInfo - Key info object from getEntityKeyInfo()
+ *   Bloomerang: { source: 'bloomerang', accountNumber, locationType, locationValue }
+ *   VisionAppraisal: { source: 'visionAppraisal', locationType, locationValue }
+ * @returns {Entity|null} The entity, or null if not found
+ */
+function getEntityByKeyInfo(keyInfo) {
+    if (!workingLoadedEntities.entityIndex) {
+        console.error('❌ Entity index not built. Call loadAllEntitiesIntoMemory() first.');
+        return null;
+    }
+
+    const key = buildEntityIndexKey(keyInfo);
+    const entity = workingLoadedEntities.entityIndex[key];
+
+    if (!entity) {
+        console.error(`❌ Entity not found for key: ${key}`, keyInfo);
+    }
+
+    return entity;
+}
+
+/**
+ * Look up a Bloomerang entity by account number and headStatus
+ * @param {string} accountNumber - The Bloomerang account number
+ * @param {string} locationType - Optional location type
+ * @param {string} locationValue - Optional location value
+ * @param {string} headStatus - Optional head status ('head', 'member', or 'na')
+ * @returns {Entity|null} The entity, or null if not found
+ */
+function getBloomerangEntityByAccountNumber(accountNumber, locationType, locationValue, headStatus) {
+    if (!workingLoadedEntities.entityIndex) {
+        console.error('❌ Entity index not built. Call loadAllEntitiesIntoMemory() first.');
+        return null;
+    }
+
+    // If we have full key info, use direct lookup
+    if (locationType && locationValue && headStatus) {
+        const key = `bloomerang:${accountNumber}:${locationType}:${locationValue}:${headStatus}`;
+        return workingLoadedEntities.entityIndex[key] || null;
+    }
+
+    // Otherwise, search for any key starting with bloomerang:<accountNumber>:
+    const prefix = `bloomerang:${accountNumber}:`;
+    for (const key of Object.keys(workingLoadedEntities.entityIndex)) {
+        if (key.startsWith(prefix)) {
+            return workingLoadedEntities.entityIndex[key];
+        }
+    }
+
+    console.error(`❌ Bloomerang entity not found for accountNumber: ${accountNumber}`);
+    return null;
+}
+
+/**
+ * Look up a VisionAppraisal entity by location type and value
+ * @param {string} locationType - The locationIdentifier type (e.g., 'FireNumber', 'PID')
+ * @param {string} locationValue - The locationIdentifier value
+ * @returns {Entity|null} The entity, or null if not found
+ */
+function getVisionAppraisalEntity(locationType, locationValue) {
+    if (!workingLoadedEntities.entityIndex) {
+        console.error('❌ Entity index not built. Call loadAllEntitiesIntoMemory() first.');
+        return null;
+    }
+
+    const key = `visionAppraisal:${locationType}:${locationValue}`;
+    const entity = workingLoadedEntities.entityIndex[key];
+
+    if (!entity) {
+        console.error(`❌ VisionAppraisal entity not found: type=${locationType}, value=${locationValue}`);
+    }
+
+    return entity;
+}
+
+/**
+ * Look up an entity by source, locationIdentifier type, value, and head status
+ * @deprecated Use getEntityByKeyInfo() or source-specific functions instead
+ */
+function getEntityBySourceTypeAndValue(source, locationType, locationValue, headStatus) {
+    console.warn('⚠️ DEPRECATED: getEntityBySourceTypeAndValue() - use getEntityByKeyInfo() instead');
+    // This old signature doesn't work with the new key format
+    // Attempt backwards compatibility for VisionAppraisal
+    const normalizedSource = source.toLowerCase().includes('vision') ? 'visionAppraisal' : 'bloomerang';
+    if (normalizedSource === 'visionAppraisal') {
+        return getVisionAppraisalEntity(locationType, locationValue);
+    }
+    // For Bloomerang, we can't look up without accountNumber
+    console.error('❌ Cannot look up Bloomerang entity without accountNumber. Use getBloomerangEntityByAccountNumber() instead.');
+    return null;
+}
+
+/**
+ * Look up an entity by source and locationIdentifier (legacy - DEPRECATED)
+ * @deprecated Use getEntityBySourceTypeAndValue() instead - this function cannot distinguish FireNumber vs PID
+ */
+function getEntityBySourceAndLocationId(source, locationId) {
+    console.warn('⚠️ DEPRECATED: getEntityBySourceAndLocationId() cannot distinguish FireNumber vs PID. Use getEntityBySourceTypeAndValue() instead.');
+    // This will not work correctly with the new index format
+    // Keeping for backwards compatibility during transition
+    return null;
 }
 
 /**
@@ -188,6 +553,20 @@ function loadScriptAsync(src) {
 // Export for global use
 if (typeof window !== 'undefined') {
     window.loadAllEntitiesIntoMemory = loadAllEntitiesIntoMemory;
+    window.buildEntityLookupIndex = buildEntityLookupIndex;
+    // New key-based functions
+    window.getEntityKeyInfo = getEntityKeyInfo;
+    window.buildEntityIndexKey = buildEntityIndexKey;
+    window.getEntityByKeyInfo = getEntityByKeyInfo;
+    window.getBloomerangEntityByAccountNumber = getBloomerangEntityByAccountNumber;
+    window.getVisionAppraisalEntity = getVisionAppraisalEntity;
+    window.isBloomerangEntity = isBloomerangEntity;
+    window.getBloomerangAccountNumber = getBloomerangAccountNumber;
+    // Legacy/deprecated functions (kept for backwards compatibility)
+    window.getEntityBySourceAndLocationId = getEntityBySourceAndLocationId;
+    window.getEntityBySourceTypeAndValue = getEntityBySourceTypeAndValue;
+    window.getLocationIdentifierValue = getLocationIdentifierValue;
+    window.getLocationIdentifierTypeAndValue = getLocationIdentifierTypeAndValue;
 }
 
 console.log('🚀 Load All Entities button function ready');

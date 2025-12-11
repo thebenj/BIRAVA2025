@@ -40,7 +40,7 @@ const MATCH_CONFIG = {
 
     // Special rules for Individual-to-Individual comparisons
     individualToIndividual: {
-        minimumCutoff: 0.91,      // Floor cutoff - use MAX(98th percentile, this value)
+        minimumCutoff: 0.75,      // Floor cutoff - use MAX(98th percentile, this value)
         minimumScore: 0.50        // Higher minimum for Individual-to-Individual
     },
 
@@ -54,66 +54,9 @@ const MATCH_CONFIG = {
 // HELPER FUNCTIONS
 // ============================================================================
 
-/**
- * Extract a displayable/comparable name string from any name type
- * @param {object} nameObj - Name object (IndividualName, SimpleIdentifiers, HouseholdName, etc.)
- * @returns {string} Best string representation for comparison
- */
-function extractNameString(nameObj) {
-    if (!nameObj) return '';
-
-    const nameType = nameObj.constructor?.name;
-
-    // IndividualName - use completeName or build from components
-    if (nameType === 'IndividualName') {
-        if (nameObj.completeName) return nameObj.completeName;
-        const parts = [nameObj.firstName, nameObj.otherNames, nameObj.lastName].filter(p => p);
-        return parts.join(' ').trim();
-    }
-
-    // HouseholdName - use termOfAddress or primaryAlias
-    if (nameType === 'HouseholdName') {
-        if (nameObj.termOfAddress) return nameObj.termOfAddress;
-        if (nameObj.primaryAlias?.term) return nameObj.primaryAlias.term;
-        return '';
-    }
-
-    // SimpleIdentifiers - use primaryAlias term
-    if (nameType === 'SimpleIdentifiers') {
-        if (nameObj.primaryAlias?.term) return nameObj.primaryAlias.term;
-        return '';
-    }
-
-    // Generic fallback - try common properties
-    if (nameObj.completeName) return nameObj.completeName;
-    if (nameObj.termOfAddress) return nameObj.termOfAddress;
-    if (nameObj.primaryAlias?.term) return nameObj.primaryAlias.term;
-    if (typeof nameObj.toString === 'function') return nameObj.toString();
-
-    return '';
-}
-
-/**
- * Compare two names of potentially different types using string comparison
- * @param {object} name1 - First name object
- * @param {object} name2 - Second name object
- * @returns {number} Similarity score 0-1
- */
-function crossTypeNameComparison(name1, name2) {
-    const str1 = extractNameString(name1).toLowerCase().trim();
-    const str2 = extractNameString(name2).toLowerCase().trim();
-
-    if (!str1 || !str2) return 0;
-
-    // Use levenshteinSimilarity from utils.js
-    if (typeof levenshteinSimilarity === 'function') {
-        return levenshteinSimilarity(str1, str2);
-    }
-
-    // Fallback if levenshteinSimilarity not available
-    console.warn('levenshteinSimilarity not available, using exact match');
-    return str1 === str2 ? 1 : 0;
-}
+// extractNameString() and crossTypeNameComparison() are now in utils.js
+// for shared use by universalEntityMatcher.js and fireNumberCollisionHandler.js
+// (Moved December 8, 2025)
 
 // ============================================================================
 // CORE COMPARISON FUNCTIONS
@@ -297,10 +240,10 @@ function compareHouseholdToHousehold(household1, household2) {
 
     return {
         score: bestScore,
-        matchedIndividual: bestMatch?.individual2,
-        matchedIndividualIndex: bestMatch?.individual2Index,
         matchedIndividual1: bestMatch?.individual1,
-        matchedIndividual1Index: bestMatch?.individual1Index,
+        matchedIndividualIndex1: bestMatch?.individual1Index,
+        matchedIndividual2: bestMatch?.individual2,
+        matchedIndividualIndex2: bestMatch?.individual2Index,
         details: bestMatch?.details
     };
 }
@@ -365,10 +308,9 @@ function findBestMatches(baseEntity, options = {}) {
     }
 
     const baseType = baseEntity.constructor.name;
-    const baseKey = getEntityKey(baseEntity);
-    const baseSource = getEntitySource(baseEntity);
+    const baseKeyInfo = getEntityKeyInfo(baseEntity);  // { type, value, accountNumber, source }
 
-    console.log(`Finding best matches for ${baseType} (${baseKey}) from ${baseSource}...`);
+    console.log(`Finding best matches for ${baseType} (${baseKeyInfo.source}:${baseKeyInfo.accountNumber || ''}:${baseKeyInfo.type}:${baseKeyInfo.value})...`);
 
     // Collect all entities to compare against
     const allTargetEntities = getAllEntities();
@@ -385,11 +327,16 @@ function findBestMatches(baseEntity, options = {}) {
     const startTime = performance.now();
 
     allTargetEntities.forEach(targetEntity => {
-        const targetKey = getEntityKey(targetEntity);
-        const targetSource = getEntitySource(targetEntity);
+        const targetKeyInfo = getEntityKeyInfo(targetEntity);  // { type, value, accountNumber, source }
 
         // Skip self-comparison
-        if (baseKey === targetKey && baseSource === targetSource) {
+        // For Bloomerang: same accountNumber means same entity
+        // For VisionAppraisal: same type + value means same entity
+        const isSameEntity = (baseKeyInfo.source === targetKeyInfo.source) && (
+            (baseKeyInfo.source === 'bloomerang' && baseKeyInfo.accountNumber === targetKeyInfo.accountNumber) ||
+            (baseKeyInfo.source === 'visionAppraisal' && baseKeyInfo.type === targetKeyInfo.type && baseKeyInfo.value === targetKeyInfo.value)
+        );
+        if (isSameEntity) {
             return;
         }
 
@@ -401,9 +348,13 @@ function findBestMatches(baseEntity, options = {}) {
         if (resultsByType[targetType]) {
             resultsByType[targetType].push({
                 targetEntity,
-                targetKey,
-                targetSource,
+                targetKey: targetKeyInfo.value,  // locationIdentifier value (for display)
+                targetKeyType: targetKeyInfo.type,  // locationIdentifier type (for lookup)
+                targetAccountNumber: targetKeyInfo.accountNumber,  // Bloomerang account number (for lookup)
+                targetHeadStatus: targetKeyInfo.headStatus,  // head status for Bloomerang lookup
+                targetSource: targetKeyInfo.source,
                 targetType,
+                entityName: getEntityDisplayName(targetEntity),  // Display name for UI
                 score: comparison.score,
                 matchedIndividual: comparison.matchedIndividual,
                 matchedIndividualIndex: comparison.matchedIndividualIndex,
@@ -497,10 +448,14 @@ function findBestMatches(baseEntity, options = {}) {
 
         // Get matches with high name score (override inclusion) - applies to ALL comparison types
         // These must still meet minimum score requirement
-        const primaryKeys = new Set(primaryMatches.map(r => r.targetKey + '|' + r.targetSource));
+        // Use accountNumber for Bloomerang uniqueness, type+value for VisionAppraisal
+        const getUniqueKey = (r) => r.targetSource === 'bloomerang'
+            ? `bloomerang:${r.targetAccountNumber}`
+            : `visionAppraisal:${r.targetKeyType}:${r.targetKey}`;
+        const primaryKeys = new Set(primaryMatches.map(getUniqueKey));
         const highNameScore = typeResults.filter(r => {
             const nameScore = r.details?.components?.name?.similarity || 0;
-            const key = r.targetKey + '|' + r.targetSource;
+            const key = getUniqueKey(r);
             return nameScore > config.nameScoreOverride &&
                    r.score >= minimumScore &&
                    !primaryKeys.has(key); // Only add if not already included
@@ -526,8 +481,11 @@ function findBestMatches(baseEntity, options = {}) {
     const result = {
         baseEntity: {
             type: baseType,
-            key: baseKey,
-            source: baseSource,
+            key: baseKeyInfo.value,  // locationIdentifier value (for display)
+            keyType: baseKeyInfo.type,  // locationIdentifier type (e.g., FireNumber, PID)
+            accountNumber: baseKeyInfo.accountNumber,  // Bloomerang account number (for lookup) or null
+            headStatus: baseKeyInfo.headStatus,  // head status for Bloomerang lookup or null
+            source: baseKeyInfo.source,  // 'bloomerang' or 'visionAppraisal'
             name: getEntityDisplayName(baseEntity)
         },
         bestMatchesByType,
@@ -604,12 +562,14 @@ function resultToCSVRows(results) {
                 // Base entity info
                 baseType: base.type,
                 baseKey: base.key,
+                baseAccountNumber: base.accountNumber || '',
                 baseSource: base.source,
                 baseName: base.name,
 
                 // Target entity info
                 targetType: match.targetType,
                 targetKey: match.targetKey,
+                targetAccountNumber: match.targetAccountNumber || '',
                 targetSource: match.targetSource,
                 targetName: getEntityDisplayName(match.targetEntity),
 
@@ -645,8 +605,8 @@ function generateBestMatchesCSV(results) {
     const resultsArray = Array.isArray(results) ? results : [results];
 
     const headers = [
-        'baseType', 'baseKey', 'baseSource', 'baseName',
-        'targetType', 'targetKey', 'targetSource', 'targetName',
+        'baseType', 'baseKey', 'baseAccountNumber', 'baseSource', 'baseName',
+        'targetType', 'targetKey', 'targetAccountNumber', 'targetSource', 'targetName',
         'rank', 'score', 'comparisonType',
         'matchedIndividualName', 'matchedIndividualIndex',
         'nameScore', 'contactInfoScore',
@@ -736,18 +696,96 @@ function getAllEntities() {
 }
 
 /**
- * Get a unique key for an entity
+ * Get key info for an entity - returns location type, value, accountNumber, and headStatus
+ * This is the canonical identifier used for entity lookup via the entityIndex.
+ * Key format in entityIndex:
+ *   Bloomerang: bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>
+ *   VisionAppraisal: visionAppraisal:<locationType>:<locationValue>
  * @param {Entity} entity
- * @returns {string}
+ * @returns {Object} Key info object:
+ *   For Bloomerang: { type: string, value: string, accountNumber: string, headStatus: string, source: 'bloomerang' }
+ *   For VisionAppraisal: { type: string, value: string, accountNumber: null, headStatus: null, source: 'visionAppraisal' }
+ *   type = locationIdentifier type (e.g., 'FireNumber', 'SimpleIdentifiers')
+ *   value = locationIdentifier value (e.g., '222', 'PO Box 1382, Block Island, RI, 02807')
+ *   accountNumber = Bloomerang account number (e.g., '1917') or null for VisionAppraisal
+ *   headStatus = 'head', 'member', or 'na' for Bloomerang; null for VisionAppraisal
+ */
+function getEntityKeyInfo(entity) {
+    // Get locationIdentifier info
+    let type = 'Unknown';
+    let value = 'unknown';
+
+    if (entity.locationIdentifier) {
+        const locId = entity.locationIdentifier;
+        type = locId.constructor?.name || 'Unknown';
+
+        if (locId.primaryAlias?.term) {
+            value = String(locId.primaryAlias.term);
+        } else if (locId.toString && typeof locId.toString === 'function') {
+            value = locId.toString();
+        }
+    }
+
+    // Check if this is a Bloomerang entity by examining the locationIdentifier sourceMap
+    // This is the authoritative test - NOT the accountNumber property (VisionAppraisal entities have accountNumber: null)
+    let accountNumber = null;
+    let headStatus = null;
+    let source = 'visionAppraisal';
+
+    // Check sourceMap for 'bloomerang' (case insensitive)
+    const sourceMap = entity.locationIdentifier?.primaryAlias?.sourceMap;
+    let isBloomerang = false;
+    if (sourceMap) {
+        if (sourceMap instanceof Map) {
+            for (const key of sourceMap.keys()) {
+                if (String(key).toLowerCase().includes('bloomerang')) {
+                    isBloomerang = true;
+                    break;
+                }
+            }
+        } else if (sourceMap.__data) {
+            // Handle deserialized Map (has __data array)
+            isBloomerang = sourceMap.__data.some(entry => String(entry[0]).toLowerCase().includes('bloomerang'));
+        }
+    }
+
+    if (isBloomerang) {
+        source = 'bloomerang';
+        // Extract account number from SimpleIdentifiers pattern
+        if (entity.accountNumber?.primaryAlias?.term) {
+            accountNumber = String(entity.accountNumber.primaryAlias.term);
+        } else if (entity.accountNumber?.term) {
+            accountNumber = String(entity.accountNumber.term);
+        }
+
+        // For AggregateHousehold entities, append 'AH' to distinguish from Individual
+        // This matches the entityIndex key format: bloomerang:729AH:... vs bloomerang:729:...
+        const entityType = entity.constructor?.name;
+        if (entityType === 'AggregateHousehold' && accountNumber) {
+            accountNumber = accountNumber + 'AH';
+        }
+
+        // Determine household head status for Bloomerang entities
+        headStatus = 'na';
+        if (entityType === 'Individual') {
+            const householdInfo = entity.contactInfo?.householdInformation;
+            if (householdInfo && householdInfo.isInHousehold) {
+                headStatus = householdInfo.isHeadOfHousehold ? 'head' : 'member';
+            }
+        }
+    }
+
+    return { type, value, accountNumber, headStatus, source };
+}
+
+/**
+ * Get a unique key for an entity (locationIdentifier value only - for display/comparison)
+ * @deprecated For entity lookup, use getEntityKeyInfo() which returns both type and value
+ * @param {Entity} entity
+ * @returns {string} The locationIdentifier value
  */
 function getEntityKey(entity) {
-    if (entity.locationIdentifier?.primaryAlias?.term) {
-        return String(entity.locationIdentifier.primaryAlias.term);
-    }
-    if (entity.locationIdentifier?.toString) {
-        return entity.locationIdentifier.toString();
-    }
-    return 'unknown';
+    return getEntityKeyInfo(entity).value;
 }
 
 /**
@@ -910,6 +948,304 @@ function analyzeAllEntities(limit = null, options = {}) {
 }
 
 // ============================================================================
+// CHUNKED CSV EXPORT (Memory-Efficient)
+// ============================================================================
+
+/**
+ * Analyze entities and download CSV in chunks to avoid memory exhaustion.
+ * Each chunk is processed, written to a file, and then memory is freed.
+ *
+ * @param {object} options - Configuration options
+ * @param {number} options.chunkSize - Entities per chunk (default: 100)
+ * @param {string|string[]} options.entityTypes - Entity type(s) to analyze (default: 'all')
+ * @param {number} options.limit - Optional total limit on entities
+ * @param {number} options.startChunk - Start from this chunk number (default: 0, for resuming)
+ * @param {number} options.delayBetweenChunks - Milliseconds to wait between chunks (default: 100)
+ */
+/**
+ * Memory-optimized function to find best matches and return ONLY CSV-ready data
+ * Does not store full entity objects - extracts strings immediately
+ * @param {Entity} baseEntity - The entity to find matches for
+ * @returns {object} Lightweight result with only CSV-ready string data
+ */
+function findBestMatchesLightweight(baseEntity) {
+    if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
+        console.error('ERROR: Please load entities first');
+        return null;
+    }
+
+    const baseType = baseEntity.constructor.name;
+    const baseKeyInfo = getEntityKeyInfo(baseEntity);
+    const baseName = getEntityDisplayName(baseEntity);
+
+    // Collect all entities to compare against
+    const allTargetEntities = getAllEntities();
+
+    // Group results by entity type - store ONLY scores and minimal identifiers
+    const resultsByType = {
+        Individual: [],
+        AggregateHousehold: [],
+        Business: [],
+        LegalConstruct: []
+    };
+
+    allTargetEntities.forEach(targetEntity => {
+        const targetKeyInfo = getEntityKeyInfo(targetEntity);
+
+        // Skip self-comparison
+        const isSameEntity = (baseKeyInfo.source === targetKeyInfo.source) && (
+            (baseKeyInfo.source === 'bloomerang' && baseKeyInfo.accountNumber === targetKeyInfo.accountNumber) ||
+            (baseKeyInfo.source === 'visionAppraisal' && baseKeyInfo.type === targetKeyInfo.type && baseKeyInfo.value === targetKeyInfo.value)
+        );
+        if (isSameEntity) return;
+
+        const comparison = universalCompareTo(baseEntity, targetEntity);
+        const targetType = targetEntity.constructor.name;
+
+        if (resultsByType[targetType]) {
+            // Store ONLY primitive data needed for CSV - NO entity object references
+            resultsByType[targetType].push({
+                targetKey: targetKeyInfo.value,
+                targetAccountNumber: targetKeyInfo.accountNumber || '',
+                targetSource: targetKeyInfo.source,
+                targetType,
+                targetName: getEntityDisplayName(targetEntity),  // Extract string NOW
+                score: comparison.score,
+                matchedIndividualName: comparison.matchedIndividual ? getEntityDisplayName(comparison.matchedIndividual) : '',
+                matchedIndividualIndex: comparison.matchedIndividualIndex ?? '',
+                comparisonType: comparison.comparisonType,
+                nameScore: comparison.details?.components?.name?.similarity ?? null,
+                contactInfoScore: comparison.details?.components?.contactInfo?.similarity ?? null
+            });
+        }
+    });
+
+    // Process each type group to find best matches
+    const csvRows = [];
+
+    Object.keys(resultsByType).forEach(entityType => {
+        const typeResults = resultsByType[entityType];
+        if (typeResults.length === 0) return;
+
+        // Sort by score descending
+        typeResults.sort((a, b) => b.score - a.score);
+
+        // Calculate 98th percentile value
+        const percentileIndex = Math.floor(typeResults.length * (1 - MATCH_CONFIG.percentileThreshold / 100));
+        const percentile98Value = typeResults[percentileIndex]?.score || 0;
+
+        // Determine comparison type rules
+        const isIndividualToIndividual = baseType === 'Individual' && entityType === 'Individual';
+        const isIndividualToHousehold =
+            (baseType === 'Individual' && entityType === 'AggregateHousehold') ||
+            (baseType === 'AggregateHousehold' && entityType === 'Individual');
+
+        let minimumScore;
+        if (isIndividualToIndividual) {
+            minimumScore = MATCH_CONFIG.individualToIndividual.minimumScore;
+        } else if (isIndividualToHousehold) {
+            minimumScore = MATCH_CONFIG.individualToHousehold.minimumScore;
+        } else {
+            minimumScore = MATCH_CONFIG.minimumScoreDefault;
+        }
+
+        let effectiveCutoff, selectionMethod, primaryMatches;
+
+        if (isIndividualToIndividual) {
+            const i2iConfig = MATCH_CONFIG.individualToIndividual;
+            effectiveCutoff = Math.max(percentile98Value, i2iConfig.minimumCutoff);
+            primaryMatches = typeResults.filter(r => r.score >= effectiveCutoff && r.score >= minimumScore);
+            selectionMethod = percentile98Value >= i2iConfig.minimumCutoff
+                ? `98th_percentile (${percentile98Value.toFixed(4)})`
+                : `floor_cutoff (${i2iConfig.minimumCutoff})`;
+        } else {
+            const above98th = typeResults.filter(r => r.score >= percentile98Value);
+            if (above98th.length >= MATCH_CONFIG.minimumGroupSize) {
+                primaryMatches = above98th.filter(r => r.score >= minimumScore);
+                selectionMethod = '98th_percentile';
+            } else {
+                primaryMatches = typeResults.slice(0, MATCH_CONFIG.minimumGroupSize).filter(r => r.score >= minimumScore);
+                selectionMethod = 'top_N';
+            }
+            effectiveCutoff = percentile98Value;
+        }
+
+        // Name score override matches
+        const getUniqueKey = (r) => r.targetSource === 'bloomerang'
+            ? `${r.targetSource}:${r.targetAccountNumber}`
+            : `${r.targetSource}:${r.targetKey}`;
+        const primaryKeys = new Set(primaryMatches.map(getUniqueKey));
+
+        const nameOverrideMatches = typeResults.filter(r =>
+            !primaryKeys.has(getUniqueKey(r)) &&
+            r.nameScore !== null &&
+            r.nameScore >= MATCH_CONFIG.nameScoreOverride &&
+            r.score >= minimumScore
+        );
+
+        const bestMatches = [...primaryMatches, ...nameOverrideMatches];
+
+        // Convert to CSV rows immediately - no intermediate storage
+        bestMatches.forEach((match, rank) => {
+            csvRows.push({
+                baseType,
+                baseKey: baseKeyInfo.value,
+                baseAccountNumber: baseKeyInfo.accountNumber || '',
+                baseSource: baseKeyInfo.source,
+                baseName,
+                targetType: match.targetType,
+                targetKey: match.targetKey,
+                targetAccountNumber: match.targetAccountNumber,
+                targetSource: match.targetSource,
+                targetName: match.targetName,
+                rank: rank + 1,
+                score: match.score.toFixed(6),
+                comparisonType: match.comparisonType,
+                matchedIndividualName: match.matchedIndividualName,
+                matchedIndividualIndex: match.matchedIndividualIndex,
+                nameScore: match.nameScore?.toFixed(4) || '',
+                contactInfoScore: match.contactInfoScore?.toFixed(4) || '',
+                typeTotal: typeResults.length,
+                type98thPercentile: percentile98Value.toFixed(4),
+                effectiveCutoff: effectiveCutoff.toFixed(4),
+                selectionMethod
+            });
+        });
+
+        // Clear type results immediately after processing
+        typeResults.length = 0;
+    });
+
+    return csvRows;
+}
+
+async function analyzeEntitiesChunked(options = {}) {
+    const config = {
+        chunkSize: 100,
+        entityTypes: 'all',
+        limit: null,
+        startChunk: 0,
+        delayBetweenChunks: 100,
+        ...options
+    };
+
+    const allEntities = getAllEntities();
+
+    // Filter by entity type(s)
+    let entitiesToProcess;
+    if (config.entityTypes === 'all') {
+        entitiesToProcess = allEntities;
+    } else if (Array.isArray(config.entityTypes)) {
+        entitiesToProcess = allEntities.filter(e => config.entityTypes.includes(e.constructor.name));
+    } else {
+        entitiesToProcess = allEntities.filter(e => e.constructor.name === config.entityTypes);
+    }
+
+    // Apply limit
+    if (config.limit) {
+        entitiesToProcess = entitiesToProcess.slice(0, config.limit);
+    }
+
+    const totalCount = entitiesToProcess.length;
+    const totalChunks = Math.ceil(totalCount / config.chunkSize);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const typeLabel = config.entityTypes === 'all' ? 'all' :
+        (Array.isArray(config.entityTypes) ? config.entityTypes.join('_') : config.entityTypes);
+
+    console.log(`=== CHUNKED ANALYSIS (MEMORY-OPTIMIZED) ===`);
+    console.log(`Total entities: ${totalCount}`);
+    console.log(`Chunk size: ${config.chunkSize}`);
+    console.log(`Total chunks: ${totalChunks}`);
+    console.log(`Starting from chunk: ${config.startChunk}`);
+    console.log(`Output files: matches_${typeLabel}_chunk_N_of_${totalChunks}_${timestamp}.csv`);
+    console.log(`============================================`);
+
+    // CSV headers
+    const headers = [
+        'baseType', 'baseKey', 'baseAccountNumber', 'baseSource', 'baseName',
+        'targetType', 'targetKey', 'targetAccountNumber', 'targetSource', 'targetName',
+        'rank', 'score', 'comparisonType',
+        'matchedIndividualName', 'matchedIndividualIndex',
+        'nameScore', 'contactInfoScore',
+        'typeTotal', 'type98thPercentile', 'effectiveCutoff', 'selectionMethod'
+    ];
+
+    let totalRowsWritten = 0;
+
+    for (let chunkIdx = config.startChunk; chunkIdx < totalChunks; chunkIdx++) {
+        const startIdx = chunkIdx * config.chunkSize;
+        const endIdx = Math.min(startIdx + config.chunkSize, totalCount);
+
+        console.log(`\nProcessing chunk ${chunkIdx + 1}/${totalChunks} (entities ${startIdx + 1}-${endIdx})...`);
+
+        // Build CSV directly - process one entity at a time
+        const csvLines = [headers.join(',')];
+        let chunkRowCount = 0;
+
+        for (let i = startIdx; i < endIdx; i++) {
+            if ((i - startIdx) % 25 === 0) {
+                console.log(`  Chunk progress: ${i - startIdx}/${endIdx - startIdx}`);
+            }
+
+            // Get CSV rows for this single entity (lightweight - no entity object storage)
+            const rows = findBestMatchesLightweight(entitiesToProcess[i]);
+
+            if (rows && rows.length > 0) {
+                rows.forEach(row => {
+                    const values = headers.map(h => {
+                        const val = row[h] ?? '';
+                        const strVal = String(val);
+                        if (strVal.includes(',') || strVal.includes('"') || strVal.includes('\n')) {
+                            return `"${strVal.replace(/"/g, '""')}"`;
+                        }
+                        return strVal;
+                    });
+                    csvLines.push(values.join(','));
+                });
+                chunkRowCount += rows.length;
+            }
+        }
+
+        const csvContent = csvLines.join('\n');
+
+        // Download this chunk
+        const chunkFilename = `matches_${typeLabel}_chunk_${chunkIdx + 1}_of_${totalChunks}_${timestamp}.csv`;
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = chunkFilename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        totalRowsWritten += chunkRowCount;
+        console.log(`  ✓ Downloaded ${chunkFilename} (${chunkRowCount} rows)`);
+
+        // Explicit cleanup - help garbage collector
+        csvLines.length = 0;
+
+        // Allow garbage collection and browser breathing room
+        if (chunkIdx < totalChunks - 1 && config.delayBetweenChunks > 0) {
+            await new Promise(resolve => setTimeout(resolve, config.delayBetweenChunks));
+        }
+    }
+
+    console.log(`\n=== COMPLETE ===`);
+    console.log(`Total files: ${totalChunks - config.startChunk}`);
+    console.log(`Total rows: ${totalRowsWritten}`);
+    console.log(`================`);
+
+    return {
+        totalEntities: totalCount,
+        totalChunks: totalChunks - config.startChunk,
+        totalRows: totalRowsWritten,
+        timestamp
+    };
+}
+
+// ============================================================================
 // INITIALIZATION
 // ============================================================================
 
@@ -928,6 +1264,11 @@ console.log('');
 console.log('  - analyzeAllEntities(limit, options) - Shortcut for all entity types');
 console.log('  - analyzeAllIndividuals(limit, options) - Shortcut for Individuals only');
 console.log('');
+console.log('  - analyzeEntitiesChunked(options) - MEMORY-SAFE: Download CSV in chunks');
+console.log('      options: { chunkSize, entityTypes, limit, startChunk, delayBetweenChunks }');
+console.log('      chunkSize: entities per file (default: 100)');
+console.log('      startChunk: resume from chunk N (default: 0)');
+console.log('');
 console.log('Example usage:');
 console.log('  // Analyze ALL entities (no download, store in memory):');
 console.log('  analyzeAllEntities(null, { download: false });');
@@ -937,6 +1278,12 @@ console.log('  analyzeEntities({ limit: 100, entityTypes: "all", download: false
 console.log('');
 console.log('  // Analyze only Individuals and AggregateHouseholds:');
 console.log('  analyzeEntities({ entityTypes: ["Individual", "AggregateHousehold"], download: false });');
+console.log('');
+console.log('  // MEMORY-SAFE: Analyze all entities in chunks of 100:');
+console.log('  await analyzeEntitiesChunked({ chunkSize: 100 });');
+console.log('');
+console.log('  // Resume from chunk 15 if interrupted:');
+console.log('  await analyzeEntitiesChunked({ chunkSize: 100, startChunk: 14 });');
 console.log('');
 console.log('  // Results available in window.lastAnalysisResults');
 
@@ -950,5 +1297,6 @@ window.analyzeEntities = analyzeEntities;
 window.analyzeAllEntities = analyzeAllEntities;
 window.analyzeAllIndividuals = analyzeAllIndividuals;
 window.analyzeAllIndividualsAndDownload = analyzeAllIndividualsAndDownload;
+window.analyzeEntitiesChunked = analyzeEntitiesChunked;
 window.universalCompareTo = universalCompareTo;
 window.generateBestMatchesCSV = generateBestMatchesCSV;

@@ -1,0 +1,1173 @@
+    {
+      "type": "Business",
+      "locationIdentifier": {
+        "type": "FireNumber",
+        "primaryAlias": {
+          "type": "AttributedTerm",
+          "term": 100,
+          "fieldName": null,
+          "sourceMap": {
+            "type": "Map",
+            "__data": [
+              [
+                "VISION_APPRAISAL",
+                {
+                  "index": 0,
+                  "identifier": "locationIdentifier_fireNumber"
+                }
+              ]
+            ]
+          },
+          "comparisonWeights": null,
+          "comparisonCalculatorName": "defaultWeightedComparison"
+        },
+        "alternatives": {
+          "type": "Aliases",
+          "homonyms": [],
+          "synonyms": [],
+          "candidates": []
+        },
+        "comparisonWeights": null,
+        "comparisonCalculatorName": "defaultWeightedComparison"
+      },
+      "name": {
+        "type": "SimpleIdentifiers",
+        "primaryAlias": {
+          "type": "AttributedTerm",
+          "term": "BLOCK ISLAND UTILITY DISTRICT",
+          "fieldName": null,
+          "sourceMap": {
+            "type": "Map",
+            "__data": [
+              [
+                "VISION_APPRAISAL",
+                {
+                  "index": 275,
+                  "identifier": "1994"
+                }
+              ]
+            ]
+          },
+          "comparisonWeights": null,
+          "comparisonCalculatorName": "defaultWeightedComparison"
+        },
+        "alternatives": {
+          "type": "Aliases",
+          "homonyms": [],
+          "synonyms": [],
+          "candidates": []
+        },
+        "comparisonWeights": null,
+        "comparisonCalculatorName": "defaultWeightedComparison"
+      },
+      "accountNumber": null,
+      "contactInfo": {
+        "type": "ContactInfo",
+        "comparisonWeights": {
+          "primaryAddress": "conditional",
+          "secondaryAddress": "conditional",
+          "email": "conditional"
+        },
+        "comparisonCalculatorName": "contactInfoWeightedComparison",
+        "email": null,
+        "phone": null,
+        "poBox": null,
+        "primaryAddress": {
+          "type": "Address",
+          "primaryAlias": {
+            "type": "AttributedTerm",
+            "term": "100 OFF OCEAN AVENUE",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "original_address"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "alternatives": {
+            "type": "Aliases",
+            "homonyms": [],
+            "synonyms": [],
+            "candidates": []
+          },
+          "comparisonWeights": {
+            "streetNumber": "conditional",
+            "streetName": "conditional",
+            "secUnitNum": "conditional",
+            "city": "conditional",
+            "state": "conditional",
+            "zipCode": "conditional"
+          },
+          "comparisonCalculatorName": "addressWeightedComparison",
+          "originalAddress": {
+            "type": "AttributedTerm",
+            "term": "100 OFF OCEAN AVENUE",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "original_address"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "recipientDetails": null,
+          "streetNumber": {
+            "type": "AttributedTerm",
+            "term": "100",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "street_number"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "streetName": {
+            "type": "AttributedTerm",
+            "term": "OFF OCEAN AVENUE",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "street_name"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "streetType": null,
+          "city": {
+            "type": "AttributedTerm",
+            "term": "Block Island",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "city"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "state": {
+            "type": "AttributedTerm",
+            "term": "RI",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "state"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "zipCode": {
+            "type": "AttributedTerm",
+            "term": "02807",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "zip_code"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "secUnitType": null,
+          "secUnitNum": null,
+          "isBlockIslandAddress": {
+            "type": "AttributedTerm",
+            "term": true,
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "is_block_island"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "cityNormalized": {
+            "type": "AttributedTerm",
+            "term": true,
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "city_normalized"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "processingSource": {
+            "type": "AttributedTerm",
+            "term": "VisionAppraisal",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "processing_source"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "processingTimestamp": {
+            "type": "AttributedTerm",
+            "term": "2025-12-08T22:12:20.537Z",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "processing_timestamp"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          }
+        },
+        "secondaryAddress": [
+          {
+            "type": "Address",
+            "primaryAlias": {
+              "type": "AttributedTerm",
+              "term": "PO BOX 518::#^#::BLOCK ISLAND:^#^: RI 02807",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "original_address"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "alternatives": {
+              "type": "Aliases",
+              "homonyms": [],
+              "synonyms": [],
+              "candidates": []
+            },
+            "comparisonWeights": {
+              "streetNumber": "conditional",
+              "streetName": "conditional",
+              "secUnitNum": "conditional",
+              "city": "conditional",
+              "state": "conditional",
+              "zipCode": "conditional"
+            },
+            "comparisonCalculatorName": "addressWeightedComparison",
+            "originalAddress": {
+              "type": "AttributedTerm",
+              "term": "PO BOX 518::#^#::BLOCK ISLAND:^#^: RI 02807",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "original_address"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "recipientDetails": null,
+            "streetNumber": null,
+            "streetName": null,
+            "streetType": null,
+            "city": {
+              "type": "AttributedTerm",
+              "term": "Block Island",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "city"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "state": {
+              "type": "AttributedTerm",
+              "term": "RI",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "state"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "zipCode": {
+              "type": "AttributedTerm",
+              "term": "02807",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "zip_code"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "secUnitType": {
+              "type": "AttributedTerm",
+              "term": "PO BOX",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "unit_type"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "secUnitNum": {
+              "type": "AttributedTerm",
+              "term": "518",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "unit_number"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "isBlockIslandAddress": {
+              "type": "AttributedTerm",
+              "term": true,
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "is_block_island"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "cityNormalized": {
+              "type": "AttributedTerm",
+              "term": true,
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "city_normalized"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "processingSource": {
+              "type": "AttributedTerm",
+              "term": "VisionAppraisal",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "processing_source"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "processingTimestamp": {
+              "type": "AttributedTerm",
+              "term": "2025-12-08T22:12:20.537Z",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "processing_timestamp"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            }
+          }
+        ]
+      },
+      "otherInfo": {
+        "type": "OtherInfo",
+        "comparisonWeights": null,
+        "comparisonCalculatorName": "defaultWeightedComparison",
+        "householdInformation": {
+          "type": "HouseholdInformation",
+          "isInHousehold": false,
+          "householdName": "",
+          "isHeadOfHousehold": false,
+          "householdIdentifier": "",
+          "comparisonWeights": "conditional",
+          "comparisonCalculatorName": "householdInformationWeightedComparison"
+        },
+        "subdivision": {
+          "1989": {
+            "type": "Business",
+            "locationIdentifier": {
+              "type": "FireNumber",
+              "primaryAlias": {
+                "type": "AttributedTerm",
+                "term": 100,
+                "fieldName": null,
+                "sourceMap": {
+                  "type": "Map",
+                  "__data": [
+                    [
+                      "VISION_APPRAISAL",
+                      {
+                        "index": 0,
+                        "identifier": "locationIdentifier_fireNumber"
+                      }
+                    ]
+                  ]
+                },
+                "comparisonWeights": null,
+                "comparisonCalculatorName": "defaultWeightedComparison"
+              },
+              "alternatives": {
+                "type": "Aliases",
+                "homonyms": [],
+                "synonyms": [],
+                "candidates": []
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "name": {
+              "type": "SimpleIdentifiers",
+              "primaryAlias": {
+                "type": "AttributedTerm",
+                "term": "BLOCK ISLAND UTILITY DISTRICT",
+                "fieldName": null,
+                "sourceMap": {
+                  "type": "Map",
+                  "__data": [
+                    [
+                      "VISION_APPRAISAL",
+                      {
+                        "index": 293,
+                        "identifier": "1989"
+                      }
+                    ]
+                  ]
+                },
+                "comparisonWeights": null,
+                "comparisonCalculatorName": "defaultWeightedComparison"
+              },
+              "alternatives": {
+                "type": "Aliases",
+                "homonyms": [],
+                "synonyms": [],
+                "candidates": []
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "accountNumber": null,
+            "contactInfo": {
+              "type": "ContactInfo",
+              "comparisonWeights": {
+                "primaryAddress": "conditional",
+                "secondaryAddress": "conditional",
+                "email": "conditional"
+              },
+              "comparisonCalculatorName": "contactInfoWeightedComparison",
+              "email": null,
+              "phone": null,
+              "poBox": null,
+              "primaryAddress": {
+                "type": "Address",
+                "primaryAlias": {
+                  "type": "AttributedTerm",
+                  "term": "100  OCEAN AVENUE",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "original_address"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "alternatives": {
+                  "type": "Aliases",
+                  "homonyms": [],
+                  "synonyms": [],
+                  "candidates": []
+                },
+                "comparisonWeights": {
+                  "streetNumber": "conditional",
+                  "streetName": "conditional",
+                  "secUnitNum": "conditional",
+                  "city": "conditional",
+                  "state": "conditional",
+                  "zipCode": "conditional"
+                },
+                "comparisonCalculatorName": "addressWeightedComparison",
+                "originalAddress": {
+                  "type": "AttributedTerm",
+                  "term": "100  OCEAN AVENUE",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "original_address"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "recipientDetails": null,
+                "streetNumber": {
+                  "type": "AttributedTerm",
+                  "term": "100",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "street_number"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "streetName": {
+                  "type": "AttributedTerm",
+                  "term": "OCEAN AVENUE",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "street_name"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "streetType": null,
+                "city": {
+                  "type": "AttributedTerm",
+                  "term": "Block Island",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "city"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "state": {
+                  "type": "AttributedTerm",
+                  "term": "RI",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "state"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "zipCode": {
+                  "type": "AttributedTerm",
+                  "term": "02807",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "zip_code"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "secUnitType": null,
+                "secUnitNum": null,
+                "isBlockIslandAddress": {
+                  "type": "AttributedTerm",
+                  "term": true,
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "is_block_island"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "cityNormalized": {
+                  "type": "AttributedTerm",
+                  "term": true,
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "city_normalized"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "processingSource": {
+                  "type": "AttributedTerm",
+                  "term": "VisionAppraisal",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "processing_source"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "processingTimestamp": {
+                  "type": "AttributedTerm",
+                  "term": "2025-12-08T22:12:20.545Z",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "processing_timestamp"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                }
+              },
+              "secondaryAddress": [
+                {
+                  "type": "Address",
+                  "primaryAlias": {
+                    "type": "AttributedTerm",
+                    "term": "PO BOX 518::#^#::100 OCEAN AVE::#^#::BLOCK ISLAND:^#^: RI 02807",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "original_address"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "alternatives": {
+                    "type": "Aliases",
+                    "homonyms": [],
+                    "synonyms": [],
+                    "candidates": []
+                  },
+                  "comparisonWeights": {
+                    "streetNumber": "conditional",
+                    "streetName": "conditional",
+                    "secUnitNum": "conditional",
+                    "city": "conditional",
+                    "state": "conditional",
+                    "zipCode": "conditional"
+                  },
+                  "comparisonCalculatorName": "addressWeightedComparison",
+                  "originalAddress": {
+                    "type": "AttributedTerm",
+                    "term": "PO BOX 518::#^#::100 OCEAN AVE::#^#::BLOCK ISLAND:^#^: RI 02807",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "original_address"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "recipientDetails": null,
+                  "streetNumber": null,
+                  "streetName": {
+                    "type": "AttributedTerm",
+                    "term": "OCEAN AVE",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "street_name"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "streetType": null,
+                  "city": {
+                    "type": "AttributedTerm",
+                    "term": "Block Island",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "city"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "state": {
+                    "type": "AttributedTerm",
+                    "term": "RI",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "state"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "zipCode": {
+                    "type": "AttributedTerm",
+                    "term": "02807",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "zip_code"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "secUnitType": {
+                    "type": "AttributedTerm",
+                    "term": "BOX",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "unit_type"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "secUnitNum": {
+                    "type": "AttributedTerm",
+                    "term": "518",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "unit_number"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "isBlockIslandAddress": {
+                    "type": "AttributedTerm",
+                    "term": true,
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "is_block_island"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "cityNormalized": {
+                    "type": "AttributedTerm",
+                    "term": true,
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "city_normalized"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "processingSource": {
+                    "type": "AttributedTerm",
+                    "term": "VisionAppraisal",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "processing_source"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "processingTimestamp": {
+                    "type": "AttributedTerm",
+                    "term": "2025-12-08T22:12:20.545Z",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "processing_timestamp"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  }
+                }
+              ]
+            },
+            "otherInfo": null,
+            "legacyInfo": null,
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison",
+            "label": null,
+            "number": null,
+            "pid": "1989",
+            "mblu": {
+              "type": "AttributedTerm",
+              "term": "17/  /  035/  /",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VISION_APPRAISAL",
+                    {
+                      "index": 293,
+                      "identifier": "1989"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "fireNumber": 100,
+            "googleFileId": "1vD86ZzEhy8VPt6fzMaWkMotrVF7yhxGM",
+            "source": "VISION_APPRAISAL",
+            "entityType": "Business"
+          }
+        }
+      },
+      "legacyInfo": null,
+      "comparisonWeights": null,
+      "comparisonCalculatorName": "defaultWeightedComparison",
+      "label": null,
+      "number": null,
+      "pid": "1994",
+      "mblu": {
+        "type": "AttributedTerm",
+        "term": "17/  /  040/  /",
+        "fieldName": null,
+        "sourceMap": {
+          "type": "Map",
+          "__data": [
+            [
+              "VISION_APPRAISAL",
+              {
+                "index": 275,
+                "identifier": "1994"
+              }
+            ]
+          ]
+        },
+        "comparisonWeights": null,
+        "comparisonCalculatorName": "defaultWeightedComparison"
+      },
+      "fireNumber": 100,
+      "googleFileId": "1-Yh0K9J8vHUBIDAzNyDjdqGeSG1oyQsV",
+      "source": "VISION_APPRAISAL",
+      "entityType": "Business"
+    }

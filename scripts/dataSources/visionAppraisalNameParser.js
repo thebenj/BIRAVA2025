@@ -1041,7 +1041,6 @@ const VisionAppraisalNameParser = {
 
     // Helper method: Create AggregateHousehold entity
     createAggregateHousehold(householdName, individuals, record, index) {
-        console.log(`🏠 DIAG: createAggregateHousehold called - index=${index}, individuals.length=${individuals.length}`);
         // Create proper locationIdentifier object (Cases 4 & 5 resolution)
         let locationIdentifier = null;
         if (record.fireNumber) {
@@ -1064,19 +1063,14 @@ const VisionAppraisalNameParser = {
 
         // Add individuals to household and populate their householdInformation
         // Pattern mirrors Bloomerang: create OtherInfo, assign HouseholdInformation via factory, call addOtherInfo
-        console.log(`🏠 DIAG: About to process ${individuals.length} individuals for householdInformation`);
         individuals.forEach((individual, idx) => {
-            console.log(`🏠 DIAG: Processing individual ${idx}, OtherInfo class available: ${typeof OtherInfo}, HouseholdInformation class available: ${typeof HouseholdInformation}`);
             const otherInfo = new OtherInfo();
-            console.log(`🏠 DIAG: Created OtherInfo, has householdInformation: ${otherInfo.householdInformation !== null}`);
             otherInfo.householdInformation = HouseholdInformation.fromVisionAppraisalData(
                 householdIdentifierStr,
                 householdNameStr,
                 idx === 0  // first individual is head of household
             );
-            console.log(`🏠 DIAG: After fromVisionAppraisalData - isInHousehold=${otherInfo.householdInformation.isInHousehold}, householdName="${otherInfo.householdInformation.householdName}"`);
             individual.addOtherInfo(otherInfo);
-            console.log(`🏠 DIAG: After addOtherInfo - individual.otherInfo exists: ${individual.otherInfo !== null}, householdInformation exists: ${individual.otherInfo?.householdInformation !== null}`);
             household.individuals.push(individual);
         });
 

@@ -575,14 +575,15 @@ class Aliased {
      * Uses genericObjectCompareTo for dynamic property iteration with automatic compareTo detection
      * Subclasses can override for more sophisticated comparison logic
      * @param {Aliased} other - Other Aliased object to compare
-     * @returns {number} 0 if objects match, non-zero if different
+     * @param {boolean} detailed - If true, return detailed breakdown object instead of just similarity score
+     * @returns {number|Object} Similarity score 0-1, or detailed breakdown object if detailed=true
      * @throws {Error} If comparing with non-Aliased object or if utility not available
      */
-    compareTo(other) {
+    compareTo(other, detailed = false) {
         // Check if generic utility is available
         if (typeof genericObjectCompareTo === 'function') {
             // Use generic utility with 'alternatives' excluded (aliases handled separately in most cases)
-            return genericObjectCompareTo(this, other, ['alternatives']);
+            return genericObjectCompareTo(this, other, ['alternatives'], detailed);
         } else {
             // Clear error message if dependency missing
             throw new Error('genericObjectCompareTo utility not available - ensure utils.js is loaded first');

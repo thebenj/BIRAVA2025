@@ -323,14 +323,16 @@ class Entity {
                 overallSimilarity: result.overallSimilarity,
                 components: result.components,
                 checkSum: result.checkSum,
+                penalties: result.penalties,
+                subordinateDetails: result.subordinateDetails,
                 participants: participants
             };
         }
 
         // Fallback to generic comparison if no calculator set
-        const similarity = genericObjectCompareTo(this, otherEntity);
+        const result = genericObjectCompareTo(this, otherEntity, [], detailed);
         if (!detailed) {
-            return similarity;
+            return result;
         }
 
         // For detailed fallback, create participants
@@ -338,7 +340,10 @@ class Entity {
             this.getParticipantDescription(),
             otherEntity.getParticipantDescription()
         );
-        return { overallSimilarity: similarity, components: {}, checkSum: 0, participants: participants };
+        // If genericObjectCompareTo returned an object (detailed mode), use it; otherwise wrap the number
+        const similarity = typeof result === 'object' ? result.overallSimilarity : result;
+        const components = typeof result === 'object' ? result.components : {};
+        return { overallSimilarity: similarity, components: components, checkSum: 0, participants: participants };
     }
 
     /**

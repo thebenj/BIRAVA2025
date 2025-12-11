@@ -210,6 +210,7 @@ const levenshteinDistance = (str1 = '', str2 = '') => {
 
 /**
  * Convert Levenshtein distance to similarity score (0-1 range)
+ * Case-insensitive comparison (converts both strings to uppercase)
  * @param {string} str1 - First string
  * @param {string} str2 - Second string
  * @returns {number} Similarity score (1 = identical, 0 = completely different)
@@ -218,9 +219,312 @@ function levenshteinSimilarity(str1, str2) {
     if (!str1 && !str2) return 1.0;  // Both empty = perfect match
     if (!str1 || !str2) return 0.0;  // One empty = no match
 
-    const distance = levenshteinDistance(str1, str2);
-    const maxLength = Math.max(str1.length, str2.length);
+    // Normalize to uppercase for case-insensitive comparison
+    const normalized1 = str1.toUpperCase();
+    const normalized2 = str2.toUpperCase();
+
+    const distance = levenshteinDistance(normalized1, normalized2);
+    const maxLength = Math.max(normalized1.length, normalized2.length);
     return maxLength > 0 ? 1 - (distance / maxLength) : 1.0;
+}
+
+// =============================================================================
+// CROSS-TYPE NAME EXTRACTION
+// Extract comparable name strings from any name type (IndividualName, HouseholdName, SimpleIdentifiers)
+// Used by universalEntityMatcher.js and fireNumberCollisionHandler.js
+// =============================================================================
+
+/**
+ * Extract a displayable/comparable name string from any name type.
+ * Handles IndividualName, HouseholdName, SimpleIdentifiers, and generic fallbacks.
+ *
+ * @param {object} nameObj - Name object (IndividualName, SimpleIdentifiers, HouseholdName, etc.)
+ * @returns {string} Best string representation for comparison
+ */
+function extractNameString(nameObj) {
+    if (!nameObj) return '';
+
+    const nameType = nameObj.constructor?.name;
+
+    // IndividualName - use completeName or build from components
+    if (nameType === 'IndividualName') {
+        if (nameObj.completeName) return nameObj.completeName;
+        const parts = [nameObj.firstName, nameObj.otherNames, nameObj.lastName].filter(p => p);
+        return parts.join(' ').trim();
+    }
+
+    // HouseholdName - use termOfAddress or primaryAlias
+    if (nameType === 'HouseholdName') {
+        if (nameObj.termOfAddress) return nameObj.termOfAddress;
+        if (nameObj.primaryAlias?.term) return nameObj.primaryAlias.term;
+        return '';
+    }
+
+    // SimpleIdentifiers - use primaryAlias term
+    if (nameType === 'SimpleIdentifiers') {
+        if (nameObj.primaryAlias?.term) return nameObj.primaryAlias.term;
+        return '';
+    }
+
+    // Generic fallback - try common properties
+    if (nameObj.completeName) return nameObj.completeName;
+    if (nameObj.termOfAddress) return nameObj.termOfAddress;
+    if (nameObj.primaryAlias?.term) return nameObj.primaryAlias.term;
+    if (typeof nameObj.toString === 'function') return nameObj.toString();
+
+    return '';
+}
+
+/**
+ * Compare two names of potentially different types using string comparison.
+ * Uses extractNameString to normalize both names to strings, then compares with levenshteinSimilarity.
+ *
+ * @param {object} name1 - First name object (any name type)
+ * @param {object} name2 - Second name object (any name type)
+ * @returns {number} Similarity score 0-1
+ */
+function crossTypeNameComparison(name1, name2) {
+    const str1 = extractNameString(name1).toLowerCase().trim();
+    const str2 = extractNameString(name2).toLowerCase().trim();
+
+    if (!str1 || !str2) return 0;
+
+    // Use levenshteinSimilarity (defined above in this file)
+    return levenshteinSimilarity(str1, str2);
+}
+
+// =============================================================================
+// PERMUTATION-BASED NAME COMPARISON
+// Alternative name comparison that finds optimal word-to-word pairings
+// Handles cases where names may be in different fields (firstName vs otherNames, etc.)
+// =============================================================================
+
+/**
+ * Permutation-based name comparison for IndividualName objects.
+ * Compares name words across all fields to find optimal pairings.
+ *
+ * Handles special cases:
+ * - Short words (<=2 chars): Treated specially or ignored depending on count
+ * - Long words (contain space): Split into component words
+ *
+ * @param {IndividualName} name1 - First name to compare
+ * @param {IndividualName} name2 - Second name to compare
+ * @returns {number} Similarity score 0-1
+ */
+function permutationBasedNameComparison(name1, name2) {
+    // Extract name words from both comparators, filtering empty strings
+    const extractNameWords = (name) => {
+        const words = [];
+        if (name.firstName && name.firstName.trim()) words.push(name.firstName.trim());
+        if (name.lastName && name.lastName.trim()) words.push(name.lastName.trim());
+        if (name.otherNames && name.otherNames.trim()) words.push(name.otherNames.trim());
+        return words;
+    };
+
+    let words1 = extractNameWords(name1);
+    let words2 = extractNameWords(name2);
+
+    // If either has no words, return 0
+    if (words1.length === 0 || words2.length === 0) {
+        return 0;
+    }
+
+    // Detect special cases
+    const isShortWord = (word) => word.length <= 2;
+    const isLongWord = (word) => word.includes(' ');
+    const stripPunctuation = (word) => word.replace(/[^a-zA-Z0-9]/g, '');
+
+    const shortWords1 = words1.filter(isShortWord);
+    const shortWords2 = words2.filter(isShortWord);
+    const longWords1 = words1.filter(isLongWord);
+    const longWords2 = words2.filter(isLongWord);
+
+    const hasShortWord1 = shortWords1.length === 1;
+    const hasShortWord2 = shortWords2.length === 1;
+    const hasMultipleShortWords1 = shortWords1.length > 1;
+    const hasMultipleShortWords2 = shortWords2.length > 1;
+    const hasLongWord1 = longWords1.length > 0;
+    const hasLongWord2 = longWords2.length > 0;
+
+    // If multiple short words on either side, ignore short word handling entirely
+    const ignoreShortWords = hasMultipleShortWords1 || hasMultipleShortWords2;
+
+    // Determine the case and process accordingly
+    let shortWordScore = null;
+    let shortWordWeight = 0;
+
+    // Process short words if exactly one on each side and not ignoring
+    if (!ignoreShortWords && hasShortWord1 && hasShortWord2) {
+        // Cases d, e, j: Both have exactly one short word
+        shortWordScore = levenshteinSimilarity(
+            stripPunctuation(shortWords1[0].toUpperCase()),
+            stripPunctuation(shortWords2[0].toUpperCase())
+        );
+        shortWordWeight = 0.1;
+
+        // Remove short words from the word lists for remaining comparison
+        words1 = words1.filter(w => !isShortWord(w));
+        words2 = words2.filter(w => !isShortWord(w));
+    } else if (!ignoreShortWords && (hasShortWord1 || hasShortWord2)) {
+        // Cases b, f, h, i: Only one side has a short word - ignore it
+        if (hasShortWord1) {
+            words1 = words1.filter(w => !isShortWord(w));
+        }
+        if (hasShortWord2) {
+            words2 = words2.filter(w => !isShortWord(w));
+        }
+    }
+
+    // Process long words - split them and replace in word lists
+    const processLongWords = (words) => {
+        const result = [];
+        for (const word of words) {
+            if (isLongWord(word)) {
+                // Split on spaces, filter single-char results, strip punctuation
+                const splitWords = word.split(/\s+/)
+                    .map(w => stripPunctuation(w))
+                    .filter(w => w.length > 1); // Ignore single-char words from splits
+                result.push(...splitWords);
+            } else {
+                result.push(stripPunctuation(word));
+            }
+        }
+        return result;
+    };
+
+    // If either side has long words, process them
+    if (hasLongWord1 || hasLongWord2) {
+        words1 = processLongWords(words1);
+        words2 = processLongWords(words2);
+    } else {
+        // Strip punctuation from all words even without long words
+        words1 = words1.map(stripPunctuation);
+        words2 = words2.map(stripPunctuation);
+    }
+
+    // Filter any remaining empty strings after processing
+    words1 = words1.filter(w => w.length > 0);
+    words2 = words2.filter(w => w.length > 0);
+
+    // If no words left to compare after processing, handle edge case
+    if (words1.length === 0 && words2.length === 0) {
+        // Only had short words which were compared
+        return shortWordScore !== null ? shortWordScore : 0;
+    }
+    if (words1.length === 0 || words2.length === 0) {
+        // One side has no remaining words
+        if (shortWordScore !== null) {
+            return shortWordScore * shortWordWeight;
+        }
+        return 0;
+    }
+
+    // Skip permutation comparison for names with 8+ words to prevent explosion
+    // generatePermutations(n, k) creates n!/(n-k)! results which explodes with large n
+    // 7! = 5,040 (acceptable), 8! = 40,320 (too many)
+    const MAX_WORDS_FOR_PERMUTATION = 7;
+    if (words1.length > MAX_WORDS_FOR_PERMUTATION || words2.length > MAX_WORDS_FOR_PERMUTATION) {
+        // Too many words - return 0 for this comparison path
+        if (shortWordScore !== null) {
+            return shortWordScore * shortWordWeight;
+        }
+        return 0;
+    }
+
+    // Calculate best score from unique pairwise comparisons
+    const bestPairwiseScore = calculateBestPairwiseScore(words1, words2);
+
+    // Apply haircut factor when word counts differ
+    // Haircut = (1 - (1 - smaller/larger)^2.5)
+    const smallerCount = Math.min(words1.length, words2.length);
+    const largerCount = Math.max(words1.length, words2.length);
+    const haircutFactor = (smallerCount === largerCount) ? 1.0 : (1 - Math.pow(1 - smallerCount / largerCount, 2.5));
+    const adjustedPairwiseScore = bestPairwiseScore * haircutFactor;
+
+    // Combine scores if we have a short word component
+    let finalScore;
+    if (shortWordScore !== null) {
+        // 10% short word, 90% remaining (with haircut applied to remaining)
+        finalScore = (shortWordScore * 0.1) + (adjustedPairwiseScore * 0.9);
+    } else {
+        finalScore = adjustedPairwiseScore;
+    }
+
+    // Apply final adjustment: subtract 0.01
+    finalScore = finalScore - 0.01;
+
+    // Ensure score doesn't go below 0
+    return Math.max(0, finalScore);
+}
+
+/**
+ * Calculate the best score from all unique pairwise comparisons.
+ * For each permutation of pairing words from list1 to words from list2,
+ * calculates the average similarity and returns the best.
+ *
+ * @param {string[]} words1 - First list of words
+ * @param {string[]} words2 - Second list of words
+ * @returns {number} Best average similarity score from all pairings
+ */
+function calculateBestPairwiseScore(words1, words2) {
+    // Ensure words1 is the smaller or equal list (for permutation generation)
+    const smaller = words1.length <= words2.length ? words1 : words2;
+    const larger = words1.length <= words2.length ? words2 : words1;
+
+    // Generate all permutations of selecting smaller.length items from larger
+    // and pairing them with smaller
+    const permutations = generatePermutations(larger.length, smaller.length);
+
+    let bestScore = 0;
+
+    for (const perm of permutations) {
+        let totalSimilarity = 0;
+        for (let i = 0; i < smaller.length; i++) {
+            const word1 = smaller[i].toUpperCase();
+            const word2 = larger[perm[i]].toUpperCase();
+            totalSimilarity += levenshteinSimilarity(word1, word2);
+        }
+        const avgSimilarity = totalSimilarity / smaller.length;
+        if (avgSimilarity > bestScore) {
+            bestScore = avgSimilarity;
+        }
+    }
+
+    return bestScore;
+}
+
+/**
+ * Generate all permutations of selecting k items from n items.
+ * Returns arrays of indices representing which items from the larger set
+ * are paired with each item from the smaller set.
+ *
+ * @param {number} n - Size of larger set
+ * @param {number} k - Size of smaller set (number to select)
+ * @returns {number[][]} Array of permutations, each an array of k indices
+ */
+function generatePermutations(n, k) {
+    const results = [];
+
+    // Generate all k-permutations of indices 0 to n-1
+    const permute = (current, used) => {
+        if (current.length === k) {
+            results.push([...current]);
+            return;
+        }
+
+        for (let i = 0; i < n; i++) {
+            if (!used[i]) {
+                used[i] = true;
+                current.push(i);
+                permute(current, used);
+                current.pop();
+                used[i] = false;
+            }
+        }
+    };
+
+    permute([], new Array(n).fill(false));
+    return results;
 }
 
 // =============================================================================
@@ -232,17 +536,25 @@ function levenshteinSimilarity(str1, str2) {
  * Default weighted comparison calculator using vowel-weighted Levenshtein
  * Used by genericObjectCompareTo when comparisonWeights are configured
  * Operates in 'this' context of the calling object
+ *
+ * For IndividualName objects, also calculates permutation-based comparison
+ * and returns the better of the two scores.
+ *
  * @param {Object} otherObject - Object to compare against
  * @returns {number} Similarity score 0-1, or null for fallback to property-by-property
  */
-function defaultWeightedComparison(otherObject) {
+function defaultWeightedComparison(otherObject, detailed = false) {
+    // Precision helper
+    const round10 = (val) => Math.round(val * 10000000000) / 10000000000;
+
     // Check if weights are configured
     if (!this.comparisonWeights) {
-        return null; // Fall back to standard property-by-property comparison
+        return detailed ? { overallSimilarity: null, error: 'No comparisonWeights configured' } : null;
     }
 
     let totalWeightedScore = 0;
     let totalWeight = 0;
+    const components = {};
 
     // Iterate through configured weights only
     for (let propName in this.comparisonWeights) {
@@ -250,36 +562,104 @@ function defaultWeightedComparison(otherObject) {
         const thisValue = this[propName];
         const otherValue = otherObject[propName];
 
-        // Skip if either value is missing (exclusion approach for robustness)
+        // Handle missing values - still record in components for detailed mode
         if (!thisValue || !otherValue) {
+            if (detailed) {
+                components[propName] = {
+                    baseValue: thisValue || '',
+                    targetValue: otherValue || '',
+                    similarity: 0,
+                    weight: weight,
+                    contribution: 0,
+                    skipped: true,
+                    skipReason: !thisValue ? 'base value missing' : 'target value missing'
+                };
+            }
             continue;
         }
 
         // Calculate similarity using the component's native compareTo method
         // ARCHITECTURE REQUIREMENT: All objects use their own compareTo for comparison
         let similarity = 0;
+        let comparisonMethod = 'unknown';
 
         if (typeof thisValue.compareTo === 'function') {
             // Use the object's native compareTo method (returns 0-1 similarity)
             similarity = thisValue.compareTo(otherValue);
+            comparisonMethod = 'compareTo';
         } else if (typeof thisValue === 'string') {
             // For plain strings, use levenshteinSimilarity directly
             const str2 = typeof otherValue === 'string' ? otherValue : String(otherValue);
             similarity = levenshteinSimilarity(thisValue, str2);
+            comparisonMethod = 'levenshtein';
         } else {
             // Fallback for primitives - exact match only
             similarity = thisValue === otherValue ? 1.0 : 0.0;
+            comparisonMethod = 'exactMatch';
         }
 
-        totalWeightedScore += similarity * weight;
+        const contribution = round10(similarity * weight);
+        totalWeightedScore += contribution;
         totalWeight += weight;
+
+        if (detailed) {
+            // Get string representation for display
+            const baseStr = typeof thisValue === 'string' ? thisValue :
+                           (thisValue.toString ? thisValue.toString() : String(thisValue));
+            const targetStr = typeof otherValue === 'string' ? otherValue :
+                             (otherValue.toString ? otherValue.toString() : String(otherValue));
+
+            components[propName] = {
+                baseValue: baseStr,
+                targetValue: targetStr,
+                similarity: round10(similarity),
+                weight: weight,
+                contribution: contribution,
+                method: comparisonMethod
+            };
+        }
     }
 
     // Calculate final weighted similarity (0-1 range)
-    const finalSimilarity = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+    const weightedSimilarity = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
 
-    // Round to 10 decimal places for precision
-    return Math.round(finalSimilarity * 10000000000) / 10000000000;
+    // For IndividualName objects, also calculate permutation-based score
+    // and return the better of the two
+    let finalSimilarity = weightedSimilarity;
+    let winningMethod = 'weighted';
+
+    // Check if this is an IndividualName (has firstName, lastName, and comparisonWeights with those keys)
+    const isIndividualName = this.comparisonWeights &&
+        'firstName' in this.comparisonWeights &&
+        'lastName' in this.comparisonWeights &&
+        (this.firstName !== undefined || this.lastName !== undefined);
+
+    let permutationScore = null;
+    if (isIndividualName) {
+        permutationScore = permutationBasedNameComparison(this, otherObject);
+        if (permutationScore > weightedSimilarity) {
+            finalSimilarity = permutationScore;
+            winningMethod = 'permutation';
+        }
+    }
+
+    // Round final similarity
+    finalSimilarity = round10(finalSimilarity);
+
+    // Return detailed breakdown or just the number
+    if (detailed) {
+        return {
+            overallSimilarity: finalSimilarity,
+            method: winningMethod,
+            weightedScore: round10(weightedSimilarity),
+            permutationScore: permutationScore !== null ? round10(permutationScore) : null,
+            isIndividualName: isIndividualName,
+            components: components,
+            totalWeight: totalWeight
+        };
+    }
+
+    return finalSimilarity;
 }
 
 // =============================================================================
@@ -413,9 +793,10 @@ function isBlockIslandZip(zipValue) {
  * - General street addresses
  *
  * @param {Address} otherObject - The other Address to compare against
- * @returns {number} Similarity score 0-1
+ * @param {boolean} detailed - If true, return detailed breakdown object
+ * @returns {number|Object} Similarity score 0-1, or detailed breakdown object if detailed=true
  */
-function addressWeightedComparison(otherObject) {
+function addressWeightedComparison(otherObject, detailed = false) {
     const thisAddr = this;
     const otherAddr = otherObject;
 
@@ -425,21 +806,23 @@ function addressWeightedComparison(otherObject) {
 
     // If either is a PO Box, use PO Box comparison for both
     if (thisIsPOBox || otherIsPOBox) {
-        return comparePOBoxAddresses(thisAddr, otherAddr);
+        return comparePOBoxAddresses(thisAddr, otherAddr, detailed);
     }
 
     // Check for Block Island addresses
+    // CRITICAL: Only use Block Island comparison when BOTH addresses are Block Island
+    // Otherwise a BI address with street number "8" would match any address with "8" at 90%+
     const thisIsBI = isBlockIslandZip(thisAddr.zipCode) ||
                      (isBlockIslandStreet(thisAddr.streetName) && isBlockIslandCity(thisAddr.city));
     const otherIsBI = isBlockIslandZip(otherAddr.zipCode) ||
                       (isBlockIslandStreet(otherAddr.streetName) && isBlockIslandCity(otherAddr.city));
 
-    if (thisIsBI || otherIsBI) {
-        return compareBlockIslandAddresses(thisAddr, otherAddr);
+    if (thisIsBI && otherIsBI) {
+        return compareBlockIslandAddresses(thisAddr, otherAddr, detailed);
     }
 
     // General street address comparison
-    return compareGeneralStreetAddresses(thisAddr, otherAddr);
+    return compareGeneralStreetAddresses(thisAddr, otherAddr, detailed);
 }
 
 /**
@@ -447,49 +830,98 @@ function addressWeightedComparison(otherObject) {
  * Logic:
  * - When zip present: zip < 0.74 → 0; zip == 1 → secUnitNum; 0.74-1 → weighted with city/state
  * - When zip absent: secUnitNum < 0.8 → 0; secUnitNum == 1 → 50/50 city/state; 0.8-1 → weighted
+ * @param {boolean} detailed - If true, return detailed breakdown
  */
-function comparePOBoxAddresses(addr1, addr2) {
+function comparePOBoxAddresses(addr1, addr2, detailed = false) {
+    const round10 = (val) => Math.round(val * 10000000000) / 10000000000;
     const hasZip = addr1.zipCode && addr2.zipCode;
+    let result, components = {}, method = 'POBox';
 
     if (hasZip) {
         const zipSim = getComponentSimilarity(addr1.zipCode, addr2.zipCode);
 
         if (zipSim < 0.74) {
-            return 0;
+            result = 0;
+            if (detailed) {
+                components = {
+                    zipCode: { baseValue: addr1.zipCode || '', targetValue: addr2.zipCode || '', similarity: round10(zipSim), weight: 1.0, contribution: 0, method: 'levenshtein', note: 'Below 0.74 threshold - returned 0' }
+                };
+                method = 'POBox_zipBelowThreshold';
+            }
+        } else {
+            const secUnitSim = getComponentSimilarity(addr1.secUnitNum, addr2.secUnitNum);
+
+            if (zipSim === 1) {
+                result = round10(secUnitSim);
+                if (detailed) {
+                    components = {
+                        zipCode: { baseValue: addr1.zipCode || '', targetValue: addr2.zipCode || '', similarity: 1.0, weight: 0, contribution: 0, method: 'levenshtein', note: 'Perfect match - secUnitNum only' },
+                        secUnitNum: { baseValue: addr1.secUnitNum || '', targetValue: addr2.secUnitNum || '', similarity: round10(secUnitSim), weight: 1.0, contribution: round10(secUnitSim), method: 'levenshtein' }
+                    };
+                    method = 'POBox_perfectZip';
+                }
+            } else {
+                // Zip between 0.74 and 1: weighted calculation including city/state
+                const citySim = getComponentSimilarity(addr1.city, addr2.city);
+                const stateSim = getStateSimilarity(addr1.state, addr2.state);
+                result = round10(0.3 * zipSim + 0.3 * secUnitSim + 0.2 * citySim + 0.2 * stateSim);
+                if (detailed) {
+                    components = {
+                        zipCode: { baseValue: addr1.zipCode || '', targetValue: addr2.zipCode || '', similarity: round10(zipSim), weight: 0.3, contribution: round10(0.3 * zipSim), method: 'levenshtein' },
+                        secUnitNum: { baseValue: addr1.secUnitNum || '', targetValue: addr2.secUnitNum || '', similarity: round10(secUnitSim), weight: 0.3, contribution: round10(0.3 * secUnitSim), method: 'levenshtein' },
+                        city: { baseValue: addr1.city || '', targetValue: addr2.city || '', similarity: round10(citySim), weight: 0.2, contribution: round10(0.2 * citySim), method: 'levenshtein' },
+                        state: { baseValue: addr1.state || '', targetValue: addr2.state || '', similarity: round10(stateSim), weight: 0.2, contribution: round10(0.2 * stateSim), method: 'exactMatch' }
+                    };
+                    method = 'POBox_partialZip';
+                }
+            }
         }
-
-        const secUnitSim = getComponentSimilarity(addr1.secUnitNum, addr2.secUnitNum);
-
-        if (zipSim === 1) {
-            return Math.round(secUnitSim * 10000000000) / 10000000000;
-        }
-
-        // Zip between 0.74 and 1: weighted calculation including city/state
-        const citySim = getComponentSimilarity(addr1.city, addr2.city);
-        const stateSim = getStateSimilarity(addr1.state, addr2.state);
-        const result = 0.3 * zipSim + 0.3 * secUnitSim + 0.2 * citySim + 0.2 * stateSim;
-        return Math.round(result * 10000000000) / 10000000000;
     } else {
         // No zip code - use secUnitNum, city, state
         const secUnitSim = getComponentSimilarity(addr1.secUnitNum, addr2.secUnitNum);
 
         if (secUnitSim < 0.8) {
-            return 0;
+            result = 0;
+            if (detailed) {
+                components = {
+                    secUnitNum: { baseValue: addr1.secUnitNum || '', targetValue: addr2.secUnitNum || '', similarity: round10(secUnitSim), weight: 1.0, contribution: 0, method: 'levenshtein', note: 'Below 0.8 threshold - returned 0' }
+                };
+                method = 'POBox_noZip_secUnitBelowThreshold';
+            }
+        } else {
+            const citySim = getComponentSimilarity(addr1.city, addr2.city);
+            const stateSim = getStateSimilarity(addr1.state, addr2.state);
+
+            if (secUnitSim === 1) {
+                // Return 50/50 city/state
+                result = round10(0.5 * citySim + 0.5 * stateSim);
+                if (detailed) {
+                    components = {
+                        secUnitNum: { baseValue: addr1.secUnitNum || '', targetValue: addr2.secUnitNum || '', similarity: 1.0, weight: 0, contribution: 0, method: 'levenshtein', note: 'Perfect match - city/state only' },
+                        city: { baseValue: addr1.city || '', targetValue: addr2.city || '', similarity: round10(citySim), weight: 0.5, contribution: round10(0.5 * citySim), method: 'levenshtein' },
+                        state: { baseValue: addr1.state || '', targetValue: addr2.state || '', similarity: round10(stateSim), weight: 0.5, contribution: round10(0.5 * stateSim), method: 'exactMatch' }
+                    };
+                    method = 'POBox_noZip_perfectSecUnit';
+                }
+            } else {
+                // secUnitNum between 0.8 and 1: weighted calculation
+                result = round10(0.6 * secUnitSim + 0.2 * citySim + 0.2 * stateSim);
+                if (detailed) {
+                    components = {
+                        secUnitNum: { baseValue: addr1.secUnitNum || '', targetValue: addr2.secUnitNum || '', similarity: round10(secUnitSim), weight: 0.6, contribution: round10(0.6 * secUnitSim), method: 'levenshtein' },
+                        city: { baseValue: addr1.city || '', targetValue: addr2.city || '', similarity: round10(citySim), weight: 0.2, contribution: round10(0.2 * citySim), method: 'levenshtein' },
+                        state: { baseValue: addr1.state || '', targetValue: addr2.state || '', similarity: round10(stateSim), weight: 0.2, contribution: round10(0.2 * stateSim), method: 'exactMatch' }
+                    };
+                    method = 'POBox_noZip_partialSecUnit';
+                }
+            }
         }
-
-        const citySim = getComponentSimilarity(addr1.city, addr2.city);
-        const stateSim = getStateSimilarity(addr1.state, addr2.state);
-
-        if (secUnitSim === 1) {
-            // Return 50/50 city/state
-            const result = 0.5 * citySim + 0.5 * stateSim;
-            return Math.round(result * 10000000000) / 10000000000;
-        }
-
-        // secUnitNum between 0.8 and 1: weighted calculation
-        const result = 0.6 * secUnitSim + 0.2 * citySim + 0.2 * stateSim;
-        return Math.round(result * 10000000000) / 10000000000;
     }
+
+    if (detailed) {
+        return { overallSimilarity: result, method: method, components: components };
+    }
+    return result;
 }
 
 /**
@@ -497,23 +929,43 @@ function comparePOBoxAddresses(addr1, addr2) {
  * Logic:
  * - When zip = 02807: streetNumber 0.85, streetName 0.15
  * - When zip absent but streetName in BI database + city is BI: streetNumber only
+ * @param {boolean} detailed - If true, return detailed breakdown
  */
-function compareBlockIslandAddresses(addr1, addr2) {
+function compareBlockIslandAddresses(addr1, addr2, detailed = false) {
+    const round10 = (val) => Math.round(val * 10000000000) / 10000000000;
     const hasZip02807 = isBlockIslandZip(addr1.zipCode) || isBlockIslandZip(addr2.zipCode);
+    let result, components = {}, method = 'BlockIsland';
 
     if (hasZip02807) {
         // Weights: streetNumber 0.85, streetName 0.15
         const streetNumSim = getComponentSimilarity(addr1.streetNumber, addr2.streetNumber);
         const streetNameSim = getComponentSimilarity(addr1.streetName, addr2.streetName);
 
-        const result = 0.85 * streetNumSim + 0.15 * streetNameSim;
-        return Math.round(result * 10000000000) / 10000000000;
+        result = round10(0.85 * streetNumSim + 0.15 * streetNameSim);
+        if (detailed) {
+            components = {
+                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 0.85, contribution: round10(0.85 * streetNumSim), method: 'levenshtein' },
+                streetName: { baseValue: addr1.streetName || '', targetValue: addr2.streetName || '', similarity: round10(streetNameSim), weight: 0.15, contribution: round10(0.15 * streetNameSim), method: 'levenshtein' }
+            };
+            method = 'BlockIsland_withZip';
+        }
     } else {
         // No zip but confirmed BI via street database + city
         // Only compare street number
         const streetNumSim = getComponentSimilarity(addr1.streetNumber, addr2.streetNumber);
-        return Math.round(streetNumSim * 10000000000) / 10000000000;
+        result = round10(streetNumSim);
+        if (detailed) {
+            components = {
+                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 1.0, contribution: round10(streetNumSim), method: 'levenshtein' }
+            };
+            method = 'BlockIsland_noZip';
+        }
     }
+
+    if (detailed) {
+        return { overallSimilarity: result, method: method, components: components };
+    }
+    return result;
 }
 
 /**
@@ -527,8 +979,10 @@ function compareBlockIslandAddresses(addr1, addr2) {
  * but the weight is NOT skipped or renormalized.
  *
  * Note: State uses exact match for 2-letter codes
+ * @param {boolean} detailed - If true, return detailed breakdown
  */
-function compareGeneralStreetAddresses(addr1, addr2) {
+function compareGeneralStreetAddresses(addr1, addr2, detailed = false) {
+    const round10 = (val) => Math.round(val * 10000000000) / 10000000000;
     // Check if EITHER side has a zip code - if so, use zip-based weighting
     const hasZip = addr1.zipCode || addr2.zipCode;
 
@@ -543,6 +997,8 @@ function compareGeneralStreetAddresses(addr1, addr2) {
         return getStateSimilarity(val1, val2);
     };
 
+    let result, components = {}, method = 'GeneralStreet';
+
     if (hasZip) {
         // With zip: streetNumber 0.3, streetName 0.2, zipCode 0.4, state 0.1
         // All weights always applied - missing fields contribute 0 similarity
@@ -551,8 +1007,16 @@ function compareGeneralStreetAddresses(addr1, addr2) {
         const zipSim = getSimilarityOrZero(addr1.zipCode, addr2.zipCode);
         const stateSim = getStateSimilarityOrZero(addr1.state, addr2.state);
 
-        const totalScore = (streetNumSim * 0.3) + (streetNameSim * 0.2) + (zipSim * 0.4) + (stateSim * 0.1);
-        return Math.round(totalScore * 10000000000) / 10000000000;
+        result = round10((streetNumSim * 0.3) + (streetNameSim * 0.2) + (zipSim * 0.4) + (stateSim * 0.1));
+        if (detailed) {
+            components = {
+                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 0.3, contribution: round10(streetNumSim * 0.3), method: 'levenshtein' },
+                streetName: { baseValue: addr1.streetName || '', targetValue: addr2.streetName || '', similarity: round10(streetNameSim), weight: 0.2, contribution: round10(streetNameSim * 0.2), method: 'levenshtein' },
+                zipCode: { baseValue: addr1.zipCode || '', targetValue: addr2.zipCode || '', similarity: round10(zipSim), weight: 0.4, contribution: round10(zipSim * 0.4), method: 'levenshtein' },
+                state: { baseValue: addr1.state || '', targetValue: addr2.state || '', similarity: round10(stateSim), weight: 0.1, contribution: round10(stateSim * 0.1), method: 'exactMatch' }
+            };
+            method = 'GeneralStreet_withZip';
+        }
     } else {
         // Without zip (both sides): streetNumber 0.3, streetName 0.2, city 0.25, state 0.25
         // All weights always applied - missing fields contribute 0 similarity
@@ -561,9 +1025,22 @@ function compareGeneralStreetAddresses(addr1, addr2) {
         const citySim = getSimilarityOrZero(addr1.city, addr2.city);
         const stateSim = getStateSimilarityOrZero(addr1.state, addr2.state);
 
-        const totalScore = (streetNumSim * 0.3) + (streetNameSim * 0.2) + (citySim * 0.25) + (stateSim * 0.25);
-        return Math.round(totalScore * 10000000000) / 10000000000;
+        result = round10((streetNumSim * 0.3) + (streetNameSim * 0.2) + (citySim * 0.25) + (stateSim * 0.25));
+        if (detailed) {
+            components = {
+                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 0.3, contribution: round10(streetNumSim * 0.3), method: 'levenshtein' },
+                streetName: { baseValue: addr1.streetName || '', targetValue: addr2.streetName || '', similarity: round10(streetNameSim), weight: 0.2, contribution: round10(streetNameSim * 0.2), method: 'levenshtein' },
+                city: { baseValue: addr1.city || '', targetValue: addr2.city || '', similarity: round10(citySim), weight: 0.25, contribution: round10(citySim * 0.25), method: 'levenshtein' },
+                state: { baseValue: addr1.state || '', targetValue: addr2.state || '', similarity: round10(stateSim), weight: 0.25, contribution: round10(stateSim * 0.25), method: 'exactMatch' }
+            };
+            method = 'GeneralStreet_noZip';
+        }
     }
+
+    if (detailed) {
+        return { overallSimilarity: result, method: method, components: components };
+    }
+    return result;
 }
 
 // =============================================================================
@@ -661,10 +1138,18 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
     let thisPrimaryMatchedIndex = -2; // -2 means no match, -1 means primary, 0+ means secondary index
     let otherPrimaryMatchedIndex = -2;
 
+    // Track the actual matched addresses for detailed return
+    let matchedBaseAddress = null;
+    let matchedTargetAddress = null;
+    let matchDirection = null; // 'base-to-target' or 'target-to-base'
+
     if (thisCI.primaryAddress) {
         const result = findBestAddressMatch(thisCI.primaryAddress, otherCI);
         primarySimilarity = result.bestScore;
         otherPrimaryMatchedIndex = result.matchedIndex;
+        matchedBaseAddress = thisCI.primaryAddress;
+        matchedTargetAddress = result.matchedAddress;
+        matchDirection = 'base-to-target';
     }
 
     if (otherCI.primaryAddress) {
@@ -673,6 +1158,9 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
             primarySimilarity = result.bestScore;
             thisPrimaryMatchedIndex = result.matchedIndex;
             otherPrimaryMatchedIndex = -2; // Reset since we're using other's primary match
+            matchedBaseAddress = result.matchedAddress;
+            matchedTargetAddress = otherCI.primaryAddress;
+            matchDirection = 'target-to-base';
         }
     }
 
@@ -732,14 +1220,35 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
         }
     }
 
-    // Step 3: Email comparison
+    // Step 3: Email comparison (split into local part and domain)
     let emailSimilarity = 0;
     const thisEmail = getEmailString(thisCI.email);
     const otherEmail = getEmailString(otherCI.email);
 
     if (thisEmail && otherEmail) {
-        // Use levenshteinSimilarity for email comparison
-        emailSimilarity = levenshteinSimilarity(thisEmail.toLowerCase(), otherEmail.toLowerCase());
+        const thisLower = thisEmail.toLowerCase();
+        const otherLower = otherEmail.toLowerCase();
+
+        const thisAtIndex = thisLower.lastIndexOf('@');
+        const otherAtIndex = otherLower.lastIndexOf('@');
+
+        if (thisAtIndex > 0 && otherAtIndex > 0) {
+            // Split into local part and domain
+            const thisLocal = thisLower.substring(0, thisAtIndex);
+            const thisDomain = thisLower.substring(thisAtIndex + 1);
+            const otherLocal = otherLower.substring(0, otherAtIndex);
+            const otherDomain = otherLower.substring(otherAtIndex + 1);
+
+            // Local part: fuzzy match (0.8 weight)
+            const localSimilarity = levenshteinSimilarity(thisLocal, otherLocal);
+            // Domain: exact match only (0.2 weight)
+            const domainSimilarity = (thisDomain === otherDomain) ? 1.0 : 0.0;
+
+            emailSimilarity = (localSimilarity * 0.8) + (domainSimilarity * 0.2);
+        } else {
+            // Malformed email (no @), fall back to full string comparison
+            emailSimilarity = levenshteinSimilarity(thisLower, otherLower);
+        }
     }
 
     // Step 4: Determine which components have data to compare
@@ -791,10 +1300,19 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
         const actualWeight = round10(baseWeights.primaryAddress / totalWeight);
         const similarity = round10(primarySimilarity);
         const weightedValue = round10(actualWeight * similarity);
+        // Get subordinate address comparison details
+        let subordinateDetails = null;
+        if (matchedBaseAddress && matchedTargetAddress && typeof matchedBaseAddress.compareTo === 'function') {
+            subordinateDetails = matchedBaseAddress.compareTo(matchedTargetAddress, true);
+        }
         components.primaryAddress = {
             actualWeight: actualWeight,
             similarity: similarity,
-            weightedValue: weightedValue
+            weightedValue: weightedValue,
+            baseValue: matchedBaseAddress ? (matchedBaseAddress.toString ? matchedBaseAddress.toString() : String(matchedBaseAddress)) : '',
+            targetValue: matchedTargetAddress ? (matchedTargetAddress.toString ? matchedTargetAddress.toString() : String(matchedTargetAddress)) : '',
+            matchDirection: matchDirection,
+            subordinateDetails: subordinateDetails
         };
         weightedValueSum += weightedValue;
     }
@@ -806,7 +1324,9 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
         components.secondaryAddress = {
             actualWeight: actualWeight,
             similarity: similarity,
-            weightedValue: weightedValue
+            weightedValue: weightedValue,
+            baseCount: thisSecondaries.length,
+            targetCount: otherSecondaries.length
         };
         weightedValueSum += weightedValue;
     }
@@ -818,7 +1338,10 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
         components.email = {
             actualWeight: actualWeight,
             similarity: similarity,
-            weightedValue: weightedValue
+            weightedValue: weightedValue,
+            baseValue: thisEmail,
+            targetValue: otherEmail,
+            method: 'levenshtein'
         };
         weightedValueSum += weightedValue;
     }
@@ -826,10 +1349,19 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
     // checkSum: overallSimilarity minus sum of weightedValues (should be 0 for validation)
     const checkSum = round10(overallSimilarity - weightedValueSum);
 
+    // Include matched address details for reconciliation
+    const addressMatch = {
+        baseAddress: matchedBaseAddress,
+        targetAddress: matchedTargetAddress,
+        matchDirection: matchDirection,
+        similarity: primarySimilarity
+    };
+
     return {
         overallSimilarity: overallSimilarity,
         components: components,
-        checkSum: checkSum
+        checkSum: checkSum,
+        addressMatch: addressMatch
     };
 }
 
@@ -865,17 +1397,35 @@ function entityWeightedComparison(otherObject, detailed = false) {
     // First pass: calculate raw similarities for name and contactInfo
     let nameSimilarity = null;
     let contactInfoSimilarity = null;
+    let nameDetailedResult = null;
+    let contactInfoDetailedResult = null;
 
     const hasNameData = thisEntity.name && otherEntity.name &&
                         typeof thisEntity.name.compareTo === 'function';
     if (hasNameData) {
-        nameSimilarity = thisEntity.name.compareTo(otherEntity.name);
+        // Always get detailed result for name, extract score
+        const nameResult = thisEntity.name.compareTo(otherEntity.name, true);
+        if (typeof nameResult === 'number') {
+            nameSimilarity = nameResult;
+            nameDetailedResult = { overallSimilarity: nameResult };
+        } else {
+            nameSimilarity = nameResult.overallSimilarity;
+            nameDetailedResult = nameResult;
+        }
     }
 
     const hasContactInfoData = thisEntity.contactInfo && otherEntity.contactInfo &&
                                typeof thisEntity.contactInfo.compareTo === 'function';
     if (hasContactInfoData) {
-        contactInfoSimilarity = thisEntity.contactInfo.compareTo(otherEntity.contactInfo);
+        // Always get detailed result for contactInfo, extract score
+        const contactResult = thisEntity.contactInfo.compareTo(otherEntity.contactInfo, true);
+        if (typeof contactResult === 'number') {
+            contactInfoSimilarity = contactResult;
+            contactInfoDetailedResult = { overallSimilarity: contactResult };
+        } else {
+            contactInfoSimilarity = contactResult.overallSimilarity;
+            contactInfoDetailedResult = contactResult;
+        }
     }
 
     // Apply weight boost logic (NAME ONLY):
@@ -955,7 +1505,25 @@ function entityWeightedComparison(otherObject, detailed = false) {
     const round10 = (val) => Math.round(val * PRECISION) / PRECISION;
 
     // Normalize by total weight (so missing data doesn't penalize)
-    const overallSimilarity = round10(weightedSum / totalWeight);
+    let overallSimilarity = round10(weightedSum / totalWeight);
+
+    // Apply penalties for missing critical data
+    // These penalties are applied AFTER the weighted calculation
+    const MISSING_NAME_PENALTY = 0.04;
+    const MISSING_CONTACTINFO_PENALTY = 0.03;
+    let totalPenalty = 0;
+
+    if (!hasNameData) {
+        totalPenalty += MISSING_NAME_PENALTY;
+    }
+    if (!hasContactInfoData) {
+        totalPenalty += MISSING_CONTACTINFO_PENALTY;
+    }
+
+    // Apply penalty and ensure score doesn't go below 0
+    if (totalPenalty > 0) {
+        overallSimilarity = round10(Math.max(0, overallSimilarity - totalPenalty));
+    }
 
     if (!detailed) {
         return overallSimilarity;
@@ -1015,13 +1583,24 @@ function entityWeightedComparison(otherObject, detailed = false) {
         weightedValueSum += weightedValue;
     }
 
-    // checkSum: overallSimilarity minus sum of weightedValues (should be 0 for validation)
-    const checkSum = round10(overallSimilarity - weightedValueSum);
+    // checkSum: overallSimilarity minus sum of weightedValues minus penalty (should be 0 for validation)
+    const checkSum = round10(overallSimilarity - weightedValueSum + totalPenalty);
 
     return {
         overallSimilarity: overallSimilarity,
         components: components,
-        checkSum: checkSum
+        checkSum: checkSum,
+        // Include penalty information
+        penalties: {
+            missingName: !hasNameData ? MISSING_NAME_PENALTY : 0,
+            missingContactInfo: !hasContactInfoData ? MISSING_CONTACTINFO_PENALTY : 0,
+            totalPenalty: totalPenalty
+        },
+        // Include subordinate detailed results for reconciliation
+        subordinateDetails: {
+            name: nameDetailedResult,
+            contactInfo: contactInfoDetailedResult
+        }
     };
 }
 
@@ -1212,10 +1791,11 @@ function getAvailableCalculators() {
  * @param {Object} obj1 - First object to compare
  * @param {Object} obj2 - Second object to compare
  * @param {Array} excludedProperties - Array of additional property names to skip
- * @returns {number} 0 if objects match, non-zero if different
+ * @param {boolean} detailed - If true, return detailed breakdown object instead of just similarity score
+ * @returns {number|Object} Similarity score 0-1, or detailed breakdown object if detailed=true
  * @throws {Error} If objects are different types (invalid comparison)
  */
-function genericObjectCompareTo(obj1, obj2, excludedProperties) {
+function genericObjectCompareTo(obj1, obj2, excludedProperties, detailed = false) {
     // Basic null/undefined checks
     if (!obj1 && !obj2) return 0; // Both null = match
     if (!obj1 || !obj2) return 1; // One null, one not = no match
@@ -1234,7 +1814,7 @@ function genericObjectCompareTo(obj1, obj2, excludedProperties) {
 
     if (obj1.comparisonCalculator && typeof obj1.comparisonCalculator === 'function') {
         // console.log('[genericObjectCompareTo] Calling comparisonCalculator...');
-        const weightedResult = obj1.comparisonCalculator.call(obj1, obj2);
+        const weightedResult = obj1.comparisonCalculator.call(obj1, obj2, detailed);
         // console.log('[genericObjectCompareTo] weightedResult:', weightedResult);
         if (weightedResult !== null) {
             // console.log('[genericObjectCompareTo] Returning weighted result');

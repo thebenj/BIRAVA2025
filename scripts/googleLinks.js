@@ -82,6 +82,8 @@ function gisLoaded() {
         scope: SCOPES,
         callback: '', // defined later
     });
+    // Expose tokenClient globally for token refresh from other scripts
+    window.tokenClient = tokenClient;
     gisInited = true;
     maybeEnableButtons();
 }

@@ -1,0 +1,1223 @@
+    {
+      "type": "Individual",
+      "locationIdentifier": {
+        "type": "FireNumber",
+        "primaryAlias": {
+          "type": "AttributedTerm",
+          "term": 1740,
+          "fieldName": null,
+          "sourceMap": {
+            "type": "Map",
+            "__data": [
+              [
+                "VISION_APPRAISAL",
+                {
+                  "index": 0,
+                  "identifier": "locationIdentifier_fireNumber"
+                }
+              ]
+            ]
+          },
+          "comparisonWeights": null,
+          "comparisonCalculatorName": "defaultWeightedComparison"
+        },
+        "alternatives": {
+          "type": "Aliases",
+          "homonyms": [],
+          "synonyms": [],
+          "candidates": []
+        },
+        "comparisonWeights": null,
+        "comparisonCalculatorName": "defaultWeightedComparison"
+      },
+      "name": {
+        "type": "IndividualName",
+        "primaryAlias": {
+          "type": "AttributedTerm",
+          "term": "JOSEPHINE MERCK",
+          "fieldName": null,
+          "sourceMap": {
+            "type": "Map",
+            "__data": [
+              [
+                "VISION_APPRAISAL",
+                {
+                  "index": 739,
+                  "identifier": "273"
+                }
+              ]
+            ]
+          },
+          "comparisonWeights": null,
+          "comparisonCalculatorName": "defaultWeightedComparison"
+        },
+        "alternatives": {
+          "type": "Aliases",
+          "homonyms": [],
+          "synonyms": [],
+          "candidates": []
+        },
+        "comparisonWeights": {
+          "lastName": 0.5,
+          "firstName": 0.4,
+          "otherNames": 0.1
+        },
+        "comparisonCalculatorName": "defaultWeightedComparison",
+        "title": "",
+        "firstName": "JOSEPHINE",
+        "otherNames": "",
+        "lastName": "MERCK",
+        "suffix": "",
+        "completeName": "JOSEPHINE MERCK",
+        "termOfAddress": "JOSEPHINE MERCK"
+      },
+      "accountNumber": null,
+      "contactInfo": {
+        "type": "ContactInfo",
+        "comparisonWeights": {
+          "primaryAddress": "conditional",
+          "secondaryAddress": "conditional",
+          "email": "conditional"
+        },
+        "comparisonCalculatorName": "contactInfoWeightedComparison",
+        "email": null,
+        "phone": null,
+        "poBox": null,
+        "primaryAddress": {
+          "type": "Address",
+          "primaryAlias": {
+            "type": "AttributedTerm",
+            "term": "1740  CORN NECK",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "original_address"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "alternatives": {
+            "type": "Aliases",
+            "homonyms": [],
+            "synonyms": [],
+            "candidates": []
+          },
+          "comparisonWeights": {
+            "streetNumber": "conditional",
+            "streetName": "conditional",
+            "secUnitNum": "conditional",
+            "city": "conditional",
+            "state": "conditional",
+            "zipCode": "conditional"
+          },
+          "comparisonCalculatorName": "addressWeightedComparison",
+          "originalAddress": {
+            "type": "AttributedTerm",
+            "term": "1740  CORN NECK",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "original_address"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "recipientDetails": null,
+          "streetNumber": {
+            "type": "AttributedTerm",
+            "term": "1740",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "street_number"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "streetName": {
+            "type": "AttributedTerm",
+            "term": "CORN NECK",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "street_name"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "streetType": null,
+          "city": {
+            "type": "AttributedTerm",
+            "term": "Block Island",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "city"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "state": {
+            "type": "AttributedTerm",
+            "term": "RI",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "state"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "zipCode": {
+            "type": "AttributedTerm",
+            "term": "02807",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "zip_code"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "secUnitType": null,
+          "secUnitNum": null,
+          "isBlockIslandAddress": {
+            "type": "AttributedTerm",
+            "term": true,
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "is_block_island"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "cityNormalized": {
+            "type": "AttributedTerm",
+            "term": true,
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "city_normalized"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "processingSource": {
+            "type": "AttributedTerm",
+            "term": "VisionAppraisal",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "processing_source"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          },
+          "processingTimestamp": {
+            "type": "AttributedTerm",
+            "term": "2025-12-08T22:12:20.705Z",
+            "fieldName": null,
+            "sourceMap": {
+              "type": "Map",
+              "__data": [
+                [
+                  "VisionAppraisal",
+                  {
+                    "index": "propertyLocation",
+                    "identifier": "processing_timestamp"
+                  }
+                ]
+              ]
+            },
+            "comparisonWeights": null,
+            "comparisonCalculatorName": "defaultWeightedComparison"
+          }
+        },
+        "secondaryAddress": [
+          {
+            "type": "Address",
+            "primaryAlias": {
+              "type": "AttributedTerm",
+              "term": "171 CAT ROCK ROAD::#^#::COS COB:^#^: CT 06807",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "original_address"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "alternatives": {
+              "type": "Aliases",
+              "homonyms": [],
+              "synonyms": [],
+              "candidates": []
+            },
+            "comparisonWeights": {
+              "streetNumber": "conditional",
+              "streetName": "conditional",
+              "secUnitNum": "conditional",
+              "city": "conditional",
+              "state": "conditional",
+              "zipCode": "conditional"
+            },
+            "comparisonCalculatorName": "addressWeightedComparison",
+            "originalAddress": {
+              "type": "AttributedTerm",
+              "term": "171 CAT ROCK ROAD::#^#::COS COB:^#^: CT 06807",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "original_address"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "recipientDetails": null,
+            "streetNumber": {
+              "type": "AttributedTerm",
+              "term": "171",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "street_number"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "streetName": {
+              "type": "AttributedTerm",
+              "term": "CAT ROCK",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "street_name"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "streetType": {
+              "type": "AttributedTerm",
+              "term": "Rd",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "street_type"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "city": {
+              "type": "AttributedTerm",
+              "term": "COS COB",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "city"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "state": {
+              "type": "AttributedTerm",
+              "term": "CT",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "state"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "zipCode": {
+              "type": "AttributedTerm",
+              "term": "06807",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "zip_code"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "secUnitType": null,
+            "secUnitNum": null,
+            "isBlockIslandAddress": {
+              "type": "AttributedTerm",
+              "term": false,
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "is_block_island"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "cityNormalized": {
+              "type": "AttributedTerm",
+              "term": false,
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "city_normalized"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "processingSource": {
+              "type": "AttributedTerm",
+              "term": "VisionAppraisal",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "processing_source"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "processingTimestamp": {
+              "type": "AttributedTerm",
+              "term": "2025-12-08T22:12:20.706Z",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VisionAppraisal",
+                    {
+                      "index": "ownerAddress",
+                      "identifier": "processing_timestamp"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            }
+          }
+        ]
+      },
+      "otherInfo": {
+        "type": "OtherInfo",
+        "comparisonWeights": null,
+        "comparisonCalculatorName": "defaultWeightedComparison",
+        "householdInformation": {
+          "type": "HouseholdInformation",
+          "isInHousehold": false,
+          "householdName": "",
+          "isHeadOfHousehold": false,
+          "householdIdentifier": "",
+          "comparisonWeights": "conditional",
+          "comparisonCalculatorName": "householdInformationWeightedComparison"
+        },
+        "subdivision": {
+          "277": {
+            "type": "Individual",
+            "locationIdentifier": {
+              "type": "FireNumber",
+              "primaryAlias": {
+                "type": "AttributedTerm",
+                "term": 1740,
+                "fieldName": null,
+                "sourceMap": {
+                  "type": "Map",
+                  "__data": [
+                    [
+                      "VISION_APPRAISAL",
+                      {
+                        "index": 0,
+                        "identifier": "locationIdentifier_fireNumber"
+                      }
+                    ]
+                  ]
+                },
+                "comparisonWeights": null,
+                "comparisonCalculatorName": "defaultWeightedComparison"
+              },
+              "alternatives": {
+                "type": "Aliases",
+                "homonyms": [],
+                "synonyms": [],
+                "candidates": []
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "name": {
+              "type": "IndividualName",
+              "primaryAlias": {
+                "type": "AttributedTerm",
+                "term": "JOSEPHINE MERCK",
+                "fieldName": null,
+                "sourceMap": {
+                  "type": "Map",
+                  "__data": [
+                    [
+                      "VISION_APPRAISAL",
+                      {
+                        "index": 2316,
+                        "identifier": "277"
+                      }
+                    ]
+                  ]
+                },
+                "comparisonWeights": null,
+                "comparisonCalculatorName": "defaultWeightedComparison"
+              },
+              "alternatives": {
+                "type": "Aliases",
+                "homonyms": [],
+                "synonyms": [],
+                "candidates": []
+              },
+              "comparisonWeights": {
+                "lastName": 0.5,
+                "firstName": 0.4,
+                "otherNames": 0.1
+              },
+              "comparisonCalculatorName": "defaultWeightedComparison",
+              "title": "",
+              "firstName": "JOSEPHINE",
+              "otherNames": "",
+              "lastName": "MERCK",
+              "suffix": "",
+              "completeName": "JOSEPHINE MERCK",
+              "termOfAddress": "JOSEPHINE MERCK"
+            },
+            "accountNumber": null,
+            "contactInfo": {
+              "type": "ContactInfo",
+              "comparisonWeights": {
+                "primaryAddress": "conditional",
+                "secondaryAddress": "conditional",
+                "email": "conditional"
+              },
+              "comparisonCalculatorName": "contactInfoWeightedComparison",
+              "email": null,
+              "phone": null,
+              "poBox": null,
+              "primaryAddress": {
+                "type": "Address",
+                "primaryAlias": {
+                  "type": "AttributedTerm",
+                  "term": "1740  OFF CORN NECK",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "original_address"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "alternatives": {
+                  "type": "Aliases",
+                  "homonyms": [],
+                  "synonyms": [],
+                  "candidates": []
+                },
+                "comparisonWeights": {
+                  "streetNumber": "conditional",
+                  "streetName": "conditional",
+                  "secUnitNum": "conditional",
+                  "city": "conditional",
+                  "state": "conditional",
+                  "zipCode": "conditional"
+                },
+                "comparisonCalculatorName": "addressWeightedComparison",
+                "originalAddress": {
+                  "type": "AttributedTerm",
+                  "term": "1740  OFF CORN NECK",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "original_address"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "recipientDetails": null,
+                "streetNumber": {
+                  "type": "AttributedTerm",
+                  "term": "1740",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "street_number"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "streetName": {
+                  "type": "AttributedTerm",
+                  "term": "OFF CORN NECK",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "street_name"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "streetType": null,
+                "city": {
+                  "type": "AttributedTerm",
+                  "term": "Block Island",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "city"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "state": {
+                  "type": "AttributedTerm",
+                  "term": "RI",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "state"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "zipCode": {
+                  "type": "AttributedTerm",
+                  "term": "02807",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "zip_code"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "secUnitType": null,
+                "secUnitNum": null,
+                "isBlockIslandAddress": {
+                  "type": "AttributedTerm",
+                  "term": true,
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "is_block_island"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "cityNormalized": {
+                  "type": "AttributedTerm",
+                  "term": true,
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "city_normalized"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "processingSource": {
+                  "type": "AttributedTerm",
+                  "term": "VisionAppraisal",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "processing_source"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                },
+                "processingTimestamp": {
+                  "type": "AttributedTerm",
+                  "term": "2025-12-08T22:12:21.384Z",
+                  "fieldName": null,
+                  "sourceMap": {
+                    "type": "Map",
+                    "__data": [
+                      [
+                        "VisionAppraisal",
+                        {
+                          "index": "propertyLocation",
+                          "identifier": "processing_timestamp"
+                        }
+                      ]
+                    ]
+                  },
+                  "comparisonWeights": null,
+                  "comparisonCalculatorName": "defaultWeightedComparison"
+                }
+              },
+              "secondaryAddress": [
+                {
+                  "type": "Address",
+                  "primaryAlias": {
+                    "type": "AttributedTerm",
+                    "term": "171 CAT ROCK ROAD::#^#::COS COB:^#^: CT 06807",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "original_address"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "alternatives": {
+                    "type": "Aliases",
+                    "homonyms": [],
+                    "synonyms": [],
+                    "candidates": []
+                  },
+                  "comparisonWeights": {
+                    "streetNumber": "conditional",
+                    "streetName": "conditional",
+                    "secUnitNum": "conditional",
+                    "city": "conditional",
+                    "state": "conditional",
+                    "zipCode": "conditional"
+                  },
+                  "comparisonCalculatorName": "addressWeightedComparison",
+                  "originalAddress": {
+                    "type": "AttributedTerm",
+                    "term": "171 CAT ROCK ROAD::#^#::COS COB:^#^: CT 06807",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "original_address"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "recipientDetails": null,
+                  "streetNumber": {
+                    "type": "AttributedTerm",
+                    "term": "171",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "street_number"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "streetName": {
+                    "type": "AttributedTerm",
+                    "term": "CAT ROCK",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "street_name"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "streetType": {
+                    "type": "AttributedTerm",
+                    "term": "Rd",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "street_type"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "city": {
+                    "type": "AttributedTerm",
+                    "term": "COS COB",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "city"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "state": {
+                    "type": "AttributedTerm",
+                    "term": "CT",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "state"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "zipCode": {
+                    "type": "AttributedTerm",
+                    "term": "06807",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "zip_code"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "secUnitType": null,
+                  "secUnitNum": null,
+                  "isBlockIslandAddress": {
+                    "type": "AttributedTerm",
+                    "term": false,
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "is_block_island"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "cityNormalized": {
+                    "type": "AttributedTerm",
+                    "term": false,
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "city_normalized"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "processingSource": {
+                    "type": "AttributedTerm",
+                    "term": "VisionAppraisal",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "processing_source"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  },
+                  "processingTimestamp": {
+                    "type": "AttributedTerm",
+                    "term": "2025-12-08T22:12:21.384Z",
+                    "fieldName": null,
+                    "sourceMap": {
+                      "type": "Map",
+                      "__data": [
+                        [
+                          "VisionAppraisal",
+                          {
+                            "index": "ownerAddress",
+                            "identifier": "processing_timestamp"
+                          }
+                        ]
+                      ]
+                    },
+                    "comparisonWeights": null,
+                    "comparisonCalculatorName": "defaultWeightedComparison"
+                  }
+                }
+              ]
+            },
+            "otherInfo": null,
+            "legacyInfo": null,
+            "comparisonWeights": {
+              "name": 0.5,
+              "contactInfo": 0.3,
+              "otherInfo": 0.15,
+              "legacyInfo": 0.05
+            },
+            "comparisonCalculatorName": "entityWeightedComparison",
+            "label": null,
+            "number": null,
+            "pid": "277",
+            "mblu": {
+              "type": "AttributedTerm",
+              "term": "03/  /  117/02 /",
+              "fieldName": null,
+              "sourceMap": {
+                "type": "Map",
+                "__data": [
+                  [
+                    "VISION_APPRAISAL",
+                    {
+                      "index": 2316,
+                      "identifier": "277"
+                    }
+                  ]
+                ]
+              },
+              "comparisonWeights": null,
+              "comparisonCalculatorName": "defaultWeightedComparison"
+            },
+            "fireNumber": 1740,
+            "googleFileId": "1PZlZh_EqifLtUR0x1GLgO77S-1PFlbQ5",
+            "source": "VISION_APPRAISAL",
+            "entityType": "Individual"
+          }
+        }
+      },
+      "legacyInfo": null,
+      "comparisonWeights": {
+        "name": 0.5,
+        "contactInfo": 0.3,
+        "otherInfo": 0.15,
+        "legacyInfo": 0.05
+      },
+      "comparisonCalculatorName": "entityWeightedComparison",
+      "label": null,
+      "number": null,
+      "pid": "273",
+      "mblu": {
+        "type": "AttributedTerm",
+        "term": "03/  /  112/03 /",
+        "fieldName": null,
+        "sourceMap": {
+          "type": "Map",
+          "__data": [
+            [
+              "VISION_APPRAISAL",
+              {
+                "index": 739,
+                "identifier": "273"
+              }
+            ]
+          ]
+        },
+        "comparisonWeights": null,
+        "comparisonCalculatorName": "defaultWeightedComparison"
+      },
+      "fireNumber": 1740,
+      "googleFileId": "1vjtOW2SjG52R5DiQKqHZ0676sgZOfvmO",
+      "source": "VISION_APPRAISAL",
+      "entityType": "Individual"
+    },

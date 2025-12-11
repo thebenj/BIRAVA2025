@@ -1533,25 +1533,45 @@ async function analyzeSelectedEntityMatches() {
 
     showUnifiedStatus('Analyzing matches... This may take a moment.', 'loading');
 
+    // DIAGNOSTIC: Log state before any loading
+    console.log('=== ANALYZE MATCHES DIAGNOSTIC ===');
+    console.log('BEFORE loading scripts:');
+    console.log('  findBestMatches available:', typeof findBestMatches === 'function');
+    console.log('  universalCompareTo available:', typeof universalCompareTo === 'function');
+    console.log('  levenshteinSimilarity available:', typeof levenshteinSimilarity === 'function');
+
     try {
         // Load the universalEntityMatcher if not already loaded
         if (typeof findBestMatches !== 'function') {
+            console.log('  -> Loading universalEntityMatcher.js...');
             await loadScriptAsync('./scripts/matching/universalEntityMatcher.js');
+            console.log('  -> Script loaded. findBestMatches now:', typeof findBestMatches === 'function');
+            console.log('  -> universalCompareTo now:', typeof universalCompareTo === 'function');
         }
 
         // Also ensure utils.js is loaded for comparison functions
         if (typeof levenshteinSimilarity !== 'function') {
+            console.log('  -> Loading utils.js...');
             await loadScriptAsync('./scripts/utils.js');
         }
+
+        // DIAGNOSTIC: Log state after loading
+        console.log('AFTER loading scripts:');
+        console.log('  findBestMatches available:', typeof findBestMatches === 'function');
+        console.log('  universalCompareTo available:', typeof universalCompareTo === 'function');
 
         // Perform the match analysis
         let matchResults;
         if (typeof findBestMatches === 'function') {
+            console.log('  -> Using findBestMatches (universalCompareTo path)');
             matchResults = findBestMatches(entity);
         } else {
             // Fallback - perform basic matching here
+            console.log('  -> WARNING: Using performBasicMatchAnalysis FALLBACK (direct compareTo)');
+            console.log('  -> This fallback is BROKEN for cross-type comparisons!');
             matchResults = performBasicMatchAnalysis(entity, entityWrapper);
         }
+        console.log('=== END DIAGNOSTIC ===')
 
         // Display results in a new window
         displayMatchAnalysisResults(entityWrapper, matchResults);
@@ -1649,15 +1669,36 @@ function displayMatchAnalysisResults(entityWrapper, results) {
 
     const styles = generateMatchAnalysisStyles();
 
+    // Extract base entity info for reconciliation
+    // From universalEntityMatcher results or from entityWrapper
+    // Key format now includes type: { source, keyType, key, accountNumber, headStatus }
+    let baseEntityInfo;
+    if (results.baseEntity) {
+        baseEntityInfo = {
+            source: results.baseEntity.source,
+            keyType: results.baseEntity.keyType,
+            key: results.baseEntity.key,
+            accountNumber: results.baseEntity.accountNumber || '',
+            headStatus: results.baseEntity.headStatus || 'na'
+        };
+    } else {
+        const locIdInfo = getLocationIdentifierInfoFromWrapper(entityWrapper);
+        baseEntityInfo = {
+            source: entityWrapper.sourceKey || entityWrapper.source?.toLowerCase() || 'unknown',
+            keyType: locIdInfo.type,
+            key: locIdInfo.value
+        };
+    }
+
     // Generate content based on results structure
     let resultsHtml = '';
 
     if (results.bestMatchesByType) {
         // Results from universalEntityMatcher (grouped by type)
-        resultsHtml = generateUniversalMatcherResultsHtml(results);
+        resultsHtml = generateUniversalMatcherResultsHtml(results, baseEntityInfo);
     } else if (results.byType) {
         // Alternative property name for universalEntityMatcher results
-        resultsHtml = generateUniversalMatcherResultsHtml(results);
+        resultsHtml = generateUniversalMatcherResultsHtml(results, baseEntityInfo);
     } else if (results.comparisons) {
         // Results from basic analysis
         resultsHtml = generateBasicMatchResultsHtml(results);
@@ -1700,6 +1741,16 @@ function displayMatchAnalysisResults(entityWrapper, results) {
                             const score = parseFloat(row.dataset.score || 0);
                             row.style.display = score >= minScore ? '' : 'none';
                         });
+                    }
+
+                    // Reconcile button handler - calls parent window's reconcileMatch
+                    // Parameters: baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus
+                    function doReconcile(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus) {
+                        if (window.opener && typeof window.opener.reconcileMatch === 'function') {
+                            window.opener.reconcileMatch(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus);
+                        } else {
+                            alert('Unable to reconcile: Parent window not available. Please ensure the main browser window is still open.');
+                        }
                     }
                 </script>
             </body>
@@ -1898,19 +1949,219 @@ function generateMatchAnalysisStyles() {
             border-radius: 3px;
             font-weight: 600;
         }
+
+        .reconcile-btn {
+            padding: 5px 10px;
+            background: #9b59b6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-right: 5px;
+        }
+        .reconcile-btn:hover { background: #8e44ad; }
+
+        /* Top Matches Section */
+        .top-matches-section {
+            border: 2px solid #f39c12;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .top-matches-header {
+            background: linear-gradient(135deg, #f39c12, #e67e22);
+            color: white;
+            padding: 12px 15px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .top-matches-content {
+            padding: 10px;
+            background: #fffbf5;
+        }
+        .top-match-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 10px;
+            background: white;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            border: 1px solid #fdebd0;
+        }
+        .top-match-row:last-child { margin-bottom: 0; }
+        .top-match-score {
+            min-width: 60px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            font-size: 12px;
+            text-align: center;
+        }
+        .top-match-info {
+            flex: 1;
+            overflow: hidden;
+        }
+        .top-match-name {
+            font-weight: 600;
+            color: #2c3e50;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .top-match-meta {
+            font-size: 11px;
+            color: #666;
+        }
+        .selection-reason {
+            padding: 3px 8px;
+            background: #fff3cd;
+            border-radius: 3px;
+            font-size: 10px;
+            color: #856404;
+            white-space: nowrap;
+        }
     `;
+}
+
+/**
+ * Generate the Top Matches summary section
+ * Shows top 2 from each entity type + top 6 overall not already included
+ * @param {Object} matchesByType - Matches grouped by entity type
+ * @param {Object} baseEntityInfo - Info about the base entity for reconciliation
+ * @returns {string} HTML content
+ */
+function generateTopMatchesSection(matchesByType, baseEntityInfo) {
+    const includedKeys = new Set();
+    const topMatches = [];
+
+    // Get top 2 from each type
+    const entityTypes = ['Individual', 'AggregateHousehold', 'Business', 'LegalConstruct'];
+    for (const type of entityTypes) {
+        const typeData = matchesByType[type];
+        const matches = typeData?.bestMatches || [];
+        const top2 = matches.slice(0, 2);
+        top2.forEach(match => {
+            const key = `${match.targetSource}_${match.targetKey}`;
+            if (!includedKeys.has(key)) {
+                includedKeys.add(key);
+                topMatches.push({ ...match, entityType: type, selectionReason: `Top from ${type}` });
+            }
+        });
+    }
+
+    // Collect all matches and sort by score descending
+    const allMatches = [];
+    for (const [type, typeData] of Object.entries(matchesByType)) {
+        const matches = typeData?.bestMatches || [];
+        matches.forEach(match => {
+            allMatches.push({ ...match, entityType: type });
+        });
+    }
+    const sortedAll = allMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    // Add up to 6 more top matches not already included
+    let addedFromOverall = 0;
+    for (const match of sortedAll) {
+        if (addedFromOverall >= 6) break;
+        const key = `${match.targetSource}_${match.targetKey}`;
+        if (!includedKeys.has(key)) {
+            includedKeys.add(key);
+            topMatches.push({ ...match, selectionReason: 'Top Overall' });
+            addedFromOverall++;
+        }
+    }
+
+    if (topMatches.length === 0) {
+        return '';
+    }
+
+    // Sort by similarity score descending
+    topMatches.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    // Generate HTML
+    let html = `
+        <div class="top-matches-section">
+            <div class="top-matches-header">
+                Top Matches Summary (${topMatches.length} highlighted)
+            </div>
+            <div class="top-matches-content">
+    `;
+
+    // Extract base entity info for reconciliation buttons
+    const baseSource = baseEntityInfo?.source || 'unknown';
+    const baseKeyType = baseEntityInfo?.keyType || 'Unknown';
+    const baseKeyValue = baseEntityInfo?.key || 'unknown';
+    const baseAccountNumber = baseEntityInfo?.accountNumber || '';
+    const baseHeadStatus = baseEntityInfo?.headStatus || 'na';
+
+    topMatches.forEach(match => {
+        const score = match.score || 0;
+        const scoreClass = score >= 0.95 ? 'score-excellent' :
+                           score >= 0.8 ? 'score-good' :
+                           score >= 0.5 ? 'score-moderate' : 'score-low';
+        const entityName = match.entityName || match.targetKey || 'Unknown';
+
+        // Build reconcile button onclick
+        const targetKeyValue = match.targetKey || '';
+        const targetKeyType = match.targetKeyType || 'Unknown';
+        const targetAccountNumber = match.targetAccountNumber || '';
+        const targetHeadStatus = match.targetHeadStatus || 'na';
+        const targetSource = match.targetSource || '';
+        const reconcileOnclick = "doReconcile('" +
+            escapeHtmlForBrowser(baseSource) + "','" +
+            escapeHtmlForBrowser(baseKeyType) + "','" +
+            escapeHtmlForBrowser(baseKeyValue) + "','" +
+            escapeHtmlForBrowser(baseAccountNumber) + "','" +
+            escapeHtmlForBrowser(baseHeadStatus) + "','" +
+            escapeHtmlForBrowser(targetSource) + "','" +
+            escapeHtmlForBrowser(targetKeyType) + "','" +
+            escapeHtmlForBrowser(targetKeyValue) + "','" +
+            escapeHtmlForBrowser(targetAccountNumber) + "','" +
+            escapeHtmlForBrowser(targetHeadStatus) + "')";
+
+        html += `
+            <div class="top-match-row">
+                <span class="top-match-score ${scoreClass}">${(score * 100).toFixed(1)}%</span>
+                <div class="top-match-info">
+                    <div class="top-match-name">${escapeHtmlForBrowser(entityName)}</div>
+                    <div class="top-match-meta">${match.entityType || ''} | ${match.targetSource || ''} | ${match.targetKey || ''}</div>
+                </div>
+                <span class="selection-reason">${match.selectionReason}</span>
+                <button class="reconcile-btn" onclick="${reconcileOnclick}">Reconcile</button>
+            </div>
+        `;
+    });
+
+    html += `
+            </div>
+        </div>
+    `;
+
+    return html;
 }
 
 /**
  * Generate HTML for results from universalEntityMatcher
  * @param {Object} results - Results grouped by type
+ * @param {Object} baseEntityInfo - Info about the base entity for reconciliation
  * @returns {string} HTML content
  */
-function generateUniversalMatcherResultsHtml(results) {
+function generateUniversalMatcherResultsHtml(results, baseEntityInfo) {
     let html = '';
 
     // Get the match data - support both property names for compatibility
     const matchesByType = results.bestMatchesByType || results.byType || {};
+
+    // Extract base entity key info for reconciliation
+    // For Bloomerang: use accountNumber + headStatus to ensure unique lookup
+    // For VisionAppraisal: use keyType + keyValue
+    const baseSource = baseEntityInfo?.source || 'unknown';
+    const baseKeyType = baseEntityInfo?.keyType || 'Unknown';
+    const baseKeyValue = baseEntityInfo?.key || 'unknown';
+    const baseAccountNumber = baseEntityInfo?.accountNumber || '';
+    const baseHeadStatus = baseEntityInfo?.headStatus || 'na';
 
     // Summary section
     html += `
@@ -1948,6 +2199,9 @@ function generateUniversalMatcherResultsHtml(results) {
         </div>
     `;
 
+    // Top Matches summary section (top 2 from each type + top 6 overall)
+    html += generateTopMatchesSection(matchesByType, baseEntityInfo);
+
     // Results by type
     for (const [type, typeData] of Object.entries(matchesByType)) {
         const matches = typeData?.bestMatches || [];
@@ -1974,6 +2228,25 @@ function generateUniversalMatcherResultsHtml(results) {
             const nameScore = match.details?.components?.name?.similarity;
             const hasHighNameScore = nameScore && nameScore > 0.985;
 
+            // Build the Reconcile button onclick with properly escaped values
+            // Parameters: baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus
+            const targetKeyValue = match.targetKey || '';
+            const targetKeyType = match.targetKeyType || 'Unknown';
+            const targetAccountNumber = match.targetAccountNumber || '';
+            const targetHeadStatus = match.targetHeadStatus || 'na';
+            const targetSource = match.targetSource || '';
+            const reconcileOnclick = "doReconcile('" +
+                escapeHtmlForBrowser(baseSource) + "','" +
+                escapeHtmlForBrowser(baseKeyType) + "','" +
+                escapeHtmlForBrowser(baseKeyValue) + "','" +
+                escapeHtmlForBrowser(baseAccountNumber) + "','" +
+                escapeHtmlForBrowser(baseHeadStatus) + "','" +
+                escapeHtmlForBrowser(targetSource) + "','" +
+                escapeHtmlForBrowser(targetKeyType) + "','" +
+                escapeHtmlForBrowser(targetKeyValue) + "','" +
+                escapeHtmlForBrowser(targetAccountNumber) + "','" +
+                escapeHtmlForBrowser(targetHeadStatus) + "')";
+
             html += `
                 <div class="match-row" data-score="${score}">
                     <span class="score-badge ${scoreClass}">${(score * 100).toFixed(1)}%</span>
@@ -1985,6 +2258,7 @@ function generateUniversalMatcherResultsHtml(results) {
                         <div class="match-key">${match.targetKey || ''}</div>
                     </div>
                     <span class="match-source">${match.targetSource || ''}</span>
+                    <button class="reconcile-btn" onclick="${reconcileOnclick}">Reconcile</button>
                     ${match.details ? `<button class="toggle-btn" onclick="toggleDetails('${detailId}')">Details</button>` : ''}
                 </div>
             `;
@@ -2135,6 +2409,674 @@ function renderMatchDetails(details) {
     }
 
     return html;
+}
+
+// =============================================================================
+// RECONCILIATION FUNCTIONS
+// =============================================================================
+
+/**
+ * Entry point for Reconcile button - displays detailed breakdown of how similarity was calculated
+ * @param {string} baseSource - Source of the base entity ('visionAppraisal' or 'bloomerang')
+ * @param {string} baseKeyType - Type of the base entity's locationIdentifier (e.g., 'FireNumber', 'PID')
+ * @param {string} baseKeyValue - Value of the base entity's locationIdentifier
+ * @param {string} baseAccountNumber - Bloomerang account number for base (empty for VisionAppraisal)
+ * @param {string} baseHeadStatus - Head status for base ('head', 'member', 'na')
+ * @param {string} targetSource - Source of the target entity
+ * @param {string} targetKeyType - Type of the target entity's locationIdentifier
+ * @param {string} targetKeyValue - Value of the target entity's locationIdentifier
+ * @param {string} targetAccountNumber - Bloomerang account number for target (empty for VisionAppraisal)
+ * @param {string} targetHeadStatus - Head status for target ('head', 'member', 'na')
+ */
+function reconcileMatch(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus) {
+    console.log('reconcileMatch called:', { baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus });
+
+    // Look up both entities using the appropriate lookup function
+    // For Bloomerang: use accountNumber + headStatus (guaranteed unique)
+    // For VisionAppraisal: use keyType + keyValue
+    let baseEntity, targetEntity;
+
+    if (baseSource === 'bloomerang' && baseAccountNumber) {
+        if (typeof getBloomerangEntityByAccountNumber !== 'function') {
+            console.error('getBloomerangEntityByAccountNumber function not available');
+            alert('Error: Entity lookup function not available. Please reload entities.');
+            return;
+        }
+        baseEntity = getBloomerangEntityByAccountNumber(baseAccountNumber, baseKeyType, baseKeyValue, baseHeadStatus);
+    } else {
+        if (typeof getVisionAppraisalEntity !== 'function') {
+            console.error('getVisionAppraisalEntity function not available');
+            alert('Error: Entity lookup function not available. Please reload entities.');
+            return;
+        }
+        baseEntity = getVisionAppraisalEntity(baseKeyType, baseKeyValue);
+    }
+
+    if (!baseEntity) {
+        const keyDesc = baseSource === 'bloomerang' ? `accountNumber:${baseAccountNumber}:${baseHeadStatus}` : `${baseKeyType}:${baseKeyValue}`;
+        console.error('Base entity not found:', baseSource, keyDesc);
+        alert('Error: Base entity not found. Key: ' + keyDesc);
+        return;
+    }
+
+    if (targetSource === 'bloomerang' && targetAccountNumber) {
+        targetEntity = getBloomerangEntityByAccountNumber(targetAccountNumber, targetKeyType, targetKeyValue, targetHeadStatus);
+    } else {
+        targetEntity = getVisionAppraisalEntity(targetKeyType, targetKeyValue);
+    }
+
+    if (!targetEntity) {
+        const keyDesc = targetSource === 'bloomerang' ? `accountNumber:${targetAccountNumber}:${targetHeadStatus}` : `${targetKeyType}:${targetKeyValue}`;
+        console.error('Target entity not found:', targetSource, keyDesc);
+        alert('Error: Target entity not found. Key: ' + keyDesc);
+        return;
+    }
+
+    console.log('Entities retrieved successfully:', {
+        baseEntity: baseEntity.constructor?.name,
+        targetEntity: targetEntity.constructor?.name
+    });
+
+    // Perform detailed reconciliation
+    const reconciliationData = performDetailedReconciliation(baseEntity, targetEntity, {
+        baseSource,
+        baseKeyType,
+        baseKeyValue,
+        baseAccountNumber,
+        baseHeadStatus,
+        targetSource,
+        targetKeyType,
+        targetKeyValue,
+        targetAccountNumber,
+        targetHeadStatus
+    });
+
+    // Display the reconciliation modal
+    displayReconciliationModal(reconciliationData);
+}
+
+/**
+ * Perform detailed reconciliation by calling universalCompareTo and extracting all details
+ * CRITICAL: This function does NOT recalculate - it extracts from universalCompareTo results
+ * @param {Object} baseEntity - The base entity
+ * @param {Object} targetEntity - The target entity to compare
+ * @param {Object} metadata - Contains baseSource, baseLocationId, targetSource, targetKey
+ * @returns {Object} Reconciliation data for display
+ */
+function performDetailedReconciliation(baseEntity, targetEntity, metadata) {
+    // Call universalCompareTo to get the comparison result
+    // This is the SINGLE SOURCE OF TRUTH - we extract, not recalculate
+    let comparisonResult;
+
+    if (typeof universalCompareTo === 'function') {
+        comparisonResult = universalCompareTo(baseEntity, targetEntity);
+    } else if (typeof baseEntity.compareTo === 'function') {
+        // Fallback to direct compareTo with detailed=true
+        comparisonResult = baseEntity.compareTo(targetEntity, true);
+    } else {
+        console.error('No comparison function available');
+        return {
+            error: 'No comparison function available',
+            baseEntity,
+            targetEntity,
+            metadata
+        };
+    }
+
+    console.log('Comparison result:', comparisonResult);
+
+    // Extract the structured reconciliation data
+    const reconciliationData = {
+        metadata: metadata,
+        baseEntityName: extractUnifiedEntityName(baseEntity),
+        baseEntityType: baseEntity.constructor?.name || 'Unknown',
+        targetEntityName: extractUnifiedEntityName(targetEntity),
+        targetEntityType: targetEntity.constructor?.name || 'Unknown',
+        overallScore: comparisonResult.score || comparisonResult.overallSimilarity || comparisonResult,
+        comparisonMethod: comparisonResult.comparisonMethod || 'standard',
+        details: comparisonResult.details || comparisonResult
+    };
+
+    // Extract name comparison details - merge top-level and subordinate
+    if (comparisonResult.details?.components?.name) {
+        // Start with top-level entity components
+        reconciliationData.nameComparison = {
+            similarity: comparisonResult.details.components.name.similarity,
+            weight: comparisonResult.details.components.name.actualWeight || comparisonResult.details.components.name.weight,
+            contribution: comparisonResult.details.components.name.weightedValue || comparisonResult.details.components.name.contribution
+        };
+        // Merge in subordinateDetails if available (contains method, components breakdown, etc.)
+        if (comparisonResult.details.subordinateDetails?.name) {
+            Object.assign(reconciliationData.nameComparison, comparisonResult.details.subordinateDetails.name);
+        }
+    } else if (comparisonResult.details?.subordinateDetails?.name) {
+        reconciliationData.nameComparison = comparisonResult.details.subordinateDetails.name;
+    }
+
+    // Extract contactInfo comparison details - merge top-level and subordinate
+    if (comparisonResult.details?.components?.contactInfo) {
+        // Start with top-level entity components
+        reconciliationData.contactInfoComparison = {
+            similarity: comparisonResult.details.components.contactInfo.similarity,
+            weight: comparisonResult.details.components.contactInfo.actualWeight || comparisonResult.details.components.contactInfo.weight,
+            contribution: comparisonResult.details.components.contactInfo.weightedValue || comparisonResult.details.components.contactInfo.contribution
+        };
+        // Merge in subordinateDetails if available (contains method, components breakdown, addressMatch, etc.)
+        if (comparisonResult.details.subordinateDetails?.contactInfo) {
+            Object.assign(reconciliationData.contactInfoComparison, comparisonResult.details.subordinateDetails.contactInfo);
+        }
+        // Extract addressMatch to top level for dedicated display
+        if (comparisonResult.details.subordinateDetails?.contactInfo?.addressMatch) {
+            reconciliationData.addressMatch = comparisonResult.details.subordinateDetails.contactInfo.addressMatch;
+        }
+    } else if (comparisonResult.details?.subordinateDetails?.contactInfo) {
+        reconciliationData.contactInfoComparison = comparisonResult.details.subordinateDetails.contactInfo;
+        if (comparisonResult.details.subordinateDetails.contactInfo.addressMatch) {
+            reconciliationData.addressMatch = comparisonResult.details.subordinateDetails.contactInfo.addressMatch;
+        }
+    }
+
+    // For household-to-household comparisons, extract matched individuals
+    if (comparisonResult.matchedIndividual1 !== undefined) {
+        reconciliationData.householdMatch = {
+            matchedIndividual1: comparisonResult.matchedIndividual1,
+            matchedIndividual2: comparisonResult.matchedIndividual2,
+            matchedIndividualIndex1: comparisonResult.matchedIndividualIndex1,
+            matchedIndividualIndex2: comparisonResult.matchedIndividualIndex2,
+            individual1Name: comparisonResult.matchedIndividual1 ?
+                extractUnifiedEntityName(comparisonResult.matchedIndividual1) : null,
+            individual2Name: comparisonResult.matchedIndividual2 ?
+                extractUnifiedEntityName(comparisonResult.matchedIndividual2) : null
+        };
+    }
+
+    return reconciliationData;
+}
+
+/**
+ * Display the reconciliation modal with detailed breakdown
+ * @param {Object} data - Reconciliation data from performDetailedReconciliation
+ */
+function displayReconciliationModal(data) {
+    // Handle error case
+    if (data.error) {
+        alert('Reconciliation Error: ' + data.error);
+        return;
+    }
+
+    const modalWindow = window.open('', '_blank', 'width=900,height=700,scrollbars=yes');
+
+    const overallScore = typeof data.overallScore === 'number' ? data.overallScore : 0;
+    const scorePercent = (overallScore * 100).toFixed(2);
+    const scoreClass = overallScore >= 0.95 ? 'excellent' :
+                       overallScore >= 0.8 ? 'good' :
+                       overallScore >= 0.5 ? 'moderate' : 'low';
+
+    // Build the HTML content - using string concatenation to avoid template literal issues
+    let htmlContent = '';
+    htmlContent += '<!DOCTYPE html><html><head>';
+    htmlContent += '<title>Reconciliation: ' + escapeHtmlForBrowser(data.baseEntityName) + '</title>';
+    htmlContent += '<style>' + generateReconciliationStyles() + '</style>';
+    htmlContent += '</head><body>';
+
+    // Header section
+    htmlContent += '<div class="reconcile-header">';
+    htmlContent += '<h1>Match Reconciliation</h1>';
+    htmlContent += '<div class="score-display score-' + scoreClass + '">';
+    htmlContent += '<span class="score-value">' + scorePercent + '%</span>';
+    htmlContent += '<span class="score-label">Overall Similarity</span>';
+    htmlContent += '</div>';
+    htmlContent += '</div>';
+
+    // Entity comparison section
+    htmlContent += '<div class="entity-comparison">';
+    // Format key badge with headStatus when not 'na'
+    const baseKeyLabel = data.metadata.baseHeadStatus && data.metadata.baseHeadStatus !== 'na'
+        ? data.metadata.baseKeyType + ':' + data.metadata.baseKeyValue + ' (' + data.metadata.baseHeadStatus + ')'
+        : data.metadata.baseKeyType + ':' + data.metadata.baseKeyValue;
+    const targetKeyLabel = data.metadata.targetHeadStatus && data.metadata.targetHeadStatus !== 'na'
+        ? data.metadata.targetKeyType + ':' + data.metadata.targetKeyValue + ' (' + data.metadata.targetHeadStatus + ')'
+        : data.metadata.targetKeyType + ':' + data.metadata.targetKeyValue;
+
+    htmlContent += '<div class="entity-card base-entity">';
+    htmlContent += '<div class="entity-label">Base Entity</div>';
+    htmlContent += '<div class="entity-name">' + escapeHtmlForBrowser(data.baseEntityName) + '</div>';
+    htmlContent += '<div class="entity-meta">';
+    htmlContent += '<span class="badge type-badge">' + escapeHtmlForBrowser(data.baseEntityType) + '</span>';
+    htmlContent += '<span class="badge source-badge">' + escapeHtmlForBrowser(data.metadata.baseSource) + '</span>';
+    htmlContent += '<span class="badge key-badge">' + escapeHtmlForBrowser(baseKeyLabel) + '</span>';
+    htmlContent += '</div>';
+    htmlContent += '<button class="view-entity-btn" onclick="viewEntityDetails(\'base\')">View Details</button>';
+    htmlContent += '</div>';
+
+    htmlContent += '<div class="vs-indicator">VS</div>';
+
+    htmlContent += '<div class="entity-card target-entity">';
+    htmlContent += '<div class="entity-label">Target Entity</div>';
+    htmlContent += '<div class="entity-name">' + escapeHtmlForBrowser(data.targetEntityName) + '</div>';
+    htmlContent += '<div class="entity-meta">';
+    htmlContent += '<span class="badge type-badge">' + escapeHtmlForBrowser(data.targetEntityType) + '</span>';
+    htmlContent += '<span class="badge source-badge">' + escapeHtmlForBrowser(data.metadata.targetSource) + '</span>';
+    htmlContent += '<span class="badge key-badge">' + escapeHtmlForBrowser(targetKeyLabel) + '</span>';
+    htmlContent += '</div>';
+    htmlContent += '<button class="view-entity-btn" onclick="viewEntityDetails(\'target\')">View Details</button>';
+    htmlContent += '</div>';
+    htmlContent += '</div>';
+
+    // Household match section (if applicable)
+    if (data.householdMatch) {
+        htmlContent += '<div class="section household-section">';
+        htmlContent += '<h2>Household-to-Household Match</h2>';
+        htmlContent += '<p class="info-text">These households were compared by finding the best-matching individual pair:</p>';
+        htmlContent += '<div class="individual-match">';
+        htmlContent += '<div class="individual-card">';
+        htmlContent += '<div class="individual-label">From Base Household (index ' + data.householdMatch.matchedIndividualIndex1 + ')</div>';
+        htmlContent += '<div class="individual-name">' + escapeHtmlForBrowser(data.householdMatch.individual1Name || 'N/A') + '</div>';
+        htmlContent += '</div>';
+        htmlContent += '<div class="match-arrow">↔</div>';
+        htmlContent += '<div class="individual-card">';
+        htmlContent += '<div class="individual-label">From Target Household (index ' + data.householdMatch.matchedIndividualIndex2 + ')</div>';
+        htmlContent += '<div class="individual-name">' + escapeHtmlForBrowser(data.householdMatch.individual2Name || 'N/A') + '</div>';
+        htmlContent += '</div>';
+        htmlContent += '</div></div>';
+    }
+
+    // Name comparison section with detailed breakdown
+    if (data.nameComparison) {
+        htmlContent += '<div class="section">';
+        htmlContent += '<h2>Name Comparison</h2>';
+        htmlContent += '<div class="comparison-grid">';
+        htmlContent += '<div class="comparison-row">';
+        htmlContent += '<span class="label">Similarity:</span>';
+        htmlContent += '<span class="value">' + ((data.nameComparison.similarity || data.nameComparison.overallSimilarity || 0) * 100).toFixed(2) + '%</span>';
+        htmlContent += '</div>';
+        if (data.nameComparison.weight !== undefined) {
+            htmlContent += '<div class="comparison-row">';
+            htmlContent += '<span class="label">Weight:</span>';
+            htmlContent += '<span class="value">' + ((data.nameComparison.weight || 0) * 100).toFixed(1) + '%</span>';
+            htmlContent += '</div>';
+        }
+        if (data.nameComparison.contribution !== undefined) {
+            htmlContent += '<div class="comparison-row">';
+            htmlContent += '<span class="label">Contribution:</span>';
+            htmlContent += '<span class="value">' + ((data.nameComparison.contribution || 0) * 100).toFixed(2) + '%</span>';
+            htmlContent += '</div>';
+        }
+        // Show comparison method (weighted vs permutation)
+        if (data.nameComparison.method) {
+            htmlContent += '<div class="comparison-row">';
+            htmlContent += '<span class="label">Method:</span>';
+            htmlContent += '<span class="value">' + escapeHtmlForBrowser(data.nameComparison.method) + '</span>';
+            htmlContent += '</div>';
+        }
+        // Show weighted vs permutation scores if available
+        if (data.nameComparison.weightedScore !== undefined && data.nameComparison.permutationScore !== undefined) {
+            htmlContent += '<div class="comparison-row">';
+            htmlContent += '<span class="label">Weighted Score:</span>';
+            htmlContent += '<span class="value">' + ((data.nameComparison.weightedScore || 0) * 100).toFixed(2) + '%</span>';
+            htmlContent += '</div>';
+            htmlContent += '<div class="comparison-row">';
+            htmlContent += '<span class="label">Permutation Score:</span>';
+            htmlContent += '<span class="value">' + ((data.nameComparison.permutationScore || 0) * 100).toFixed(2) + '%</span>';
+            htmlContent += '</div>';
+        }
+        htmlContent += '</div>';
+
+        // Name component breakdown (lastName, firstName, otherNames)
+        if (data.nameComparison.components) {
+            htmlContent += '<div class="sub-breakdown">';
+            htmlContent += '<h3>Component Breakdown</h3>';
+            htmlContent += '<table class="breakdown-table">';
+            htmlContent += '<thead><tr><th>Component</th><th>Weight</th><th>Similarity</th><th>Contribution</th></tr></thead>';
+            htmlContent += '<tbody>';
+            var nameComponents = data.nameComparison.components;
+            for (var compName in nameComponents) {
+                if (nameComponents.hasOwnProperty(compName)) {
+                    var comp = nameComponents[compName];
+                    var weight = comp.weight || comp.actualWeight || 0;
+                    var similarity = comp.similarity || 0;
+                    var contribution = comp.weightedValue || comp.contribution || (weight * similarity);
+                    htmlContent += '<tr>';
+                    htmlContent += '<td>' + escapeHtmlForBrowser(compName) + '</td>';
+                    htmlContent += '<td>' + (weight * 100).toFixed(1) + '%</td>';
+                    htmlContent += '<td>' + (similarity * 100).toFixed(2) + '%</td>';
+                    htmlContent += '<td>' + (contribution * 100).toFixed(2) + '%</td>';
+                    htmlContent += '</tr>';
+                }
+            }
+            htmlContent += '</tbody></table>';
+            htmlContent += '</div>';
+        }
+        htmlContent += '</div>';
+    }
+
+    // ContactInfo comparison section with detailed breakdown
+    if (data.contactInfoComparison) {
+        htmlContent += '<div class="section">';
+        htmlContent += '<h2>Contact Info Comparison</h2>';
+        htmlContent += '<div class="comparison-grid">';
+        htmlContent += '<div class="comparison-row">';
+        htmlContent += '<span class="label">Similarity:</span>';
+        htmlContent += '<span class="value">' + ((data.contactInfoComparison.similarity || data.contactInfoComparison.overallSimilarity || 0) * 100).toFixed(2) + '%</span>';
+        htmlContent += '</div>';
+        if (data.contactInfoComparison.weight !== undefined) {
+            htmlContent += '<div class="comparison-row">';
+            htmlContent += '<span class="label">Weight:</span>';
+            htmlContent += '<span class="value">' + ((data.contactInfoComparison.weight || 0) * 100).toFixed(1) + '%</span>';
+            htmlContent += '</div>';
+        }
+        if (data.contactInfoComparison.contribution !== undefined) {
+            htmlContent += '<div class="comparison-row">';
+            htmlContent += '<span class="label">Contribution:</span>';
+            htmlContent += '<span class="value">' + ((data.contactInfoComparison.contribution || 0) * 100).toFixed(2) + '%</span>';
+            htmlContent += '</div>';
+        }
+        // Show method if available
+        if (data.contactInfoComparison.method) {
+            htmlContent += '<div class="comparison-row">';
+            htmlContent += '<span class="label">Method:</span>';
+            htmlContent += '<span class="value">' + escapeHtmlForBrowser(data.contactInfoComparison.method) + '</span>';
+            htmlContent += '</div>';
+        }
+        htmlContent += '</div>';
+
+        // ContactInfo component breakdown (primaryAddress, secondaryAddress, email)
+        if (data.contactInfoComparison.components) {
+            htmlContent += '<div class="sub-breakdown">';
+            htmlContent += '<h3>Component Breakdown</h3>';
+            htmlContent += '<table class="breakdown-table">';
+            htmlContent += '<thead><tr><th>Component</th><th>Weight</th><th>Similarity</th><th>Contribution</th></tr></thead>';
+            htmlContent += '<tbody>';
+            var ciComponents = data.contactInfoComparison.components;
+            for (var compName in ciComponents) {
+                if (ciComponents.hasOwnProperty(compName)) {
+                    var comp = ciComponents[compName];
+                    var weight = comp.weight || comp.actualWeight || 0;
+                    var similarity = comp.similarity || 0;
+                    var contribution = comp.weightedValue || comp.contribution || (weight * similarity);
+                    htmlContent += '<tr>';
+                    htmlContent += '<td>' + escapeHtmlForBrowser(compName) + '</td>';
+                    htmlContent += '<td>' + (weight * 100).toFixed(1) + '%</td>';
+                    htmlContent += '<td>' + (similarity * 100).toFixed(2) + '%</td>';
+                    htmlContent += '<td>' + (contribution * 100).toFixed(2) + '%</td>';
+                    htmlContent += '</tr>';
+                }
+            }
+            htmlContent += '</tbody></table>';
+            htmlContent += '</div>';
+        }
+        htmlContent += '</div>';
+    }
+
+    // Address match section with detailed breakdown
+    if (data.addressMatch) {
+        htmlContent += '<div class="section address-section">';
+        htmlContent += '<h2>Address Match Details</h2>';
+
+        // Show method (pobox, blockIsland, generalStreet)
+        if (data.addressMatch.method) {
+            htmlContent += '<p class="info-text">Match method: <strong>' + escapeHtmlForBrowser(data.addressMatch.method) + '</strong></p>';
+        } else {
+            htmlContent += '<p class="info-text">Addresses that were matched:</p>';
+        }
+
+        htmlContent += '<div class="address-comparison">';
+
+        // Base address
+        htmlContent += '<div class="address-card">';
+        htmlContent += '<div class="address-label">Base Address</div>';
+        htmlContent += '<div class="address-content">' + formatAddressForDisplay(data.addressMatch.baseAddress) + '</div>';
+        htmlContent += '</div>';
+
+        // Similarity indicator
+        htmlContent += '<div class="similarity-indicator">';
+        htmlContent += '<span class="similarity-value">' + ((data.addressMatch.similarity || data.addressMatch.overallSimilarity || 0) * 100).toFixed(1) + '%</span>';
+        htmlContent += '<span class="direction-label">' + escapeHtmlForBrowser(data.addressMatch.direction || data.addressMatch.matchDirection || '') + '</span>';
+        htmlContent += '</div>';
+
+        // Target address
+        htmlContent += '<div class="address-card">';
+        htmlContent += '<div class="address-label">Target Address</div>';
+        htmlContent += '<div class="address-content">' + formatAddressForDisplay(data.addressMatch.targetAddress) + '</div>';
+        htmlContent += '</div>';
+
+        htmlContent += '</div>';
+
+        // Address field-by-field breakdown
+        if (data.addressMatch.components || data.addressMatch.subordinateDetails) {
+            var addrComponents = data.addressMatch.components || data.addressMatch.subordinateDetails;
+            htmlContent += '<div class="sub-breakdown">';
+            htmlContent += '<h3>Field-by-Field Comparison</h3>';
+            htmlContent += '<table class="breakdown-table">';
+            htmlContent += '<thead><tr><th>Field</th><th>Base Value</th><th>Target Value</th><th>Similarity</th></tr></thead>';
+            htmlContent += '<tbody>';
+            for (var fieldName in addrComponents) {
+                if (addrComponents.hasOwnProperty(fieldName)) {
+                    var field = addrComponents[fieldName];
+                    var baseVal = field.baseValue || '';
+                    var targetVal = field.targetValue || '';
+                    var similarity = field.similarity || 0;
+                    htmlContent += '<tr>';
+                    htmlContent += '<td>' + escapeHtmlForBrowser(fieldName) + '</td>';
+                    htmlContent += '<td>' + escapeHtmlForBrowser(String(baseVal)) + '</td>';
+                    htmlContent += '<td>' + escapeHtmlForBrowser(String(targetVal)) + '</td>';
+                    htmlContent += '<td>' + (similarity * 100).toFixed(1) + '%</td>';
+                    htmlContent += '</tr>';
+                }
+            }
+            htmlContent += '</tbody></table>';
+            htmlContent += '</div>';
+        }
+
+        htmlContent += '</div>';
+    }
+
+    // Raw details section (collapsible)
+    htmlContent += '<div class="section raw-details">';
+    htmlContent += '<h2 onclick="toggleRawDetails()" style="cursor:pointer;">Raw Comparison Data ▼</h2>';
+    htmlContent += '<pre id="rawDetailsContent" style="display:none;">';
+    htmlContent += escapeHtmlForBrowser(JSON.stringify(data.details, null, 2));
+    htmlContent += '</pre></div>';
+
+    // Close button
+    htmlContent += '<div class="actions">';
+    htmlContent += '<button onclick="window.close()" class="close-btn">Close</button>';
+    htmlContent += '</div>';
+
+    // Script for toggle and view entity details
+    htmlContent += '<script>';
+    htmlContent += 'function toggleRawDetails() {';
+    htmlContent += '  var el = document.getElementById("rawDetailsContent");';
+    htmlContent += '  el.style.display = el.style.display === "none" ? "block" : "none";';
+    htmlContent += '}';
+    htmlContent += 'function viewEntityDetails(which) {';
+    htmlContent += '  var metadata = window._reconcileMetadata;';
+    htmlContent += '  if (!metadata) { alert("Metadata not available"); return; }';
+    htmlContent += '  var source, keyType, keyValue, accountNumber, headStatus;';
+    htmlContent += '  if (which === "base") {';
+    htmlContent += '    source = metadata.baseSource;';
+    htmlContent += '    keyType = metadata.baseKeyType;';
+    htmlContent += '    keyValue = metadata.baseKeyValue;';
+    htmlContent += '    accountNumber = metadata.baseAccountNumber;';
+    htmlContent += '    headStatus = metadata.baseHeadStatus;';
+    htmlContent += '  } else {';
+    htmlContent += '    source = metadata.targetSource;';
+    htmlContent += '    keyType = metadata.targetKeyType;';
+    htmlContent += '    keyValue = metadata.targetKeyValue;';
+    htmlContent += '    accountNumber = metadata.targetAccountNumber;';
+    htmlContent += '    headStatus = metadata.targetHeadStatus;';
+    htmlContent += '  }';
+    htmlContent += '  if (!window.opener || !window.opener.workingLoadedEntities) {';
+    htmlContent += '    alert("Parent window not available. Please keep the main browser window open.");';
+    htmlContent += '    return;';
+    htmlContent += '  }';
+    htmlContent += '  var entity = null;';
+    htmlContent += '  var entityKey = keyType + ":" + keyValue;';
+    htmlContent += '  if (source === "bloomerang") {';
+    htmlContent += '    if (window.opener.getBloomerangEntityByAccountNumber && accountNumber) {';
+    htmlContent += '      entity = window.opener.getBloomerangEntityByAccountNumber(accountNumber, keyType, keyValue, headStatus);';
+    htmlContent += '    }';
+    htmlContent += '  } else if (source === "visionAppraisal") {';
+    htmlContent += '    if (window.opener.getVisionAppraisalEntity) {';
+    htmlContent += '      entity = window.opener.getVisionAppraisalEntity(keyType, keyValue);';
+    htmlContent += '    }';
+    htmlContent += '  }';
+    htmlContent += '  if (!entity) {';
+    htmlContent += '    alert("Entity not found: " + source + " " + entityKey);';
+    htmlContent += '    return;';
+    htmlContent += '  }';
+    htmlContent += '  var entityType = entity.constructor ? entity.constructor.name : "Unknown";';
+    htmlContent += '  var sourceName = source === "bloomerang" ? "Bloomerang" : "VisionAppraisal";';
+    htmlContent += '  var entityWrapper = {';
+    htmlContent += '    entity: entity,';
+    htmlContent += '    key: entityKey,';
+    htmlContent += '    source: sourceName,';
+    htmlContent += '    sourceKey: source,';
+    htmlContent += '    entityType: entityType';
+    htmlContent += '  };';
+    htmlContent += '  if (window.opener.renderEntityDetailsWindow) {';
+    htmlContent += '    window.opener.renderEntityDetailsWindow(entityWrapper);';
+    htmlContent += '  } else if (window.opener.basicEntityDetailsView) {';
+    htmlContent += '    window.opener.basicEntityDetailsView(entityWrapper);';
+    htmlContent += '  } else {';
+    htmlContent += '    alert("Entity renderer not available");';
+    htmlContent += '  }';
+    htmlContent += '}';
+    htmlContent += '</script>';
+
+    htmlContent += '</body></html>';
+
+    modalWindow.document.write(htmlContent);
+    modalWindow.document.close();
+
+    // Store metadata in the modal window for the viewEntityDetails function
+    modalWindow._reconcileMetadata = data.metadata;
+}
+
+/**
+ * Generate CSS styles for reconciliation modal
+ * @returns {string} CSS styles
+ */
+function generateReconciliationStyles() {
+    return '* { box-sizing: border-box; }' +
+        'body { font-family: "Segoe UI", Arial, sans-serif; padding: 20px; margin: 0; background: #f0f2f5; color: #333; }' +
+        '.reconcile-header { background: linear-gradient(135deg, #6c5ce7, #a29bfe); color: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }' +
+        '.reconcile-header h1 { margin: 0; font-size: 24px; }' +
+        '.score-display { text-align: center; background: rgba(255,255,255,0.2); padding: 15px 25px; border-radius: 8px; }' +
+        '.score-value { font-size: 36px; font-weight: bold; display: block; }' +
+        '.score-label { font-size: 12px; opacity: 0.9; }' +
+        '.score-excellent { background: rgba(39,174,96,0.3); }' +
+        '.score-good { background: rgba(46,204,113,0.3); }' +
+        '.score-moderate { background: rgba(243,156,18,0.3); }' +
+        '.score-low { background: rgba(231,76,60,0.3); }' +
+        '.entity-comparison { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; }' +
+        '.entity-card { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }' +
+        '.entity-label { font-size: 12px; color: #666; margin-bottom: 5px; text-transform: uppercase; }' +
+        '.entity-name { font-size: 18px; font-weight: 600; color: #2c3e50; margin-bottom: 10px; }' +
+        '.entity-meta { display: flex; gap: 8px; flex-wrap: wrap; }' +
+        '.badge { padding: 4px 8px; border-radius: 4px; font-size: 11px; }' +
+        '.type-badge { background: #27ae60; color: white; }' +
+        '.source-badge { background: #3498db; color: white; }' +
+        '.key-badge { background: #7f8c8d; color: white; }' +
+        '.vs-indicator { font-size: 24px; font-weight: bold; color: #95a5a6; }' +
+        '.section { background: white; padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }' +
+        '.section h2 { margin: 0 0 15px 0; font-size: 16px; color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; }' +
+        '.comparison-grid { display: grid; gap: 10px; }' +
+        '.comparison-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px dotted #eee; }' +
+        '.comparison-row:last-child { border-bottom: none; }' +
+        '.comparison-row .label { color: #666; }' +
+        '.comparison-row .value { font-weight: 600; color: #2c3e50; }' +
+        '.household-section { background: #fff3e0; }' +
+        '.individual-match { display: flex; align-items: center; gap: 15px; }' +
+        '.individual-card { flex: 1; background: white; padding: 15px; border-radius: 6px; text-align: center; }' +
+        '.individual-label { font-size: 11px; color: #666; margin-bottom: 5px; }' +
+        '.individual-name { font-weight: 600; color: #e65100; }' +
+        '.match-arrow { font-size: 24px; color: #ff9800; }' +
+        '.info-text { color: #666; font-size: 13px; margin-bottom: 15px; }' +
+        '.address-section { background: #e3f2fd; }' +
+        '.address-comparison { display: flex; align-items: center; gap: 15px; }' +
+        '.address-card { flex: 1; background: white; padding: 15px; border-radius: 6px; }' +
+        '.address-label { font-size: 11px; color: #666; margin-bottom: 8px; text-transform: uppercase; }' +
+        '.address-content { font-size: 13px; line-height: 1.5; }' +
+        '.similarity-indicator { text-align: center; padding: 10px; }' +
+        '.similarity-value { font-size: 20px; font-weight: bold; color: #1976d2; display: block; }' +
+        '.direction-label { font-size: 10px; color: #666; }' +
+        '.raw-details { background: #fafafa; }' +
+        '.raw-details pre { background: #263238; color: #aed581; padding: 15px; border-radius: 6px; overflow: auto; font-size: 12px; max-height: 300px; }' +
+        '.actions { text-align: center; margin-top: 20px; }' +
+        '.close-btn { background: #6c5ce7; color: white; border: none; padding: 12px 30px; border-radius: 6px; font-size: 14px; cursor: pointer; }' +
+        '.close-btn:hover { background: #5b4cdb; }' +
+        '.view-entity-btn { background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; margin-top: 10px; }' +
+        '.view-entity-btn:hover { background: #2980b9; }' +
+        // Step 5: Detailed breakdown styles
+        '.sub-breakdown { margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }' +
+        '.sub-breakdown h3 { margin: 0 0 10px 0; font-size: 13px; color: #666; font-weight: 600; }' +
+        '.breakdown-table { width: 100%; border-collapse: collapse; font-size: 13px; }' +
+        '.breakdown-table thead { background: #f8f9fa; }' +
+        '.breakdown-table th { padding: 8px 10px; text-align: left; font-weight: 600; color: #495057; border-bottom: 2px solid #dee2e6; }' +
+        '.breakdown-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }' +
+        '.breakdown-table tr:last-child td { border-bottom: none; }' +
+        '.breakdown-table tr:hover { background: #f8f9fa; }';
+}
+
+/**
+ * Format an Address object for display
+ * @param {Object} address - Address object
+ * @returns {string} Formatted HTML string
+ */
+function formatAddressForDisplay(address) {
+    if (!address) return '<em>No address</em>';
+
+    const parts = [];
+
+    // Helper to extract term from AttributedTerm or direct value
+    const getTerm = function(val) {
+        if (!val) return null;
+        if (typeof val === 'string') return val;
+        if (val.term) return val.term;
+        if (val.primaryAlias && val.primaryAlias.term) return val.primaryAlias.term;
+        return null;
+    };
+
+    const streetNum = getTerm(address.streetNumber);
+    const streetName = getTerm(address.streetName);
+    const streetType = getTerm(address.streetType);
+    const secUnitType = getTerm(address.secUnitType);
+    const secUnitNum = getTerm(address.secUnitNum);
+    const city = getTerm(address.city);
+    const state = getTerm(address.state);
+    const zipCode = getTerm(address.zipCode);
+
+    // Build street line
+    const streetParts = [];
+    if (streetNum) streetParts.push(streetNum);
+    if (streetName) streetParts.push(streetName);
+    if (streetType) streetParts.push(streetType);
+    if (streetParts.length > 0) parts.push(streetParts.join(' '));
+
+    // Secondary unit
+    if (secUnitType || secUnitNum) {
+        const unitParts = [];
+        if (secUnitType) unitParts.push(secUnitType);
+        if (secUnitNum) unitParts.push(secUnitNum);
+        parts.push(unitParts.join(' '));
+    }
+
+    // City, State, Zip
+    const cityStateZip = [];
+    if (city) cityStateZip.push(city);
+    if (state) cityStateZip.push(state);
+    if (zipCode) cityStateZip.push(zipCode);
+    if (cityStateZip.length > 0) parts.push(cityStateZip.join(', '));
+
+    if (parts.length === 0) {
+        // Try original address as fallback
+        const original = getTerm(address.originalAddress);
+        if (original) return escapeHtmlForBrowser(original);
+        return '<em>Address details not available</em>';
+    }
+
+    return escapeHtmlForBrowser(parts.join('<br>'));
 }
 
 // =============================================================================
@@ -2316,6 +3258,64 @@ function generateUnifiedStats() {
 // =============================================================================
 // UTILITY FUNCTIONS
 // =============================================================================
+
+/**
+ * Extract location identifier type and value from an entity wrapper
+ * Used for reconciliation to get the canonical lookup key (source:type:value)
+ * @param {Object} entityWrapper - Entity wrapper with source metadata
+ * @returns {Object} { type: string, value: string }
+ */
+function getLocationIdentifierInfoFromWrapper(entityWrapper) {
+    const entity = entityWrapper.entity;
+
+    // Try to get locationIdentifier from entity
+    if (entity.locationIdentifier) {
+        const locId = entity.locationIdentifier;
+        const type = locId.constructor?.name || 'Unknown';
+
+        // Handle object structure (FireNumber, PID with primaryAlias)
+        if (locId.primaryAlias && locId.primaryAlias.term) {
+            return { type, value: String(locId.primaryAlias.term) };
+        }
+        // Handle direct term structure
+        if (locId.term) {
+            return { type, value: String(locId.term) };
+        }
+        // Handle raw value
+        if (typeof locId === 'string' || typeof locId === 'number') {
+            return { type: 'Unknown', value: String(locId) };
+        }
+    }
+
+    // Fallback to account number for Bloomerang entities
+    if (entity.accountNumber) {
+        if (entity.accountNumber.primaryAlias && entity.accountNumber.primaryAlias.term) {
+            return { type: 'AccountNumber', value: String(entity.accountNumber.primaryAlias.term) };
+        }
+        if (entity.accountNumber.term) {
+            return { type: 'AccountNumber', value: String(entity.accountNumber.term) };
+        }
+    }
+
+    // Last resort: use entity key from wrapper (strip prefix)
+    if (entityWrapper.key) {
+        const key = entityWrapper.key;
+        if (key.startsWith('va_') || key.startsWith('bl_')) {
+            return { type: 'Unknown', value: key.substring(3) };
+        }
+        return { type: 'Unknown', value: key };
+    }
+
+    return { type: 'Unknown', value: 'unknown' };
+}
+
+/**
+ * Extract location identifier value from an entity wrapper (legacy compatibility)
+ * @deprecated Use getLocationIdentifierInfoFromWrapper() instead
+ */
+function getLocationIdentifierFromWrapper(entityWrapper) {
+    return getLocationIdentifierInfoFromWrapper(entityWrapper).value;
+}
 
 /**
  * Load script with promise-based waiting

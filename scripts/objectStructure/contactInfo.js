@@ -41,7 +41,7 @@ class Info {
         }
 
         // Fallback to generic comparison
-        return genericObjectCompareTo(this, other);
+        return genericObjectCompareTo(this, other, [], detailed);
     }
 
     /**
@@ -441,8 +441,9 @@ class OtherInfo extends Info {
         if (!this.subdivision) {
             this.subdivision = {};
         }
-        // Serialize the entity to JSON string for storage using serializeWithTypes
-        this.subdivision[pid] = serializeWithTypes(entity);
+        // Store entity object directly - it will be serialized with type info
+        // when the parent entity is serialized via serializeWithTypes
+        this.subdivision[pid] = entity;
     }
 
     /**
