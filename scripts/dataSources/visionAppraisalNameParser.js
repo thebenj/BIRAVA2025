@@ -985,9 +985,9 @@ const VisionAppraisalNameParser = {
         return new HouseholdName(householdNameTerm, householdNameTerm.term);
     },
 
-    // Helper method: Create SimpleIdentifiers object from AttributedTerm (Cases 1b & 1c resolution)
-    createSimpleIdentifiersObject(attributedTerm) {
-        return new SimpleIdentifiers(attributedTerm);
+    // Helper method: Create NonHumanName object from AttributedTerm (for Business & LegalConstruct entities)
+    createNonHumanNameObject(attributedTerm) {
+        return new NonHumanName(attributedTerm);
     },
 
     // Helper method: Create Individual entity (copied from existing parser for compatibility)
@@ -1100,8 +1100,8 @@ const VisionAppraisalNameParser = {
             locationIdentifier = this.createPidObject(record.pid);
         }
 
-        // Create proper SimpleIdentifiers object (Case 1b resolution)
-        const properBusinessName = this.createSimpleIdentifiersObject(businessName);
+        // Create NonHumanName object for Business entity
+        const properBusinessName = this.createNonHumanNameObject(businessName);
 
         const business = new Business(locationIdentifier, properBusinessName, record.propertyLocation, record.ownerAddress, null);
 
@@ -1125,8 +1125,8 @@ const VisionAppraisalNameParser = {
             locationIdentifier = this.createPidObject(record.pid);
         }
 
-        // Create proper SimpleIdentifiers object (Case 1c resolution)
-        const properBusinessName = this.createSimpleIdentifiersObject(businessName);
+        // Create NonHumanName object for LegalConstruct entity
+        const properBusinessName = this.createNonHumanNameObject(businessName);
 
         const legalConstruct = new LegalConstruct(locationIdentifier, properBusinessName, record.propertyLocation, record.ownerAddress, null);
 

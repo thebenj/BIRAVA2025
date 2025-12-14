@@ -44,6 +44,7 @@ const CLASS_REGISTRY = {
     'PID': typeof PID !== 'undefined' ? PID : null,
     'IndividualName': typeof IndividualName !== 'undefined' ? IndividualName : null,
     'HouseholdName': typeof HouseholdName !== 'undefined' ? HouseholdName : null,
+    'NonHumanName': typeof NonHumanName !== 'undefined' ? NonHumanName : null,
     'Address': typeof Address !== 'undefined' ? Address : null,
 
     // Contact Info Classes

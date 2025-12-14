@@ -633,6 +633,35 @@ class SimpleIdentifiers extends Aliased {
 }
 
 /**
+ * NonHumanName class - subclass of SimpleIdentifiers for non-human entity names
+ * Used for Business and LegalConstruct entities where name is a simple identifier
+ * (not a complex individual name with firstName/lastName/etc.)
+ * @param {AttributedTerm} primaryAlias - AttributedTerm containing the organization/business name
+ */
+class NonHumanName extends SimpleIdentifiers {
+    constructor(primaryAlias) {
+        super(primaryAlias);
+    }
+
+    /**
+     * Deserialize NonHumanName from JSON object
+     * @param {Object} data - Serialized data
+     * @returns {NonHumanName} Reconstructed NonHumanName instance
+     */
+    static deserialize(data) {
+        if (data.type !== 'NonHumanName') {
+            throw new Error('Invalid NonHumanName serialization format');
+        }
+
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
+        const identifier = new NonHumanName(primaryAlias);
+        identifier.alternatives = ensureDeserialized(data.alternatives, Aliases);
+
+        return identifier;
+    }
+}
+
+/**
  * IndicativeData class - container that holds identifier fields of moderate reliability
  * Used for data that suggests identity but isn't definitive (contact info, account numbers)
  * Contains either SimpleIdentifiers or ComplexIdentifiers instance

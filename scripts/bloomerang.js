@@ -778,7 +778,7 @@ async function processRowToEntity(row, dataSource, households) {
     } else if (entityType === 'NonHuman') {
         // Use placeholder location identifier if none available
         const finalLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
-        entity = new NonHuman(finalLocationIdentifier, nameObjects.individualName, null, null,
+        entity = new NonHuman(finalLocationIdentifier, nameObjects.nonHumanName, null, null,
             createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource));
     } else if (entityType === 'AggregateHousehold') {
         // Handle household processing (locationIdentifier may be null - handled inside function)
@@ -1095,8 +1095,8 @@ function determineEntityType(fields, fieldMap) {
 }
 
 /**
- * TEMP NAME PROCESSING FUNCTION - VisionAppraisal-style processing
- * Returns AttributedTerm objects directly WITHOUT IdentifyingData wrappers
+ * NAME PROCESSING FUNCTION - Creates appropriate name objects based on entity type
+ * Returns name objects directly WITHOUT IdentifyingData wrappers
  * This matches VisionAppraisal entity creation patterns
  */
 async function createNameObjects(fields, fieldMap, rowIndex, accountNumber, dataSource, entityType) {
@@ -1107,12 +1107,20 @@ async function createNameObjects(fields, fieldMap, rowIndex, accountNumber, data
     const lastName = (fields[fieldMap.lastName] || '').trim();
     const suffix = ''; // Not in Bloomerang data
     const householdName = (fields[fieldMap.householdName] || '').trim();
+    const nameField = (fields[fieldMap.name] || '').trim(); // Field 0: Name (used for NonHuman entities)
 
-    // Build complete name from available components
+    // For NonHuman entities, use the "name" field (field 0) which contains the organization name
+    let nonHumanNameObject = null;
+    if (entityType === 'NonHuman') {
+        const nonHumanNameTerm = new AttributedTerm(nameField, dataSource, rowIndex, accountNumber);
+        nonHumanNameObject = new NonHumanName(nonHumanNameTerm);
+    }
+
+    // Build complete name from available components (for Individual entities)
     const nameParts = [title, firstName, middleName, lastName, suffix].filter(part => part !== '');
     const completeName = nameParts.join(' ');
 
-    // VISIONAPPRAISAL STYLE: Return IndividualName directly (no IdentifyingData wrapper)
+    // IndividualName for Individual entities
     const individualNameTerm = new AttributedTerm(completeName, dataSource, rowIndex, accountNumber);
     const individualName = new IndividualName(
         individualNameTerm,
@@ -1123,7 +1131,7 @@ async function createNameObjects(fields, fieldMap, rowIndex, accountNumber, data
         suffix
     );
 
-    // VISIONAPPRAISAL STYLE: Return HouseholdName directly (no IdentifyingData wrapper)
+    // HouseholdName for AggregateHousehold entities
     let householdNameObject = null;
     if (entityType === 'AggregateHousehold' && householdName) {
         const householdNameTerm = new AttributedTerm(householdName, dataSource, rowIndex, accountNumber);
@@ -1132,7 +1140,8 @@ async function createNameObjects(fields, fieldMap, rowIndex, accountNumber, data
 
     return {
         individualName: individualName,        // Direct IndividualName object
-        householdName: householdNameObject     // Direct HouseholdName object
+        householdName: householdNameObject,    // Direct HouseholdName object
+        nonHumanName: nonHumanNameObject       // Direct NonHumanName object (for Business/LegalConstruct)
     };
 }
 
