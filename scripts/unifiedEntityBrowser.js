@@ -29,6 +29,106 @@ const unifiedBrowser = {
 };
 
 // =============================================================================
+// TRUE MATCH AND NEAR MATCH CRITERIA
+// =============================================================================
+
+/**
+ * Match criteria thresholds configuration
+ * True Match: Any ONE of these conditions makes it a true match
+ * Near Match: Same conditions with reduced thresholds (applied when NOT a true match)
+ */
+const MATCH_CRITERIA = {
+    trueMatch: {
+        // Condition 1: overall > 0.80 AND name > 0.83
+        overallAndName: { overall: 0.80, name: 0.83 },
+        // Condition 2: contactInfo > 0.87 (alone)
+        contactInfoAlone: 0.87,
+        // Condition 3: overall > 0.905 (alone)
+        overallAlone: 0.905,
+        // Condition 4: name > 0.875 (alone)
+        nameAlone: 0.875
+    },
+    nearMatch: {
+        // Same conditions minus 0.03 (except contactInfo which is minus 0.02)
+        overallAndName: { overall: 0.77, name: 0.80 },
+        contactInfoAlone: 0.85,  // -0.02 per user specification
+        overallAlone: 0.875,
+        nameAlone: 0.845
+    }
+};
+
+/**
+ * Check if a match qualifies as a True Match
+ * @param {number} overallScore - Overall similarity score (0-1)
+ * @param {number|null} nameScore - Name similarity score (0-1), may be null
+ * @param {number|null} contactInfoScore - ContactInfo similarity score (0-1), may be null
+ * @returns {boolean} True if match meets True Match criteria
+ */
+function isTrueMatch(overallScore, nameScore, contactInfoScore) {
+    const c = MATCH_CRITERIA.trueMatch;
+
+    // Condition 1: overall > 0.80 AND name > 0.83
+    if (overallScore > c.overallAndName.overall && nameScore !== null && nameScore > c.overallAndName.name) {
+        return true;
+    }
+
+    // Condition 2: contactInfo > 0.87 (alone)
+    if (contactInfoScore !== null && contactInfoScore > c.contactInfoAlone) {
+        return true;
+    }
+
+    // Condition 3: overall > 0.905 (alone)
+    if (overallScore > c.overallAlone) {
+        return true;
+    }
+
+    // Condition 4: name > 0.875 (alone)
+    if (nameScore !== null && nameScore > c.nameAlone) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Check if a match qualifies as a Near Match (but NOT a True Match)
+ * @param {number} overallScore - Overall similarity score (0-1)
+ * @param {number|null} nameScore - Name similarity score (0-1), may be null
+ * @param {number|null} contactInfoScore - ContactInfo similarity score (0-1), may be null
+ * @returns {boolean} True if match meets Near Match criteria but NOT True Match criteria
+ */
+function isNearMatch(overallScore, nameScore, contactInfoScore) {
+    // First check: if it's a true match, it's NOT a near match
+    if (isTrueMatch(overallScore, nameScore, contactInfoScore)) {
+        return false;
+    }
+
+    const c = MATCH_CRITERIA.nearMatch;
+
+    // Condition 1: overall > 0.77 AND name > 0.80
+    if (overallScore > c.overallAndName.overall && nameScore !== null && nameScore > c.overallAndName.name) {
+        return true;
+    }
+
+    // Condition 2: contactInfo > 0.85 (alone)
+    if (contactInfoScore !== null && contactInfoScore > c.contactInfoAlone) {
+        return true;
+    }
+
+    // Condition 3: overall > 0.875 (alone)
+    if (overallScore > c.overallAlone) {
+        return true;
+    }
+
+    // Condition 4: name > 0.845 (alone)
+    if (nameScore !== null && nameScore > c.nameAlone) {
+        return true;
+    }
+
+    return false;
+}
+
+// =============================================================================
 // INITIALIZATION & SETUP
 // =============================================================================
 
@@ -67,6 +167,9 @@ function setupDataSourceSelector() {
         updateEntityTypeOptions();
         updateUIState();
         clearCurrentResults();
+        if (hasLoadedData()) {
+            applyCurrentFilters();
+        }
     });
 }
 
@@ -134,11 +237,11 @@ function setupActionButtons() {
         exportBtn.addEventListener('click', exportCurrentResults);
     }
 
-    // Stats button
-    const statsBtn = document.getElementById('unifiedStatsBtn');
-    if (statsBtn) {
-        statsBtn.addEventListener('click', showUnifiedStats);
-    }
+    // Stats button - onclick handler already set in index.html
+    // const statsBtn = document.getElementById('unifiedStatsBtn');
+    // if (statsBtn) {
+    //     statsBtn.addEventListener('click', showUnifiedStats);
+    // }
 
     // Analyze Matches button
     const analyzeMatchesBtn = document.getElementById('unifiedAnalyzeMatchesBtn');
@@ -273,83 +376,44 @@ async function loadSelectedData() {
 
 /**
  * Get all entities from currently selected data source(s) and entity type(s)
- * Uses existing workingLoadedEntities global structure
- * @returns {Array} Array of entity objects with source metadata
+ * Uses compatibility layer to work with either unifiedEntityDatabase or workingLoadedEntities
+ * @returns {Array} Array of entity wrapper objects with source metadata
  */
 function getAllSelectedEntities() {
-    if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
-        console.warn('workingLoadedEntities not loaded');
-        return [];
-    }
-
-    const entities = [];
-
-    // Determine which data sources to include
-    const sourcesToCheck = unifiedBrowser.selectedDataSource === 'all'
-        ? ['visionappraisal', 'bloomerang']
-        : [unifiedBrowser.selectedDataSource];
-
-    for (const sourceKey of sourcesToCheck) {
-        if (sourceKey === 'visionappraisal') {
-            // VisionAppraisal: single array of entities
-            if (workingLoadedEntities.visionAppraisal.loaded && workingLoadedEntities.visionAppraisal.entities) {
-                const sourceEntities = workingLoadedEntities.visionAppraisal.entities.filter(entity =>
-                    unifiedBrowser.selectedEntityType === 'all' ||
-                    getEntityType(entity) === unifiedBrowser.selectedEntityType
-                );
-
-                sourceEntities.forEach((entity, index) => {
-                    entities.push({
-                        source: 'VisionAppraisal',
-                        sourceKey: sourceKey,
-                        entityType: getEntityType(entity),
-                        index: index,
-                        key: `va_${index}`,
-                        entity: entity
-                    });
-                });
-            }
-
-        } else if (sourceKey === 'bloomerang') {
-            // Bloomerang: collection-based structure
-            if (workingLoadedEntities.bloomerang && workingLoadedEntities.bloomerang.loaded) {
-                const collections = ['individuals', 'households', 'nonhuman'];
-
-                for (const collectionType of collections) {
-                    const collection = workingLoadedEntities.bloomerang[collectionType];
-                    if (!collection || !collection.entities) continue;
-
-                    const entityTypeMapping = {
-                        'individuals': 'Individual',
-                        'households': 'AggregateHousehold',
-                        'nonhuman': 'NonHuman'
-                    };
-
-                    const collectionEntityType = entityTypeMapping[collectionType] || collectionType;
-
-                    // Filter by entity type if specific type selected
-                    if (unifiedBrowser.selectedEntityType !== 'all' &&
-                        collectionEntityType !== unifiedBrowser.selectedEntityType) {
-                        continue;
-                    }
-
-                    // Note: entities is an object, not array, with keys
-                    for (const [key, entity] of Object.entries(collection.entities)) {
-                        entities.push({
-                            source: 'Bloomerang',
-                            sourceKey: sourceKey,
-                            entityType: collectionEntityType,
-                            index: key,
-                            key: `bl_${key}`,
-                            entity: entity
-                        });
-                    }
-                }
-            }
+    // Use compatibility layer if available
+    if (typeof getFilteredEntities === 'function' && typeof isEntityDatabaseLoaded === 'function') {
+        if (!isEntityDatabaseLoaded()) {
+            console.warn('Entity database not loaded');
+            return [];
         }
+
+        // Map dropdown values to filter values
+        const sourceFilter = unifiedBrowser.selectedDataSource === 'all' ? 'all' :
+            (unifiedBrowser.selectedDataSource === 'visionappraisal' ? 'visionAppraisal' : 'bloomerang');
+
+        // Get filtered entities from compatibility layer
+        const filteredEntities = getFilteredEntities(sourceFilter, unifiedBrowser.selectedEntityType);
+
+        // Convert to entityWrapper format for browser display
+        const entities = [];
+        for (const [key, entity] of Object.entries(filteredEntities)) {
+            const isVisionAppraisal = key.startsWith('visionAppraisal:');
+            entities.push({
+                source: isVisionAppraisal ? 'VisionAppraisal' : 'Bloomerang',
+                sourceKey: isVisionAppraisal ? 'visionappraisal' : 'bloomerang',
+                entityType: getEntityType(entity),
+                index: key,  // Use unified key as index
+                key: key,    // Use unified key directly (e.g., 'visionAppraisal:FireNumber:1510')
+                entity: entity
+            });
+        }
+
+        return entities;
     }
 
-    return entities;
+    // Keyed Database is required - no legacy fallback
+    console.error('Keyed Database not loaded. Use "Load Unified Database" or "Load All Entities Into Memory" first.');
+    return [];
 }
 
 /**
@@ -368,6 +432,11 @@ function getEntityType(entity) {
  * @returns {boolean} True if any data source has loaded data
  */
 function hasLoadedData() {
+    // Use compatibility layer if available
+    if (typeof isEntityDatabaseLoaded === 'function') {
+        return isEntityDatabaseLoaded();
+    }
+    // Fallback to legacy check
     return window.workingLoadedEntities && workingLoadedEntities.status === 'loaded';
 }
 
@@ -1533,38 +1602,22 @@ async function analyzeSelectedEntityMatches() {
 
     showUnifiedStatus('Analyzing matches... This may take a moment.', 'loading');
 
-    // DIAGNOSTIC: Log state before any loading
-    console.log('=== ANALYZE MATCHES DIAGNOSTIC ===');
-    console.log('BEFORE loading scripts:');
-    console.log('  findBestMatches available:', typeof findBestMatches === 'function');
-    console.log('  universalCompareTo available:', typeof universalCompareTo === 'function');
-    console.log('  levenshteinSimilarity available:', typeof levenshteinSimilarity === 'function');
-
     try {
         // Load the universalEntityMatcher if not already loaded
         if (typeof findBestMatches !== 'function') {
-            console.log('  -> Loading universalEntityMatcher.js...');
             await loadScriptAsync('./scripts/matching/universalEntityMatcher.js');
-            console.log('  -> Script loaded. findBestMatches now:', typeof findBestMatches === 'function');
-            console.log('  -> universalCompareTo now:', typeof universalCompareTo === 'function');
         }
 
         // Also ensure utils.js is loaded for comparison functions
         if (typeof levenshteinSimilarity !== 'function') {
-            console.log('  -> Loading utils.js...');
             await loadScriptAsync('./scripts/utils.js');
         }
 
-        // DIAGNOSTIC: Log state after loading
-        console.log('AFTER loading scripts:');
-        console.log('  findBestMatches available:', typeof findBestMatches === 'function');
-        console.log('  universalCompareTo available:', typeof universalCompareTo === 'function');
-
         // Perform the match analysis
+        // Pass the base entity's database key so it can be used for direct lookup during reconciliation
         let matchResults;
         if (typeof findBestMatches === 'function') {
-            console.log('  -> Using findBestMatches (universalCompareTo path)');
-            matchResults = findBestMatches(entity);
+            matchResults = findBestMatches(entity, { baseDatabaseKey: entityWrapper.key });
         } else {
             // Fallback - perform basic matching here
             console.log('  -> WARNING: Using performBasicMatchAnalysis FALLBACK (direct compareTo)');
@@ -1671,7 +1724,7 @@ function displayMatchAnalysisResults(entityWrapper, results) {
 
     // Extract base entity info for reconciliation
     // From universalEntityMatcher results or from entityWrapper
-    // Key format now includes type: { source, keyType, key, accountNumber, headStatus }
+    // Key format now includes type: { source, keyType, key, accountNumber, headStatus, databaseKey }
     let baseEntityInfo;
     if (results.baseEntity) {
         baseEntityInfo = {
@@ -1679,14 +1732,16 @@ function displayMatchAnalysisResults(entityWrapper, results) {
             keyType: results.baseEntity.keyType,
             key: results.baseEntity.key,
             accountNumber: results.baseEntity.accountNumber || '',
-            headStatus: results.baseEntity.headStatus || 'na'
+            headStatus: results.baseEntity.headStatus || 'na',
+            databaseKey: results.baseEntity.databaseKey || ''  // Actual database key for direct lookup
         };
     } else {
         const locIdInfo = getLocationIdentifierInfoFromWrapper(entityWrapper);
         baseEntityInfo = {
             source: entityWrapper.sourceKey || entityWrapper.source?.toLowerCase() || 'unknown',
             keyType: locIdInfo.type,
-            key: locIdInfo.value
+            key: locIdInfo.value,
+            databaseKey: entityWrapper.key || ''  // Fallback: use entityWrapper.key if available
         };
     }
 
@@ -1744,10 +1799,10 @@ function displayMatchAnalysisResults(entityWrapper, results) {
                     }
 
                     // Reconcile button handler - calls parent window's reconcileMatch
-                    // Parameters: baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus
-                    function doReconcile(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus) {
+                    // Parameters: baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus, baseDatabaseKey, targetDatabaseKey
+                    function doReconcile(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus, baseDatabaseKey, targetDatabaseKey) {
                         if (window.opener && typeof window.opener.reconcileMatch === 'function') {
-                            window.opener.reconcileMatch(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus);
+                            window.opener.reconcileMatch(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus, baseDatabaseKey, targetDatabaseKey);
                         } else {
                             alert('Unable to reconcile: Parent window not available. Please ensure the main browser window is still open.');
                         }
@@ -1962,6 +2017,40 @@ function generateMatchAnalysisStyles() {
         }
         .reconcile-btn:hover { background: #8e44ad; }
 
+        /* True Match and Near Match checkboxes */
+        .match-checkbox {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .match-checkbox input[type="checkbox"] {
+            margin: 0;
+            cursor: pointer;
+        }
+        .true-match-label {
+            background: #d4edda;
+            border: 1px solid #28a745;
+            color: #155724;
+        }
+        .true-match-label:has(input:checked) {
+            background: #28a745;
+            color: white;
+        }
+        .near-match-label {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+        }
+        .near-match-label:has(input:checked) {
+            background: #ffc107;
+            color: #212529;
+        }
+
         /* Top Matches Section */
         .top-matches-section {
             border: 2px solid #f39c12;
@@ -2103,12 +2192,20 @@ function generateTopMatchesSection(matchesByType, baseEntityInfo) {
                            score >= 0.5 ? 'score-moderate' : 'score-low';
         const entityName = match.entityName || match.targetKey || 'Unknown';
 
+        // Extract scores for True/Near Match evaluation
+        const nameScore = match.details?.components?.name?.similarity ?? null;
+        const contactInfoScore = match.details?.components?.contactInfo?.similarity ?? null;
+        const matchIsTrueMatch = isTrueMatch(score, nameScore, contactInfoScore);
+        const matchIsNearMatch = isNearMatch(score, nameScore, contactInfoScore);
+
         // Build reconcile button onclick
         const targetKeyValue = match.targetKey || '';
         const targetKeyType = match.targetKeyType || 'Unknown';
         const targetAccountNumber = match.targetAccountNumber || '';
         const targetHeadStatus = match.targetHeadStatus || 'na';
         const targetSource = match.targetSource || '';
+        const targetDatabaseKey = match.targetDatabaseKey || '';  // Actual database key for direct lookup
+        const baseDatabaseKey = baseEntityInfo?.databaseKey || '';  // Will be empty until we track base entity key
         const reconcileOnclick = "doReconcile('" +
             escapeHtmlForBrowser(baseSource) + "','" +
             escapeHtmlForBrowser(baseKeyType) + "','" +
@@ -2119,7 +2216,9 @@ function generateTopMatchesSection(matchesByType, baseEntityInfo) {
             escapeHtmlForBrowser(targetKeyType) + "','" +
             escapeHtmlForBrowser(targetKeyValue) + "','" +
             escapeHtmlForBrowser(targetAccountNumber) + "','" +
-            escapeHtmlForBrowser(targetHeadStatus) + "')";
+            escapeHtmlForBrowser(targetHeadStatus) + "','" +
+            escapeHtmlForBrowser(baseDatabaseKey) + "','" +
+            escapeHtmlForBrowser(targetDatabaseKey) + "')";
 
         html += `
             <div class="top-match-row">
@@ -2129,6 +2228,8 @@ function generateTopMatchesSection(matchesByType, baseEntityInfo) {
                     <div class="top-match-meta">${match.entityType || ''} | ${match.targetSource || ''} | ${match.targetKey || ''}</div>
                 </div>
                 <span class="selection-reason">${match.selectionReason}</span>
+                <label class="match-checkbox true-match-label"><input type="checkbox" class="true-match-checkbox" ${matchIsTrueMatch ? 'checked' : ''}> True</label>
+                <label class="match-checkbox near-match-label"><input type="checkbox" class="near-match-checkbox" ${matchIsNearMatch ? 'checked' : ''}> Near</label>
                 <button class="reconcile-btn" onclick="${reconcileOnclick}">Reconcile</button>
             </div>
         `;
@@ -2225,16 +2326,23 @@ function generateUniversalMatcherResultsHtml(results, baseEntityInfo) {
 
             const detailId = `detail_${type}_${idx}`;
             const entityName = match.entityName || match.targetKey || 'Unknown';
-            const nameScore = match.details?.components?.name?.similarity;
+            const nameScore = match.details?.components?.name?.similarity ?? null;
+            const contactInfoScore = match.details?.components?.contactInfo?.similarity ?? null;
             const hasHighNameScore = nameScore && nameScore > 0.985;
 
+            // Evaluate True Match and Near Match criteria
+            const matchIsTrueMatch = isTrueMatch(score, nameScore, contactInfoScore);
+            const matchIsNearMatch = isNearMatch(score, nameScore, contactInfoScore);
+
             // Build the Reconcile button onclick with properly escaped values
-            // Parameters: baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus
+            // Parameters: baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus, baseDatabaseKey, targetDatabaseKey
             const targetKeyValue = match.targetKey || '';
             const targetKeyType = match.targetKeyType || 'Unknown';
             const targetAccountNumber = match.targetAccountNumber || '';
             const targetHeadStatus = match.targetHeadStatus || 'na';
             const targetSource = match.targetSource || '';
+            const targetDatabaseKey = match.targetDatabaseKey || '';  // Actual database key for direct lookup
+            const baseDatabaseKey = baseEntityInfo?.databaseKey || '';  // Will be empty until we track base entity key
             const reconcileOnclick = "doReconcile('" +
                 escapeHtmlForBrowser(baseSource) + "','" +
                 escapeHtmlForBrowser(baseKeyType) + "','" +
@@ -2245,7 +2353,9 @@ function generateUniversalMatcherResultsHtml(results, baseEntityInfo) {
                 escapeHtmlForBrowser(targetKeyType) + "','" +
                 escapeHtmlForBrowser(targetKeyValue) + "','" +
                 escapeHtmlForBrowser(targetAccountNumber) + "','" +
-                escapeHtmlForBrowser(targetHeadStatus) + "')";
+                escapeHtmlForBrowser(targetHeadStatus) + "','" +
+                escapeHtmlForBrowser(baseDatabaseKey) + "','" +
+                escapeHtmlForBrowser(targetDatabaseKey) + "')";
 
             html += `
                 <div class="match-row" data-score="${score}">
@@ -2258,6 +2368,8 @@ function generateUniversalMatcherResultsHtml(results, baseEntityInfo) {
                         <div class="match-key">${match.targetKey || ''}</div>
                     </div>
                     <span class="match-source">${match.targetSource || ''}</span>
+                    <label class="match-checkbox true-match-label"><input type="checkbox" class="true-match-checkbox" ${matchIsTrueMatch ? 'checked' : ''}> True</label>
+                    <label class="match-checkbox near-match-label"><input type="checkbox" class="near-match-checkbox" ${matchIsNearMatch ? 'checked' : ''}> Near</label>
                     <button class="reconcile-btn" onclick="${reconcileOnclick}">Reconcile</button>
                     ${match.details ? `<button class="toggle-btn" onclick="toggleDetails('${detailId}')">Details</button>` : ''}
                 </div>
@@ -2427,42 +2539,67 @@ function renderMatchDetails(details) {
  * @param {string} targetKeyValue - Value of the target entity's locationIdentifier
  * @param {string} targetAccountNumber - Bloomerang account number for target (empty for VisionAppraisal)
  * @param {string} targetHeadStatus - Head status for target ('head', 'member', 'na')
+ * @param {string} baseDatabaseKey - Actual database key for base entity (preferred lookup method)
+ * @param {string} targetDatabaseKey - Actual database key for target entity (preferred lookup method)
  */
-function reconcileMatch(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus) {
-    console.log('reconcileMatch called:', { baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus });
+function reconcileMatch(baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus, baseDatabaseKey, targetDatabaseKey) {
+    console.log('reconcileMatch called:', { baseSource, baseKeyType, baseKeyValue, baseAccountNumber, baseHeadStatus, targetSource, targetKeyType, targetKeyValue, targetAccountNumber, targetHeadStatus, baseDatabaseKey, targetDatabaseKey });
 
-    // Look up both entities using the appropriate lookup function
-    // For Bloomerang: use accountNumber + headStatus (guaranteed unique)
-    // For VisionAppraisal: use keyType + keyValue
+    // Get the entity database for direct key lookup
+    const db = window.unifiedEntityDatabase?.entities;
+
+    // Look up both entities - PREFER direct database key lookup
     let baseEntity, targetEntity;
 
-    if (baseSource === 'bloomerang' && baseAccountNumber) {
-        if (typeof getBloomerangEntityByAccountNumber !== 'function') {
-            console.error('getBloomerangEntityByAccountNumber function not available');
-            alert('Error: Entity lookup function not available. Please reload entities.');
-            return;
+    // Try direct database key lookup first for target entity (we have this key from findBestMatches)
+    if (targetDatabaseKey && db) {
+        targetEntity = db[targetDatabaseKey];
+        if (targetEntity) {
+            console.log('Target entity found via database key:', targetDatabaseKey);
         }
-        baseEntity = getBloomerangEntityByAccountNumber(baseAccountNumber, baseKeyType, baseKeyValue, baseHeadStatus);
-    } else {
-        if (typeof getVisionAppraisalEntity !== 'function') {
-            console.error('getVisionAppraisalEntity function not available');
-            alert('Error: Entity lookup function not available. Please reload entities.');
-            return;
+    }
+
+    // Try direct database key lookup for base entity (may be empty until we track base entity key)
+    if (baseDatabaseKey && db) {
+        baseEntity = db[baseDatabaseKey];
+        if (baseEntity) {
+            console.log('Base entity found via database key:', baseDatabaseKey);
         }
-        baseEntity = getVisionAppraisalEntity(baseKeyType, baseKeyValue);
+    }
+
+    // Fallback to legacy lookup for base entity if database key lookup failed
+    if (!baseEntity) {
+        if (baseSource === 'bloomerang' && baseAccountNumber) {
+            if (typeof getBloomerangEntityByAccountNumber !== 'function') {
+                console.error('getBloomerangEntityByAccountNumber function not available');
+                alert('Error: Entity lookup function not available. Please reload entities.');
+                return;
+            }
+            baseEntity = getBloomerangEntityByAccountNumber(baseAccountNumber, baseKeyType, baseKeyValue, baseHeadStatus);
+        } else {
+            if (typeof getVisionAppraisalEntity !== 'function') {
+                console.error('getVisionAppraisalEntity function not available');
+                alert('Error: Entity lookup function not available. Please reload entities.');
+                return;
+            }
+            baseEntity = getVisionAppraisalEntity(baseKeyType, baseKeyValue);
+        }
     }
 
     if (!baseEntity) {
         const keyDesc = baseSource === 'bloomerang' ? `accountNumber:${baseAccountNumber}:${baseHeadStatus}` : `${baseKeyType}:${baseKeyValue}`;
-        console.error('Base entity not found:', baseSource, keyDesc);
+        console.error('Base entity not found:', baseSource, keyDesc, 'databaseKey:', baseDatabaseKey);
         alert('Error: Base entity not found. Key: ' + keyDesc);
         return;
     }
 
-    if (targetSource === 'bloomerang' && targetAccountNumber) {
-        targetEntity = getBloomerangEntityByAccountNumber(targetAccountNumber, targetKeyType, targetKeyValue, targetHeadStatus);
-    } else {
-        targetEntity = getVisionAppraisalEntity(targetKeyType, targetKeyValue);
+    // Fallback to legacy lookup for target entity if database key lookup failed
+    if (!targetEntity) {
+        if (targetSource === 'bloomerang' && targetAccountNumber) {
+            targetEntity = getBloomerangEntityByAccountNumber(targetAccountNumber, targetKeyType, targetKeyValue, targetHeadStatus);
+        } else {
+            targetEntity = getVisionAppraisalEntity(targetKeyType, targetKeyValue);
+        }
     }
 
     if (!targetEntity) {
@@ -2906,7 +3043,7 @@ function displayReconciliationModal(data) {
     htmlContent += '    accountNumber = metadata.targetAccountNumber;';
     htmlContent += '    headStatus = metadata.targetHeadStatus;';
     htmlContent += '  }';
-    htmlContent += '  if (!window.opener || !window.opener.workingLoadedEntities) {';
+    htmlContent += '  if (!window.opener || (!window.opener.unifiedEntityDatabase && !window.opener.workingLoadedEntities)) {';
     htmlContent += '    alert("Parent window not available. Please keep the main browser window open.");';
     htmlContent += '    return;';
     htmlContent += '  }';
@@ -3161,68 +3298,54 @@ function showUnifiedStats() {
 function generateUnifiedStats() {
     const stats = [];
     let totalEntities = 0;
-    const entityTypeCounts = {};
-    const sourceCounts = {
+    let entityTypeCounts = {};
+    let sourceCounts = {
         'VisionAppraisal': 0,
         'Bloomerang': 0
     };
+    let dataSource = 'none';
 
-    // Analyze loaded data from workingLoadedEntities
-    if (window.workingLoadedEntities && workingLoadedEntities.status === 'loaded') {
+    // Use compatibility layer if available
+    if (typeof getEntityDatabaseMetadata === 'function' && typeof isEntityDatabaseLoaded === 'function') {
+        if (isEntityDatabaseLoaded()) {
+            const metadata = getEntityDatabaseMetadata();
+            dataSource = metadata.source;
+            totalEntities = metadata.totalEntities || 0;
 
-        // VisionAppraisal data
-        if (workingLoadedEntities.visionAppraisal.loaded && workingLoadedEntities.visionAppraisal.entities) {
-            const vaCount = workingLoadedEntities.visionAppraisal.entities.length;
-            sourceCounts['VisionAppraisal'] = vaCount;
-            totalEntities += vaCount;
-
-            workingLoadedEntities.visionAppraisal.entities.forEach(entity => {
-                const type = getEntityType(entity);
-                entityTypeCounts[type] = (entityTypeCounts[type] || 0) + 1;
-            });
-        }
-
-        // Bloomerang data
-        if (workingLoadedEntities.bloomerang && workingLoadedEntities.bloomerang.loaded) {
-            let bloomerangTotal = 0;
-
-            const collections = ['individuals', 'households', 'nonhuman'];
-            const entityTypeMapping = {
-                'individuals': 'Individual',
-                'households': 'AggregateHousehold',
-                'nonhuman': 'NonHuman'
-            };
-
-            collections.forEach(collectionType => {
-                const collection = workingLoadedEntities.bloomerang[collectionType];
-                if (collection && collection.entities) {
-                    const count = Object.keys(collection.entities).length;
-                    bloomerangTotal += count;
-
-                    const mappedType = entityTypeMapping[collectionType] || collectionType;
-                    entityTypeCounts[mappedType] = (entityTypeCounts[mappedType] || 0) + count;
-                }
-            });
-
-            sourceCounts['Bloomerang'] = bloomerangTotal;
-            totalEntities += bloomerangTotal;
+            // Get counts from metadata
+            if (metadata.entityTypes) {
+                entityTypeCounts = metadata.entityTypes;
+            }
+            if (metadata.sources) {
+                // Sources are objects with {count, originalCount} - extract the count
+                const vaSource = metadata.sources.visionAppraisal;
+                const blSource = metadata.sources.bloomerang;
+                sourceCounts['VisionAppraisal'] = typeof vaSource === 'object' ? (vaSource?.count || 0) : (vaSource || 0);
+                sourceCounts['Bloomerang'] = typeof blSource === 'object' ? (blSource?.count || 0) : (blSource || 0);
+            }
         }
     }
+    // Keyed Database is required - no legacy fallback
+
+    // Determine status display
+    const vaLoaded = sourceCounts['VisionAppraisal'] > 0;
+    const blLoaded = sourceCounts['Bloomerang'] > 0;
 
     // Build statistics HTML
     stats.push(`
         <div class="stats-section">
             <h2>Data Source Summary</h2>
+            <p style="font-size: 12px; color: #666;">Data source: ${dataSource}</p>
             <table class="stats-table">
                 <tr><th>Data Source</th><th>Status</th><th>Entity Count</th></tr>
                 <tr>
                     <td>VisionAppraisal</td>
-                    <td>${workingLoadedEntities?.visionAppraisal?.loaded ? '✅ Loaded' : '❌ Not Loaded'}</td>
+                    <td>${vaLoaded ? '✅ Loaded' : '❌ Not Loaded'}</td>
                     <td>${sourceCounts['VisionAppraisal']}</td>
                 </tr>
                 <tr>
                     <td>Bloomerang</td>
-                    <td>${workingLoadedEntities?.bloomerang?.loaded ? '✅ Loaded' : '❌ Not Loaded'}</td>
+                    <td>${blLoaded ? '✅ Loaded' : '❌ Not Loaded'}</td>
                     <td>${sourceCounts['Bloomerang']}</td>
                 </tr>
                 <tr style="font-weight: bold;">
@@ -3353,3 +3476,16 @@ if (typeof document !== 'undefined') {
 }
 
 console.log("📚 Unified Entity Browser module loaded");
+
+// =============================================================================
+// EXPORTS FOR ENTITY GROUP BUILDER AND ENTITY GROUP BROWSER
+// =============================================================================
+
+// Export matching criteria and functions to window scope for use by entityGroupBuilder.js
+// Export basicEntityDetailsView for drill-down style View Details in EntityGroup Browser
+if (typeof window !== 'undefined') {
+    window.MATCH_CRITERIA = MATCH_CRITERIA;
+    window.isTrueMatch = isTrueMatch;
+    window.isNearMatch = isNearMatch;
+    window.basicEntityDetailsView = basicEntityDetailsView;
+}

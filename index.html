@@ -387,6 +387,95 @@
                 flex-wrap: wrap;
             }
         }
+
+        /* EntityGroup Browser Styles */
+        .entitygroup-result-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .entitygroup-result-item:hover {
+            background-color: #f3e5f5;
+        }
+
+        .entitygroup-result-item.entitygroup-selected {
+            background-color: #e1bee7;
+            border-left: 4px solid #9c27b0;
+        }
+
+        .entitygroup-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .entitygroup-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .entitygroup-index {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            background-color: #9c27b0;
+        }
+
+        .entitygroup-member-count {
+            font-size: 11px;
+            color: #6c757d;
+            font-weight: 500;
+        }
+
+        .entitygroup-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+
+        .entitygroup-badge-prospect {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .entitygroup-badge-donor {
+            background-color: #2196f3;
+            color: white;
+        }
+
+        .entitygroup-badge-nearmiss {
+            background-color: #ff9800;
+            color: white;
+        }
+
+        .entitygroup-name {
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+            margin-bottom: 3px;
+            line-height: 1.3;
+        }
+
+        .entitygroup-details {
+            color: #666;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .entitygroup-members-preview {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -427,6 +516,32 @@
             </button>
             <p style="font-size: 12px; color: #666; margin: 10px 0;">
                 Loads all VisionAppraisal + Bloomerang entities from Google Drive into memory for analysis
+            </p>
+
+            <!-- Unified Database Persistence -->
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                <label for="unifiedDatabaseFileId" style="display: block; font-size: 12px; color: #333; margin-bottom: 5px;">
+                    Unified Database File ID (for persistence):
+                </label>
+                <input type="text"
+                       id="unifiedDatabaseFileId"
+                       placeholder="Enter Google Drive file ID for unified database"
+                       style="width: 100%; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px;"
+                       onchange="saveUnifiedDatabaseFileId(this.value)">
+            </div>
+            <button class="optBut" onclick="recordUnifiedDatabase()" style="background-color: #3498db; color: white;" id="recordUnifiedBtn">
+                💾 Record Unified Database
+            </button>
+            <button class="optBut" onclick="loadAndRecordEntities()" style="background-color: #9b59b6; color: white;" id="loadAndRecordBtn">
+                📥 Load & Record Entities
+            </button>
+            <button class="optBut" onclick="loadUnifiedDatabaseFromDrive()" style="background-color: #e67e22; color: white;" id="loadUnifiedBtn">
+                📂 Load Unified Database
+            </button>
+            <p style="font-size: 12px; color: #666; margin: 10px 0;">
+                <strong>Record Unified Database:</strong> Saves in-memory entities to Google Drive.<br>
+                <strong>Load & Record:</strong> Loads from source files (VA + Bloomerang) AND saves unified database.<br>
+                <strong>Load Unified Database:</strong> Loads previously saved unified database from Google Drive (no regeneration).
             </p>
             <button class="optBut" onclick="runFullEntityAnalysisWithCSV()" style="background-color: #8e44ad; color: white;" id="analyzeAllEntitiesBtn">
                 📊 Analyze All Entities & Download CSV
@@ -574,6 +689,109 @@
                 <button class="action-button" onclick="clearSearchAndFilters()" style="background-color: #6c757d;">🗑️ Clear All</button>
             </div>
         </div>
+
+        <!-- EntityGroup Browser Section -->
+        <div class="entity-browser-section" style="border-color: #9c27b0;">
+            <h3 style="color: #9c27b0;">📊 EntityGroup Browser - Matched Entity Groups Explorer</h3>
+
+            <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
+                <!-- File ID inputs row -->
+                <div class="control-row" style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 320px;">
+                        <label for="entityGroupFileId" style="font-weight: 600; margin-bottom: 5px; color: #495057;">EntityGroup Database File ID:</label>
+                        <input type="text" id="entityGroupFileId" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; font-family: 'Courier New', monospace;" placeholder="Enter database file ID...">
+                    </div>
+                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 320px;">
+                        <label for="entityGroupReferenceFileId" style="font-weight: 600; margin-bottom: 5px; color: #495057;">Reference File ID:</label>
+                        <input type="text" id="entityGroupReferenceFileId" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; font-family: 'Courier New', monospace;" placeholder="Enter reference file ID...">
+                    </div>
+                </div>
+
+                <!-- Load/Build/Save buttons row -->
+                <div class="control-row" style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+                    <button id="entityGroupLoadBtn" class="action-button" style="background-color: #9c27b0; padding: 10px 20px; font-weight: 600;">
+                        📂 Load EntityGroups
+                    </button>
+                    <button id="entityGroupBuildBtn" class="action-button" style="background-color: #ff9800; padding: 10px 20px; font-weight: 600;">
+                        🔨 Build New
+                    </button>
+                    <span style="color: #999; margin: 0 5px;">|</span>
+                    <button id="entityGroupSaveToFileIdBtn" class="action-button" style="background-color: #17a2b8; padding: 10px 16px; font-weight: 600;">
+                        💾 Save to File IDs
+                    </button>
+                    <button id="entityGroupSaveAsNewBtn" class="action-button" style="background-color: #28a745; padding: 10px 16px; font-weight: 600;">
+                        📄 Save as New Files
+                    </button>
+                </div>
+
+                <div class="control-row" style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 200px;">
+                        <label for="entityGroupFilter" style="font-weight: 600; margin-bottom: 5px; color: #495057;">Filter Groups:</label>
+                        <select id="entityGroupFilter" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;">
+                            <option value="all">All Groups</option>
+                            <option value="multi">Multi-Member Only</option>
+                            <option value="single">Single-Member Only</option>
+                            <option value="prospects">Prospects (No Bloomerang)</option>
+                            <option value="donors">Existing Donors (Has Bloomerang)</option>
+                            <option value="nearMisses">Groups with Near Misses</option>
+                        </select>
+                    </div>
+                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 200px;">
+                        <label for="entityGroupSort" style="font-weight: 600; margin-bottom: 5px; color: #495057;">Sort By:</label>
+                        <select id="entityGroupSort" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;">
+                            <option value="index">Group Index</option>
+                            <option value="memberCount">Member Count (Desc)</option>
+                            <option value="name">Consensus Name</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                    <strong>EntityGroup Browser:</strong> Browse matched entity groups that consolidate entities from multiple data sources into unified real-world person/household representations.
+                    Load a saved EntityGroup database from Google Drive or build a new one from the Unified Entity Database.
+                </div>
+
+                <!-- Load Unified Database button - Required to display entity names/addresses in the browser -->
+                <div style="margin-top: 15px; padding: 10px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+                    <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                        <button id="entityGroupLoadUnifiedDbBtn" class="action-button" style="background-color: #28a745; padding: 8px 16px; font-weight: 600;">
+                            📂 Load Unified Database
+                        </button>
+                        <span style="font-size: 12px; color: #856404;">
+                            <strong>Required:</strong> Load the Unified Entity Database to display founding member names and addresses.
+                            Uses the file ID from "Entity Reconstruction" section above. Without this, groups will show "entity (not loaded)".
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="search-section">
+                <input type="text" id="entityGroupSearchInput" class="search-input" placeholder="Search groups by name, address, or member details...">
+                <button id="entityGroupSearchBtn" class="search-button">🔍 Search</button>
+                <button id="entityGroupClearBtn" class="search-button" style="background-color: #6c757d;">Clear</button>
+            </div>
+
+            <div id="entityGroupStatusMessage" class="status-message" style="display: none;"></div>
+
+            <div class="results-section">
+                <div class="results-header">
+                    <span id="entityGroupResultsCount">Enter file ID and click Load to browse EntityGroups</span>
+                </div>
+                <div id="entityGroupResultsList" class="results-list">
+                    <div style="padding: 20px; text-align: center; color: #999;">
+                        <div style="font-size: 48px; margin-bottom: 15px;">📊</div>
+                        <div style="font-weight: 600; margin-bottom: 10px;">EntityGroup Browser</div>
+                        <div>Enter a Google Drive file ID and load to begin browsing entity groups</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button id="entityGroupViewDetailsBtn" class="action-button">👁️ View Group Details</button>
+                <button id="entityGroupExportBtn" class="action-button">📄 Export Groups</button>
+                <button id="entityGroupStatsBtn" class="action-button">📊 Group Stats</button>
+            </div>
+        </div>
     </div>
     <div id="ressieH">"dude"</div>
     <div id="streeter">"dude"</div>
@@ -609,6 +827,7 @@
     <script type="text/javascript" src="./scripts/objectStructure/contactInfo.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/householdInformation.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/entityClasses.js"></script>
+    <script type="text/javascript" src="./scripts/objectStructure/entityGroup.js"></script>
     <script type="text/javascript" src="./scripts/utils/classSerializationUtils.js"></script>
     <script type="text/javascript" src="./scripts/visionAppraisalParser.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/visionAppraisal.js"></script>
@@ -623,6 +842,7 @@
     <!-- Unified Entity Browser System -->
     <script type="text/javascript" src="./scripts/dataSourceManager.js"></script>
     <script type="text/javascript" src="./scripts/entityRenderer.js"></script>
+    <script type="text/javascript" src="./scripts/matching/universalEntityMatcher.js"></script>
     <script type="text/javascript" src="./scripts/unifiedEntityBrowser.js"></script>
 
     <!-- Legacy Entity Browsers (kept for reference) -->
@@ -1069,6 +1289,144 @@
 
     <!-- Load All Entities Button Functionality -->
     <script src="./scripts/loadAllEntitiesButton.js"></script>
+
+    <!-- Unified Database Persistence -->
+    <script src="./scripts/unifiedDatabasePersistence.js"></script>
+
+    <!-- Entity Group Builder -->
+    <script src="./scripts/matching/entityGroupBuilder.js"></script>
+
+    <!-- EntityGroup Browser -->
+    <script src="./scripts/entityGroupBrowser.js"></script>
+
+    <!-- Unified Database Button Handlers -->
+    <script>
+        // Storage key for unified database file ID
+        const UNIFIED_DB_FILE_ID_KEY = 'birava_unifiedDatabaseFileId';
+
+        // Save file ID to localStorage
+        function saveUnifiedDatabaseFileId(fileId) {
+            if (fileId && fileId.trim()) {
+                localStorage.setItem(UNIFIED_DB_FILE_ID_KEY, fileId.trim());
+                console.log('Unified database file ID saved:', fileId.trim());
+            }
+        }
+
+        // Get file ID from localStorage or input
+        function getUnifiedDatabaseFileId() {
+            const input = document.getElementById('unifiedDatabaseFileId');
+            if (input && input.value.trim()) {
+                return input.value.trim();
+            }
+            return localStorage.getItem(UNIFIED_DB_FILE_ID_KEY);
+        }
+
+        // Load saved file ID on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedFileId = localStorage.getItem(UNIFIED_DB_FILE_ID_KEY);
+            if (savedFileId) {
+                const input = document.getElementById('unifiedDatabaseFileId');
+                if (input) {
+                    input.value = savedFileId;
+                }
+            }
+        });
+
+        // Record Unified Database button handler
+        async function recordUnifiedDatabase() {
+            const fileId = getUnifiedDatabaseFileId();
+            if (!fileId) {
+                alert('Please enter a Google Drive file ID for the unified database.');
+                return;
+            }
+
+            if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
+                alert('Entities not loaded!\n\nPlease click "Load All Entities Into Memory" first.');
+                return;
+            }
+
+            const btn = document.getElementById('recordUnifiedBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Saving...';
+            btn.disabled = true;
+
+            try {
+                const result = await saveUnifiedDatabase(fileId);
+                alert(`Unified database saved successfully!\n\nEntities: ${result.metadata.totalEntities}\nFile: ${result.fileName}`);
+            } catch (error) {
+                console.error('Error recording unified database:', error);
+                alert('Error saving unified database: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Load & Record Entities button handler
+        async function loadAndRecordEntities() {
+            const fileId = getUnifiedDatabaseFileId();
+            if (!fileId) {
+                alert('Please enter a Google Drive file ID for the unified database.');
+                return;
+            }
+
+            const btn = document.getElementById('loadAndRecordBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Loading & Saving...';
+            btn.disabled = true;
+
+            try {
+                const result = await loadSourcesAndSaveUnified(fileId);
+                alert(`Entities loaded and unified database saved!\n\nEntities: ${result.saveResult.metadata.totalEntities}\nFile: ${result.saveResult.fileName}`);
+            } catch (error) {
+                console.error('Error in load & record:', error);
+                alert('Error: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Load Unified Database from Google Drive (no regeneration)
+        async function loadUnifiedDatabaseFromDrive() {
+            const fileId = getUnifiedDatabaseFileId();
+            if (!fileId) {
+                alert('Please enter a Google Drive file ID for the unified database.');
+                return;
+            }
+
+            const btn = document.getElementById('loadUnifiedBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Loading...';
+            btn.disabled = true;
+
+            try {
+                // Clear any cached database from workingLoadedEntities path
+                if (typeof clearEntityDatabaseCache === 'function') {
+                    clearEntityDatabaseCache();
+                }
+
+                const result = await loadUnifiedDatabase(fileId);
+
+                // Auto-populate the unified browser with loaded data
+                if (typeof showAllEntities === 'function') {
+                    showAllEntities();
+                }
+
+                const classStatus = result.classesRestored ? '✅ Class types restored' : '⚠️ Class restoration issue';
+                alert(`Unified database loaded from Google Drive!\n\n` +
+                      `Entities: ${result.entityCount}\n` +
+                      `Created: ${result.metadata.createdAt}\n` +
+                      `${classStatus}`);
+            } catch (error) {
+                console.error('Error loading unified database:', error);
+                alert('Error loading unified database: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
 
 </body>
 </html>

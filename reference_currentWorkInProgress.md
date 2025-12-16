@@ -1,7 +1,7 @@
 # Current Work In Progress - Nested Project Layers
 
 **Created**: December 7, 2025
-**Last Updated**: December 7, 2025 (status correction)
+**Last Updated**: December 16, 2025
 **Purpose**: Track the layered/nested projects currently in progress to prevent context loss during AI session transitions
 
 ---
@@ -9,41 +9,40 @@
 ## Active Project Stack (Outermost to Innermost)
 
 ```
-LAYER 1: Analyze Matches UI (6-feature enhancement)
-    Status: CODED_READY_FOR_TESTING
+LAYER 1: EntityGroup Database (Step 4 of Roadmap)
+    Status: CODED_READY_FOR_USER_VERIFICATION
+    Files: scripts/objectStructure/entityGroup.js, scripts/matching/entityGroupBuilder.js
+    Reference: reference_projectRoadmap.md Section 4
+         |
+         v
+LAYER 2: Analyze Matches UI (6-feature enhancement)
+    Status: USER_VERIFIED_WORKING (True Match / Near Match checkboxes verified)
     Reference: reference_analyzeMatchesUI.md
          |
          v
-LAYER 2: Reconcile Button Feature
+LAYER 3: Reconcile Button Feature
     Status: USER_VERIFIED_WORKING (Name breakdown displays correctly)
     Reference: reference_reconcileFeatureSpec.md
          |
          v
-LAYER 3: Entity Key Uniqueness Fix
+LAYER 4: Entity Key Uniqueness Fix
     Status: USER_VERIFIED_WORKING
-    Note: Remaining DUPLICATE errors are PID/FireNumber issue (separate concern)
     Reference: reference_entityKeyUniqueness.md
          |
          v
-LAYER 4: Detailed compareTo Parameter Flow
-    Status: STEPS 1-5 USER_VERIFIED_WORKING, Step 6 (CSS) pending
-    Purpose: compareTo(other, true) returns breakdown objects
-    Reference: reference_compareToDirectImplementationPlan.md (end of doc)
-         |
-         v
-LAYER 5: compareTo Architecture (4 phases)
-    Status: ALL 4 PHASES TESTED WORKING
-    Phase 1: IndividualName - TESTED WORKING
-    Phase 2: Address - TESTED WORKING
-    Phase 3: ContactInfo - TESTED WORKING (10/11 tests)
-    Phase 4: Entity - TESTED WORKING (10/10 tests)
+LAYER 5: Detailed compareTo Parameter Flow
+    Status: STEPS 1-5 USER_VERIFIED_WORKING, Step 6 (CSS) pending (minor)
     Reference: reference_compareToDirectImplementationPlan.md
          |
          v
-LAYER 6: Fire Number Collision Handler
-    Status: CODED BUT DISABLED (deferred)
-    Disable flag: COLLISION_HANDLER_DISABLED = true in fireNumberCollisionHandler.js
-    Note: Cross-type comparison solved in universalEntityMatcher, can port back when needed
+LAYER 6: compareTo Architecture (4 phases)
+    Status: ALL 4 PHASES TESTED WORKING
+    Reference: reference_compareToDirectImplementationPlan.md
+         |
+         v
+LAYER 7: Fire Number Collision Handler
+    Status: USER_VERIFIED_WORKING (ENABLED)
+    Disable flag: COLLISION_HANDLER_DISABLED = false
     Reference: reference_fireNumberCollisionPlan.md
 ```
 
@@ -51,98 +50,108 @@ LAYER 6: Fire Number Collision Handler
 
 ## Current Status Summary
 
-**LAYER 2 RECONCILE FEATURE: USER_VERIFIED_WORKING**
-- Name Component Breakdown table displays correctly (lastName, firstName, otherNames)
-- Shows weights, similarities, and contributions for each component
+**LAYER 1 ENTITYGROUP DATABASE: CODED_READY_FOR_USER_VERIFICATION**
 
-**Next Steps**:
-1. ~~Test Reconcile button in Match Analysis window~~ DONE
-2. ~~Enhance displayReconciliationModal to show detailed breakdown (Step 5)~~ DONE
-3. Add CSS styling for reconciliation display (Step 6) - MINOR
-4. Test full Analyze Matches UI features (Layer 1)
+### Test Results (December 16, 2025)
+| Metric | Value |
+|--------|-------|
+| Total Groups | 2291 |
+| Multi-member Groups | 785 |
+| Single-member Groups | 1506 |
+| Prospects | 1316 |
+| Existing Donors | 975 |
+| Entities Assigned | 4097 |
+| Near Misses | 202 |
 
-**Deferred**:
-- Fire number collision handler re-enablement
-- PID/FireNumber duplicate resolution
-
----
-
-## Layer 1: Analyze Matches UI Enhancement
-
-### Six Features Implemented
-| # | Feature | Status |
-|---|---------|--------|
-| 1 | View Details button on each row | CODED |
-| 2 | Complete name + one-line address display | CODED |
-| 3 | Top Matches summary section | CODED |
-| 4 | 98th percentile in filter row | CODED |
-| 5 | CSV export option | CODED |
-| 6 | "True Match?" checkbox placeholder | CODED |
+### Files Created
+- `scripts/objectStructure/entityGroup.js` - EntityGroup and EntityGroupDatabase classes
+- `scripts/matching/entityGroupBuilder.js` - 5-phase construction algorithm
 
 ### Files Modified
-- scripts/unifiedEntityBrowser.js (main implementation)
+- `index.html` - Added script includes
+- `scripts/unifiedEntityBrowser.js` - Exported isTrueMatch, isNearMatch, MATCH_CRITERIA
 
-### Testing Instructions
-1. Refresh browser (code files changed)
-2. Load entities - click "Load All Entities Into Memory"
-3. Select an entity in unified entity browser
-4. Click "Analyze Matches" button
-5. Verify all 6 features work
+### 5-Phase Construction Algorithm
+1. **Phase 1**: Bloomerang Households (426 found)
+2. **Phase 2**: VisionAppraisal Households (1406 processed)
+3. **Phase 3**: Bloomerang Individuals (remaining after Phase 1)
+4. **Phase 4**: VisionAppraisal Individuals (remaining after Phase 2)
+5. **Phase 5**: Remaining entity types (Business, LegalConstruct)
+
+### Pending Features
+- Browser/viewing tools for EntityGroups
+- CSV output for EntityGroups
+- Google Drive persistence (save/load)
+- Consensus entity synthesis (_synthesizeConsensus is placeholder)
 
 ---
 
-## Layer 2: Reconcile Button Feature
+## Completed Foundational Work
 
-### Purpose
-Display detailed breakdown of how similarity score was calculated between two entities.
+### Keyed Database Migration (Dec 14-15, 2025) - USER_VERIFIED_WORKING
+- All 6 migration phases complete
+- Reference: reference_keyedDatabaseMigration.md
 
-### Architecture Decisions
-1. **Entity Lookup**: Single canonical path using source + locationIdentifier
-2. **Single Source of Truth**: universalCompareTo performs ALL calculations
-3. **Enriched Returns**: compareTo(other, true) returns breakdown objects
+### Key Preservation (Dec 15, 2025) - USER_VERIFIED_WORKING
+- Database keys flow through entire system (findBestMatches → reconcileMatch)
+- Reference: reference_keyPreservationPlan.md
 
-### Functions to Implement (in unifiedEntityBrowser.js)
-- reconcileMatch(baseEntityInfo, targetKey, targetSource, ...)
-- performDetailedReconciliation(baseEntity, targetEntity)
-- displayReconciliationModal(reconciliationData)
+### True Match / Near Match Criteria (Dec 15-16, 2025) - USER_VERIFIED_WORKING
+- isTrueMatch() and isNearMatch() functions in unifiedEntityBrowser.js
+- MATCH_CRITERIA configuration exported for use by EntityGroup construction
+- Checkboxes in Analyze Matches UI auto-detect match status
+
+### NonHumanName Implementation (Dec 14, 2025) - USER_VERIFIED_WORKING
+- NonHumanName class for Business/LegalConstruct entities
+
+### Email Matching Improvement (Dec 14, 2025) - USER_VERIFIED_WORKING
+- Split local part (0.8 fuzzy) + domain (0.2 exact)
+
+### Fire Number Collision Handler (Dec 8, 2025) - USER_VERIFIED_WORKING
+- Stats: {merged: 8, suffixed: 59, unique_output: 2309}
+- COLLISION_HANDLER_DISABLED = false (ENABLED)
+
+---
+
+## Layer 2: Analyze Matches UI Enhancement
+
+### Six Features
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | View Details button on each row | USER_VERIFIED_WORKING |
+| 2 | Complete name + one-line address display | USER_VERIFIED_WORKING |
+| 3 | Top Matches summary section | USER_VERIFIED_WORKING |
+| 4 | 98th percentile in filter row | USER_VERIFIED_WORKING |
+| 5 | CSV export option | CODED_NOT_TESTED |
+| 6 | True Match / Near Match checkboxes | USER_VERIFIED_WORKING |
+
+---
+
+## Layer 3: Reconcile Button Feature
+
+### Status: USER_VERIFIED_WORKING
+- Name Component Breakdown table displays correctly
+- Shows weights, similarities, and contributions for each component
+- View Details buttons added to both Base Entity and Target Entity cards
 
 ### Critical Lesson
-Do NOT use ${...} interpolations inside `<script>` blocks in template literals - causes parsing issues.
+Do NOT use ${...} interpolations inside `<script>` blocks in template literals.
 
 ---
 
-## Layer 3: Entity Key Uniqueness
+## Layer 4: Entity Key Uniqueness
 
 ### Status: USER_VERIFIED_WORKING
 
-### Problem (Resolved)
-```
-DUPLICATE locationIdentifier in Bloomerang: SimpleIdentifiers:PO Box 1382, Block Island, RI, 02807:na
-{existing: Individual, duplicate: AggregateHousehold}
-```
-
-### Root Cause (Fixed)
-Bloomerang Individuals and AggregateHouseholds can share same locationIdentifier (address).
-Previous key format `source:type:value:headStatus` still collides because standalone Individuals and AggregateHouseholds both get headStatus='na'.
-
-### Solution Implemented
-**Bloomerang key format**: `bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>`
-**VisionAppraisal key format**: `visionAppraisal:<locationType>:<locationValue>`
-
-### Files Modified
-- scripts/loadAllEntitiesButton.js: New key functions, updated index building
-- scripts/matching/universalEntityMatcher.js: Updated getEntityKeyInfo, findBestMatches
-- scripts/unifiedEntityBrowser.js: Updated reconcile functions with 10 parameters
-
-### Note on Remaining Duplicates
-Some DUPLICATE errors may still appear - these are due to the PID/FireNumber relationship complexity, which is a separate issue that does not block current work.
+### Key Formats
+- **Bloomerang**: `bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>`
+- **VisionAppraisal**: `visionAppraisal:<locationType>:<locationValue>`
 
 ---
 
-## Layer 4: Detailed compareTo Parameter Flow
+## Layer 5: Detailed compareTo Parameter Flow
 
-### Problem Solved
-`detailed=true` parameter was not reaching comparison calculator functions.
+### Status: STEPS 1-5 USER_VERIFIED_WORKING
 
 ### Solution
 Updated entire call chain to pass detailed parameter:
@@ -152,48 +161,34 @@ compareTo(other, detailed=false)
     → comparisonCalculator.call(obj1, obj2, detailed)
 ```
 
-### Files Modified (December 7, 2025)
-- scripts/utils.js: genericObjectCompareTo, address helpers, contactInfoWeightedComparison
-- scripts/objectStructure/aliasClasses.js: Aliased.compareTo
-- scripts/objectStructure/contactInfo.js: Info.compareTo fallback
-- scripts/objectStructure/entityClasses.js: Entity.compareTo fallback
-
-### Completed Work (December 7, 2025)
-- Step 5: USER_VERIFIED_WORKING - Component Breakdown table displays correctly
-  - Fix: Added `subordinateDetails: result.subordinateDetails` to Entity.compareTo return in entityClasses.js (line 325)
-  - Display shows lastName (50% weight), firstName (40% weight), otherNames (10% weight)
-
-### Remaining Work
+### Remaining
 - Step 6: Add CSS styling for reconciliation display (minor polish)
 
 ---
 
-## Layer 5: compareTo Architecture
+## Layer 6: compareTo Architecture
 
-See: reference_compareToDirectImplementationPlan.md for full details.
+### Status: ALL 4 PHASES TESTED WORKING
+- Phase 1: IndividualName - TESTED WORKING
+- Phase 2: Address - TESTED WORKING
+- Phase 3: ContactInfo - TESTED WORKING
+- Phase 4: Entity - TESTED WORKING
 
-### Key Facts
-- All 4 phases tested working
-- Uses vowel-weighted Levenshtein from matchingTools.js
-- Calculator registry pattern for serialization safety
-- Weight boost: +12% for 100% name match, +6% for >95% name match
+See: reference_compareToDirectImplementationPlan.md
 
 ---
 
-## Layer 6: Fire Number Collision Handler
+## Layer 7: Fire Number Collision Handler
 
-See: reference_fireNumberCollisionPlan.md for full plan.
+### Status: USER_VERIFIED_WORKING (December 8, 2025)
+- Located in: scripts/dataSources/fireNumberCollisionHandler.js
+- COLLISION_HANDLER_DISABLED = false (ENABLED)
+- Uses crossTypeNameComparison from utils.js
 
-### Current State
-- CODED in scripts/dataSources/fireNumberCollisionHandler.js
-- DISABLED via flag: `COLLISION_HANDLER_DISABLED = true`
-- Was blocked by cross-type comparison error
-- Cross-type solution NOW EXISTS in universalEntityMatcher.js (extractNameString, crossTypeNameComparison)
-
-### To Re-enable
-1. Port crossTypeNameComparison approach from universalEntityMatcher.js
-2. Set COLLISION_HANDLER_DISABLED = false
-3. Run full integration test
+### Test Stats
+- Merged same owner: 8
+- Suffixed different owner: 59
+- Unique entities in output: 2309
 
 ---
 
@@ -203,51 +198,23 @@ See: reference_fireNumberCollisionPlan.md for full plan.
 percentileThreshold: 98
 minimumGroupSize: 10
 minimumScoreDefault: 0.31
-nameScoreOverride: 0.985  # Applies to ALL comparison types
+nameScoreOverride: 0.985
+individualToIndividual_minimumCutoff: 0.75
 
-individualToIndividual:
-  minimumCutoff: 0.91  # Floor cutoff - MAX(98th percentile, this value)
-  minimumScore: 0.50
-
-individualToHousehold:
-  minimumScore: 0.50
+selection_rule: "98th percentile OR top 10; include all 100% matches beyond that count"
 ```
 
-### Best Match Selection Logic
-- 98th percentile OR top 10 (whichever is more)
-- Name score >98.5% included if score >= minimum
-- Perfect matches always included beyond 98th percentile count
+---
+
+## Critical Lessons Preserved
+
+1. **Template Literals**: Do NOT use ${...} interpolations inside `<script>` blocks
+2. **Key Changes**: When adding new key components, ADD to existing format, do NOT replace elements
+3. **Source Identification**: Use sourceMap-based test (locationIdentifier.primaryAlias.sourceMap contains 'bloomerang'), NOT accountNumber property
+4. **Fire Number Collision**: Cannot use full universalCompareTo - entities have same primary address; must use NAME ONLY + SECONDARY ADDRESS ONLY comparison
+5. **Key Preservation**: Database keys generated ONLY during database building; once loaded, keys travel with entities through all flows
 
 ---
 
-## Critical Session Lesson (December 7, 2025)
-
-**User feedback during implementation:**
-> "you are returning account number INSTEAD? I wanted account number ADDED to the key"
-> "What happened to the head of household element in the key? I explicitly said not to remove that"
-
-**Lesson learned**: When adding new key components, ADD them to existing format, do NOT replace existing elements. Preserve ALL existing key elements AND add new ones.
-
----
-
-## Files Modified This Session (December 7, 2025)
-
-### Entity Key Uniqueness
-- loadAllEntitiesButton.js: isBloomerangEntity, getBloomerangAccountNumber, getEntityKeyInfo, buildEntityIndexKey, etc.
-- universalEntityMatcher.js: getEntityKeyInfo returns accountNumber and headStatus
-- unifiedEntityBrowser.js: reconcileMatch accepts 10 parameters, doReconcile passes all 10
-
-### Detailed Parameter Flow
-- utils.js: genericObjectCompareTo 4th param, address helper detailed params
-- aliasClasses.js: Aliased.compareTo passes detailed
-- contactInfo.js: Info.compareTo fallback passes detailed
-- entityClasses.js: Entity.compareTo fallback passes detailed
-
-### Step 5 Fix (December 7, 2025)
-- entityClasses.js: Added `subordinateDetails: result.subordinateDetails` to Entity.compareTo return object (line 325)
-- Root cause: Calculator returned subordinateDetails but Entity.compareTo was stripping it
-
----
-
-**Document Version**: 1.1
-**Last Updated**: December 7, 2025 (Step 5 completed)
+**Document Version**: 2.0
+**Last Updated**: December 16, 2025

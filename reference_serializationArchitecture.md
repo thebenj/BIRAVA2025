@@ -24,9 +24,14 @@ Recursive serialization system that preserves class constructor information thro
 - `testRoundTrip(testObject)` - Testing utility for serialization cycles
 
 **Class Registry**:
-- Maps 20+ class names to constructors (Entity, Individual, Business, LegalConstruct, AggregateHousehold, AttributedTerm, ContactInfo, Address, etc.)
+- Maps 20+ class names to constructors (Entity, Individual, Business, LegalConstruct, AggregateHousehold, AttributedTerm, ContactInfo, Address, NonHumanName, etc.)
 - Handles built-in types: Map, Set, Date, RegExp
 - Graceful fallback for missing classes
+
+**Name Classes in Registry**:
+- `IndividualName` - For Individual entities (has firstName, lastName, completeName, etc.)
+- `HouseholdName` - For AggregateHousehold entities
+- `NonHumanName` - For Business and LegalConstruct entities (added Dec 14, 2025)
 
 ### **2. Production Integration**
 

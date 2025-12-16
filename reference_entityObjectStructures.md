@@ -43,15 +43,27 @@ This document describes the complete object structures that result from deserial
 
 ## 👥 **Name Structures**
 
-### **AttributedTerm Names (Households, Businesses, Legal Constructs)**
+### **HouseholdName (AggregateHousehold Entities)**
 ```javascript
 {
-    __type: "AttributedTerm",
-    term: "LOPES HELDER & MARIA FATIMA",    // Display name
-    fieldName: null,                        // Source field name
-    sourceMap: MapObject                    // Source tracking information
+    __type: "HouseholdName",
+    primaryAlias: AttributedTermObject,     // Primary name alias with term
+    alternatives: Object                    // Alternative names
 }
 ```
+
+### **NonHumanName (Business and LegalConstruct Entities)**
+*Added December 14, 2025 - extends SimpleIdentifiers*
+```javascript
+{
+    __type: "NonHumanName",
+    primaryAlias: AttributedTermObject,     // Primary name alias
+    alternatives: Object                    // Alternative names
+}
+// Access name via: entity.name.primaryAlias.term
+```
+
+**Note**: Prior to Dec 14 2025, Business/LegalConstruct used plain `SimpleIdentifiers` or `AttributedTerm` directly. Now uses `NonHumanName` for consistency with Bloomerang NonHuman entities.
 
 ### **IndividualName Structure (Individual Entities)**
 ```javascript

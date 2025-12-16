@@ -563,6 +563,214 @@ class Aliased {
     }
 
     /**
+     * Static factory method: create a consensus Aliased from multiple Aliased objects
+     * Selects the best primary (highest average similarity to others) and categorizes
+     * the remaining primaries into homonyms, synonyms, or candidates based on thresholds.
+     * Also merges existing alternatives from source objects.
+     *
+     * @param {Array<Aliased>} aliasedObjects - Array of Aliased objects to merge
+     * @param {Object} thresholds - Categorization thresholds
+     * @param {number} thresholds.homonym - Minimum similarity for homonym (e.g., 0.875)
+     * @param {number} thresholds.synonym - Minimum similarity for synonym (e.g., 0.845)
+     * @param {number} thresholds.candidate - Minimum similarity for candidate (e.g., 0.5)
+     * @returns {Aliased|null} New Aliased instance with populated alternatives, or null if empty input
+     */
+    static createConsensus(aliasedObjects, thresholds) {
+        if (!aliasedObjects || aliasedObjects.length === 0) return null;
+        if (aliasedObjects.length === 1) return aliasedObjects[0];
+
+        // Default thresholds if not provided
+        const t = {
+            homonym: thresholds?.homonym ?? 0.875,
+            synonym: thresholds?.synonym ?? 0.845,
+            candidate: thresholds?.candidate ?? 0.5
+        };
+
+        // Step 1: Find the best primary (highest average similarity to all others)
+        let bestIndex = 0;
+        let bestAvgScore = 0;
+        const similarityScores = []; // Store [i][j] scores
+
+        for (let i = 0; i < aliasedObjects.length; i++) {
+            let totalScore = 0;
+            let comparisons = 0;
+            similarityScores[i] = [];
+
+            for (let j = 0; j < aliasedObjects.length; j++) {
+                if (i === j) {
+                    similarityScores[i][j] = 1.0;
+                    continue;
+                }
+
+                try {
+                    if (typeof aliasedObjects[i].compareTo === 'function') {
+                        const score = aliasedObjects[i].compareTo(aliasedObjects[j]);
+                        if (typeof score === 'number') {
+                            totalScore += score;
+                            comparisons++;
+                            similarityScores[i][j] = score;
+                        } else {
+                            similarityScores[i][j] = 0;
+                        }
+                    } else {
+                        similarityScores[i][j] = 0;
+                    }
+                } catch (e) {
+                    similarityScores[i][j] = 0;
+                }
+            }
+
+            const avgScore = comparisons > 0 ? totalScore / comparisons : 0;
+            if (avgScore > bestAvgScore) {
+                bestAvgScore = avgScore;
+                bestIndex = i;
+            }
+        }
+
+        // Step 2: Create new consensus Aliased using the best primary
+        const bestObject = aliasedObjects[bestIndex];
+        const consensus = new Aliased(bestObject.primaryAlias);
+
+        // Copy comparison properties from best object
+        if (bestObject.comparisonWeights) {
+            consensus.comparisonWeights = bestObject.comparisonWeights;
+        }
+        if (bestObject.comparisonCalculatorName) {
+            consensus.comparisonCalculatorName = bestObject.comparisonCalculatorName;
+            consensus.comparisonCalculator = resolveComparisonCalculator(bestObject.comparisonCalculatorName);
+        }
+
+        // Step 3: Categorize other primaries into alternatives
+        for (let i = 0; i < aliasedObjects.length; i++) {
+            if (i === bestIndex) continue;
+
+            const otherObject = aliasedObjects[i];
+            const similarity = similarityScores[bestIndex][i];
+
+            // Add other's primary to appropriate category
+            if (otherObject.primaryAlias) {
+                if (similarity >= t.homonym) {
+                    consensus.alternatives.add(otherObject.primaryAlias, 'homonyms');
+                } else if (similarity >= t.synonym) {
+                    consensus.alternatives.add(otherObject.primaryAlias, 'synonyms');
+                } else if (similarity >= t.candidate) {
+                    consensus.alternatives.add(otherObject.primaryAlias, 'candidates');
+                }
+            }
+
+            // Step 4: Merge existing alternatives from other objects
+            if (otherObject.alternatives) {
+                consensus._mergeSourceAlternatives(otherObject.alternatives, similarity, t);
+            }
+        }
+
+        // Also merge alternatives from the best object itself
+        if (bestObject.alternatives) {
+            consensus._mergeSourceAlternatives(bestObject.alternatives, 1.0, t);
+        }
+
+        return consensus;
+    }
+
+    /**
+     * Merge other Aliased objects into this instance, categorizing their primaries
+     * and alternatives based on similarity thresholds.
+     *
+     * @param {Array<Aliased>} otherObjects - Other Aliased objects to merge
+     * @param {Object} thresholds - Categorization thresholds
+     * @param {number} thresholds.homonym - Minimum similarity for homonym (e.g., 0.875)
+     * @param {number} thresholds.synonym - Minimum similarity for synonym (e.g., 0.845)
+     * @param {number} thresholds.candidate - Minimum similarity for candidate (e.g., 0.5)
+     */
+    mergeAlternatives(otherObjects, thresholds) {
+        if (!otherObjects || otherObjects.length === 0) return;
+
+        // Default thresholds if not provided
+        const t = {
+            homonym: thresholds?.homonym ?? 0.875,
+            synonym: thresholds?.synonym ?? 0.845,
+            candidate: thresholds?.candidate ?? 0.5
+        };
+
+        for (const otherObject of otherObjects) {
+            // Compare this object to the other
+            let similarity = 0;
+            try {
+                if (typeof this.compareTo === 'function') {
+                    const score = this.compareTo(otherObject);
+                    if (typeof score === 'number') {
+                        similarity = score;
+                    }
+                }
+            } catch (e) {
+                // Skip comparison errors
+            }
+
+            // Add other's primary to appropriate category
+            if (otherObject.primaryAlias) {
+                // Don't add if it matches our primary
+                if (otherObject.primaryAlias.term !== this.primaryAlias.term) {
+                    if (similarity >= t.homonym) {
+                        this.alternatives.add(otherObject.primaryAlias, 'homonyms');
+                    } else if (similarity >= t.synonym) {
+                        this.alternatives.add(otherObject.primaryAlias, 'synonyms');
+                    } else if (similarity >= t.candidate) {
+                        this.alternatives.add(otherObject.primaryAlias, 'candidates');
+                    }
+                }
+            }
+
+            // Merge existing alternatives from other object
+            if (otherObject.alternatives) {
+                this._mergeSourceAlternatives(otherObject.alternatives, similarity, t);
+            }
+        }
+    }
+
+    /**
+     * Helper: merge alternatives from a source Aliases object into this instance
+     * Categorization depends on how similar the source was to this object
+     * @param {Aliases} sourceAlternatives - Source alternatives to merge
+     * @param {number} sourceSimilarity - Similarity of source to this primary (0-1)
+     * @param {Object} t - Thresholds object {homonym, synonym, candidate}
+     * @private
+     */
+    _mergeSourceAlternatives(sourceAlternatives, sourceSimilarity, t) {
+        // If source is highly similar (homonym-level), its alternatives get promoted
+        // If source is moderately similar, its alternatives become candidates
+        // If source is dissimilar, we don't merge its alternatives
+
+        if (sourceSimilarity < t.candidate) {
+            // Source too dissimilar - don't merge its alternatives
+            return;
+        }
+
+        const allSourceTerms = sourceAlternatives.getAllAttributedTerms();
+
+        for (const term of allSourceTerms) {
+            // Don't add if it matches our primary
+            if (term.term === this.primaryAlias.term) continue;
+
+            // Determine category based on source similarity
+            if (sourceSimilarity >= t.homonym) {
+                // Source is basically same entity - its homonyms become our synonyms,
+                // its synonyms become our synonyms, its candidates stay candidates
+                if (sourceAlternatives.homonyms.some(h => h.term === term.term)) {
+                    this.alternatives.add(term, 'synonyms');
+                } else if (sourceAlternatives.synonyms.some(s => s.term === term.term)) {
+                    this.alternatives.add(term, 'synonyms');
+                } else {
+                    this.alternatives.add(term, 'candidates');
+                }
+            } else if (sourceSimilarity >= t.synonym) {
+                // Source is a synonym - demote all its alternatives to candidates
+                this.alternatives.add(term, 'candidates');
+            }
+            // If source similarity < synonym threshold but >= candidate, we already skipped above
+        }
+    }
+
+    /**
      * Returns the string representation of this Aliased object
      * @returns {string} The primary alias value
      */

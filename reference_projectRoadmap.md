@@ -3,7 +3,22 @@
 ## Document Purpose
 This document provides a high-level outline of the project's future direction. It is NOT detailed enough to work from directly - each step requires specific discussion before implementation begins.
 
-**Last Updated:** December 13, 2025
+**Last Updated:** December 16, 2025
+
+---
+
+## Status Overview
+
+| Step | Description | Status |
+|------|-------------|--------|
+| 1 | Five-Step Process Architecture | PLANNING (conceptual) |
+| 2 | Two Levels of Match Recognition | IMPLEMENTED (isTrueMatch, isNearMatch in unifiedEntityBrowser.js) |
+| 3 | Unified Database Persistence | USER_VERIFIED_WORKING |
+| 4 | Grouped Datasets (EntityGroup Database) | USER_VERIFIED_WORKING (browser complete, persistence READY_FOR_VERIFICATION) |
+| 5 | Custom BIRA Mailing Reports | PLANNING |
+| 6 | PropertyValue SimpleIdentifier | PLANNING |
+| 7 | Code Generalization for New Data Sources | PLANNING |
+| 8 | Clean Up Steps | PLANNING |
 
 ---
 
@@ -66,30 +81,137 @@ New properties to add to entities:
 
 ---
 
-## 3. Unified Database Persistence
+## 3. Unified Database Persistence - USER_VERIFIED_WORKING
 
-### 3.1 Prerequisites
-- Resolve outstanding data integrity errors currently reported on unified browser load
-- (Note: These are errors beyond the DUPLICATE key errors already addressed)
+**Status**: Completed December 14-15, 2025
+**Reference**: reference_keyedDatabaseMigration.md, reference_keyPreservationPlan.md
 
-### 3.2 Implementation
-- Implement and test base code
-- Ensure serialization/deserialization based on proper principles
+### 3.1 Prerequisites - RESOLVED
+- Data integrity errors resolved (NonHumanName class added for Business/LegalConstruct entities)
+- DUPLICATE key errors resolved via accountNumber addition to Bloomerang keys
 
-### 3.3 New Buttons
-Add two buttons next to existing entity load buttons:
+### 3.2 Implementation - COMPLETE
+- Keyed Database architecture implemented in unifiedDatabasePersistence.js
+- Serialization/deserialization working correctly
+- Key preservation ensures database keys travel through all flows
 
-1. **Record unified database** - Save currently in-memory database to disk
-2. **Load and record entities** - Load entities from source files AND record unified database
+### 3.3 New Buttons - IMPLEMENTED
+Two buttons added:
 
-### 3.4 Requirements
-- Unified browser viewing tools must function identically whether unified database is:
-  - Newly created in memory, OR
-  - Loaded from disk
+1. **"Record Unified Database"** - Saves in-memory database to Google Drive
+2. **"Load Unified Database"** - Loads database from Google Drive
+
+### 3.4 Requirements - VERIFIED
+- Unified browser viewing tools function identically whether unified database is:
+  - Newly created in memory via "Load All Entities Into Memory", OR
+  - Loaded from disk via "Load Unified Database"
+- All phases of Keyed Database migration complete (see reference_keyedDatabaseMigration.md)
 
 ---
 
 ## 4. Grouped Datasets (EntityGroup Database)
+
+**Status**: USER_VERIFIED_WORKING (December 16, 2025) - Browser complete, persistence READY_FOR_VERIFICATION
+
+### 4.0 Implementation Summary
+
+#### Files Created
+- `scripts/objectStructure/entityGroup.js` - EntityGroup and EntityGroupDatabase classes
+- `scripts/matching/entityGroupBuilder.js` - 5-phase construction algorithm + persistence functions
+- `scripts/entityGroupBrowser.js` - Browser tool with View Details capabilities + save button handlers
+
+#### Test Results (December 16 session - Full Database)
+| Metric | Value |
+|--------|-------|
+| Total Groups | 2291 |
+| Multi-member Groups | 785 |
+| Single-member Groups | 1506 |
+| Prospects (no Bloomerang member) | 1316 |
+| Existing Donors (has Bloomerang member) | 975 |
+| Entities Assigned | 4097 |
+| Near Misses Recorded | 202 |
+
+#### Test Results (December 16 session - Sample Run)
+| Metric | Value |
+|--------|-------|
+| Sample Size | 800 entities |
+| Groups Built | 645 |
+| Database File Size | 1.88 MB |
+| Reference File Size | 37.8 KB |
+| Database File ID | 1NRKzen-IjQcc950cCGPr96g8V15mEW74 |
+| Reference File ID | 1nTFLPY5gKeCwWy9RA8H014f2R7y88n33 |
+
+#### Completed Features
+- ✅ Browser/viewing tools: USER_VERIFIED_WORKING (scripts/entityGroupBrowser.js)
+  - Load EntityGroup database from Google Drive
+  - Build New button (constructs from loaded entities)
+  - Filter/Sort/Search functionality
+  - View Group Details modal with View Details buttons for:
+    - Founding member (Entity Browser style)
+    - Each group member (Entity Browser style)
+    - Each near miss (Entity Browser style)
+    - Consensus entity (Drill-Down property explorer style)
+  - Group Stats modal
+  - Export to CSV
+- ✅ Stratified sampling for fast testing (200 entity sample in ~30 seconds vs 20+ minutes full run)
+- ✅ Google Drive persistence: READY_FOR_VERIFICATION
+  - Reference file companion (lightweight group membership lookup)
+  - Two input boxes: Database File ID, Reference File ID
+  - "Save to File IDs" button (updates existing files)
+  - "Save as New Files" button (creates new files, reports IDs)
+  - buildEntityGroupDatabase() auto-saves both to NEW files
+
+#### Pending Features
+- CSV output enhancement (more detailed/formatted export)
+- Alias consensus integration testing (code written, not yet verified)
+
+### 4.0.1 Persistence Architecture (December 16, 2025)
+
+#### Reference File Structure
+```json
+{
+  "metadata": {
+    "timestamp": "2025-12-16T22:01:49.000Z",
+    "totalGroups": 645,
+    "totalMembers": 801
+  },
+  "groups": {
+    "0||bloomerang:12345:...": ["visionAppraisal:FireNumber:1510"],
+    "1||bloomerang:67890:...": [],
+    ...
+  }
+}
+```
+
+Key format: `{groupIndex}||{foundingMemberKey}` (|| separator unlikely in entity keys)
+Value: Array of additional member keys (excluding founding member)
+
+#### Persistence Functions (entityGroupBuilder.js)
+| Function | Purpose |
+|----------|---------|
+| `buildEntityGroupReferenceFile(groupDb)` | Creates reference file object |
+| `saveEntityGroupDatabase(groupDb, fileId)` | Updates existing database file |
+| `saveEntityGroupDatabaseToNewFile(groupDb)` | Creates new database file |
+| `saveEntityGroupReference(refData, fileId)` | Updates existing reference file |
+| `saveEntityGroupReferenceToNewFile(refData)` | Creates new reference file |
+| `saveEntityGroupDatabaseAndReference(groupDb, dbId, refId)` | Updates both existing files |
+| `saveEntityGroupDatabaseAndReferenceToNewFiles(groupDb)` | Creates both new files |
+
+#### Browser Save Buttons (entityGroupBrowser.js)
+| Button | Function | Behavior |
+|--------|----------|----------|
+| "Save to File IDs" | `saveEntityGroupToExistingFiles()` | Updates files at IDs in input boxes |
+| "Save as New Files" | `saveEntityGroupToNewFiles()` | Creates new files, updates input boxes, reports IDs |
+
+#### Design Rationale
+- Future feature: Edit group membership (add/remove members)
+- Need to save edited databases without overwriting clean originals
+- Two file IDs (database + reference) kept in sync
+- "Save as New Files" creates fresh copies for edited versions
+
+#### Technical Note
+EntityGroupDatabase stores `groups` as an **object** keyed by index (not array).
+Use `Object.values(groupDb.groups)` to iterate over groups.
 
 ### 4.1 Core Principles
 
@@ -164,9 +286,26 @@ New object class with the following structure:
 
 ### 4.4 Access Tools
 
-#### Browser Tool
-- Window listing all entity groups (similar to unified entity browser primary window)
-- Detailed view (similar to unified entity browser detail view)
+#### Browser Tool - USER_VERIFIED_WORKING
+**File**: `scripts/entityGroupBrowser.js`
+
+Features implemented:
+- Window listing all entity groups with founding member name/address
+- Filter by: all, multi-member, single-member, prospects, donors, near misses
+- Sort by: index, member count, name
+- Search by name, address, or member keys
+- View Group Details modal showing:
+  - Founding member with View Details button
+  - All group members with individual View Details buttons
+  - Near misses with View buttons
+  - Consensus entity with Drill-Down View Details button
+- Group Stats modal (totals, composition, phase breakdown)
+- Export to CSV
+- File ID persistence in localStorage
+
+Two View Details button styles:
+1. **Entity Browser style** (renderEntityDetailsWindow): Used for founding member, members, near misses - shows same view as Entity Browser's View Details
+2. **Drill-Down style** (basicEntityDetailsView): Used for consensus entity - interactive property explorer with Expand buttons for nested objects
 
 #### CSV Output
 When entityGroup database generated, spin off one CSV per construction step:

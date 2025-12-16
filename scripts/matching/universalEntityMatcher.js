@@ -302,7 +302,12 @@ function universalCompareTo(entity1, entity2) {
 function findBestMatches(baseEntity, options = {}) {
     const config = { ...MATCH_CONFIG, ...options };
 
-    if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
+    // Use compatibility layer check if available, fallback to legacy check
+    const dbLoaded = (typeof isEntityDatabaseLoaded === 'function')
+        ? isEntityDatabaseLoaded()
+        : (window.workingLoadedEntities?.status === 'loaded');
+
+    if (!dbLoaded) {
         console.error('ERROR: Please load entities first');
         return null;
     }
@@ -312,8 +317,11 @@ function findBestMatches(baseEntity, options = {}) {
 
     console.log(`Finding best matches for ${baseType} (${baseKeyInfo.source}:${baseKeyInfo.accountNumber || ''}:${baseKeyInfo.type}:${baseKeyInfo.value})...`);
 
-    // Collect all entities to compare against
-    const allTargetEntities = getAllEntities();
+    // Collect all entities to compare against - WITH their database keys
+    // getAllEntitiesWithKeys() returns [databaseKey, entity] pairs
+    const allTargetEntitiesWithKeys = (typeof getAllEntitiesWithKeys === 'function')
+        ? getAllEntitiesWithKeys()
+        : getAllEntities().map(e => [null, e]);  // fallback if function unavailable
 
     // Group results by entity type
     const resultsByType = {
@@ -326,19 +334,17 @@ function findBestMatches(baseEntity, options = {}) {
     let comparisonCount = 0;
     const startTime = performance.now();
 
-    allTargetEntities.forEach(targetEntity => {
-        const targetKeyInfo = getEntityKeyInfo(targetEntity);  // { type, value, accountNumber, source }
+    // Get baseDatabaseKey for self-comparison (passed via options)
+    const baseDatabaseKey = config.baseDatabaseKey || null;
 
-        // Skip self-comparison
-        // For Bloomerang: same accountNumber means same entity
-        // For VisionAppraisal: same type + value means same entity
-        const isSameEntity = (baseKeyInfo.source === targetKeyInfo.source) && (
-            (baseKeyInfo.source === 'bloomerang' && baseKeyInfo.accountNumber === targetKeyInfo.accountNumber) ||
-            (baseKeyInfo.source === 'visionAppraisal' && baseKeyInfo.type === targetKeyInfo.type && baseKeyInfo.value === targetKeyInfo.value)
-        );
-        if (isSameEntity) {
+    allTargetEntitiesWithKeys.forEach(([targetDatabaseKey, targetEntity]) => {
+        // Skip self-comparison using database keys directly
+        if (baseDatabaseKey && targetDatabaseKey && baseDatabaseKey === targetDatabaseKey) {
             return;
         }
+
+        // Generate targetKeyInfo for display purposes (not for lookup)
+        const targetKeyInfo = getEntityKeyInfo(targetEntity);  // { type, value, accountNumber, source }
 
         const comparison = universalCompareTo(baseEntity, targetEntity);
         comparisonCount++;
@@ -348,8 +354,9 @@ function findBestMatches(baseEntity, options = {}) {
         if (resultsByType[targetType]) {
             resultsByType[targetType].push({
                 targetEntity,
+                targetDatabaseKey,  // ACTUAL database key - use this for lookup!
                 targetKey: targetKeyInfo.value,  // locationIdentifier value (for display)
-                targetKeyType: targetKeyInfo.type,  // locationIdentifier type (for lookup)
+                targetKeyType: targetKeyInfo.type,  // locationIdentifier type (for lookup - DEPRECATED)
                 targetAccountNumber: targetKeyInfo.accountNumber,  // Bloomerang account number (for lookup)
                 targetHeadStatus: targetKeyInfo.headStatus,  // head status for Bloomerang lookup
                 targetSource: targetKeyInfo.source,
@@ -481,8 +488,9 @@ function findBestMatches(baseEntity, options = {}) {
     const result = {
         baseEntity: {
             type: baseType,
+            databaseKey: config.baseDatabaseKey || null,  // ACTUAL database key - use this for lookup!
             key: baseKeyInfo.value,  // locationIdentifier value (for display)
-            keyType: baseKeyInfo.type,  // locationIdentifier type (e.g., FireNumber, PID)
+            keyType: baseKeyInfo.type,  // locationIdentifier type (e.g., FireNumber, PID) - DEPRECATED for lookup
             accountNumber: baseKeyInfo.accountNumber,  // Bloomerang account number (for lookup) or null
             headStatus: baseKeyInfo.headStatus,  // head status for Bloomerang lookup or null
             source: baseKeyInfo.source,  // 'bloomerang' or 'visionAppraisal'
@@ -668,31 +676,19 @@ function downloadBestMatchesCSV(results, filename = null) {
 // ============================================================================
 
 /**
- * Get all entities from workingLoadedEntities
+ * Get all entities from entity database (unified or legacy)
+ * Uses compatibility layer from unifiedDatabasePersistence.js
  * @returns {Entity[]} Array of all entities
  */
 function getAllEntities() {
-    const entities = [];
-
-    // VisionAppraisal entities
-    if (workingLoadedEntities.visionAppraisal?.entities) {
-        Object.values(workingLoadedEntities.visionAppraisal.entities).forEach(e => {
-            entities.push(e);
-        });
+    // Use compatibility layer - works with unifiedEntityDatabase
+    if (typeof getAllEntitiesArray === 'function') {
+        return getAllEntitiesArray();
     }
 
-    // Bloomerang entities
-    if (workingLoadedEntities.bloomerang) {
-        ['individuals', 'households', 'nonhuman'].forEach(collection => {
-            if (workingLoadedEntities.bloomerang[collection]?.entities) {
-                Object.values(workingLoadedEntities.bloomerang[collection].entities).forEach(e => {
-                    entities.push(e);
-                });
-            }
-        });
-    }
-
-    return entities;
+    // Keyed Database is required - no legacy fallback
+    console.error('Keyed Database not loaded. Use "Load Unified Database" or "Load All Entities Into Memory" first.');
+    return [];
 }
 
 /**
@@ -969,7 +965,12 @@ function analyzeAllEntities(limit = null, options = {}) {
  * @returns {object} Lightweight result with only CSV-ready string data
  */
 function findBestMatchesLightweight(baseEntity) {
-    if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
+    // Use compatibility layer check if available, fallback to legacy check
+    const dbLoaded = (typeof isEntityDatabaseLoaded === 'function')
+        ? isEntityDatabaseLoaded()
+        : (window.workingLoadedEntities?.status === 'loaded');
+
+    if (!dbLoaded) {
         console.error('ERROR: Please load entities first');
         return null;
     }
@@ -1249,43 +1250,9 @@ async function analyzeEntitiesChunked(options = {}) {
 // INITIALIZATION
 // ============================================================================
 
-console.log('Universal Entity Matcher loaded');
-console.log('Available functions:');
-console.log('  - findBestMatches(entity) - Find best matches for one entity');
-console.log('  - findBestMatchesBatch(entities) - Process multiple entities');
-console.log('  - downloadBestMatchesCSV(results) - Download results as CSV');
-console.log('  - findMatchesByKey(key, source) - Quick lookup and match by entity key');
-console.log('');
-console.log('  - analyzeEntities(options) - THE MAIN FUNCTION - Process any entity types');
-console.log('      options: { limit, entityTypes, download, storeInMemory }');
-console.log('      entityTypes: "all", "Individual", "AggregateHousehold", "Business", "LegalConstruct"');
-console.log('                   or array like ["Individual", "AggregateHousehold"]');
-console.log('');
-console.log('  - analyzeAllEntities(limit, options) - Shortcut for all entity types');
-console.log('  - analyzeAllIndividuals(limit, options) - Shortcut for Individuals only');
-console.log('');
-console.log('  - analyzeEntitiesChunked(options) - MEMORY-SAFE: Download CSV in chunks');
-console.log('      options: { chunkSize, entityTypes, limit, startChunk, delayBetweenChunks }');
-console.log('      chunkSize: entities per file (default: 100)');
-console.log('      startChunk: resume from chunk N (default: 0)');
-console.log('');
-console.log('Example usage:');
-console.log('  // Analyze ALL entities (no download, store in memory):');
-console.log('  analyzeAllEntities(null, { download: false });');
-console.log('');
-console.log('  // Analyze 100 entities of all types:');
-console.log('  analyzeEntities({ limit: 100, entityTypes: "all", download: false });');
-console.log('');
-console.log('  // Analyze only Individuals and AggregateHouseholds:');
-console.log('  analyzeEntities({ entityTypes: ["Individual", "AggregateHousehold"], download: false });');
-console.log('');
-console.log('  // MEMORY-SAFE: Analyze all entities in chunks of 100:');
-console.log('  await analyzeEntitiesChunked({ chunkSize: 100 });');
-console.log('');
-console.log('  // Resume from chunk 15 if interrupted:');
-console.log('  await analyzeEntitiesChunked({ chunkSize: 100, startChunk: 14 });');
-console.log('');
-console.log('  // Results available in window.lastAnalysisResults');
+// Verbose initialization logging commented out - Dec 15, 2025
+// console.log('Universal Entity Matcher loaded');
+// To see available functions, uncomment the block below or check the source code
 
 // Store config globally for inspection
 window.MATCH_CONFIG = MATCH_CONFIG;

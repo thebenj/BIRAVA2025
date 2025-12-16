@@ -130,34 +130,37 @@ async function loadAllEntitiesIntoMemory() {
             }
         };
 
-        // Step 6: Final summary
-        const vaCount = workingLoadedEntities.visionAppraisal.entities?.length || 0;
-        const bloomerangCount =
-            (workingLoadedEntities.bloomerang.individuals?.metadata?.totalEntities || 0) +
-            (workingLoadedEntities.bloomerang.households?.metadata?.totalEntities || 0) +
-            (workingLoadedEntities.bloomerang.nonhuman?.metadata?.totalEntities || 0);
+        workingLoadedEntities.status = 'loaded';
+
+        // Step 6: Build Keyed Database from loaded entities
+        console.log('\n🔑 Building Keyed Database...');
+        if (typeof buildUnifiedEntityDatabase === 'function') {
+            buildUnifiedEntityDatabase();
+        } else {
+            console.error('❌ buildUnifiedEntityDatabase not available - Keyed Database not built');
+        }
+
+        // Step 7: Final summary using Keyed Database metadata
+        const metadata = window.unifiedEntityDatabase?.metadata;
+        const vaCount = metadata?.sources?.visionAppraisal?.count || 0;
+        const bloomerangCount = metadata?.sources?.bloomerang?.count || 0;
+        const totalCount = metadata?.totalEntities || (vaCount + bloomerangCount);
 
         console.log('\n🎉 ENTITY LOADING COMPLETE!');
         console.log('============================');
         console.log(`📊 VisionAppraisal: ${vaCount} entities`);
         console.log(`👥 Bloomerang: ${bloomerangCount} entities`);
-        console.log(`🔢 Grand Total: ${vaCount + bloomerangCount} entities`);
+        console.log(`🔢 Grand Total: ${totalCount} entities`);
         console.log('');
-        console.log('💡 Entities available in global workingLoadedEntities object');
+        console.log('💡 Entities available in unifiedEntityDatabase.entities');
         console.log('💡 Use extractNameWorking(entity) to extract names');
         console.log('💡 Individual entities return full name structure');
-
-        workingLoadedEntities.status = 'loaded';
-
-        // Step 7: Build entity lookup index by source + locationIdentifier
-        console.log('\n🔑 Building entity lookup index...');
-        buildEntityLookupIndex();
 
         return {
             success: true,
             visionAppraisal: vaCount,
             bloomerang: bloomerangCount,
-            total: vaCount + bloomerangCount
+            total: totalCount
         };
 
     } catch (error) {
@@ -346,80 +349,9 @@ function getLocationIdentifierValue(entity) {
     return result ? result.value : null;
 }
 
-/**
- * Build the entity lookup index mapping unique key → entity
- * Key formats:
- *   Bloomerang: bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>
- *   VisionAppraisal: visionAppraisal:<locationType>:<locationValue>
- * Examples:
- *   visionAppraisal:FireNumber:53
- *   bloomerang:1917:SimpleIdentifiers:PO Box 1382, Block Island, RI, 02807:head
- *   bloomerang:1917:SimpleIdentifiers:PO Box 1382, Block Island, RI, 02807:na (AggregateHousehold with same account)
- * This index enables direct entity lookup without searching or fallback logic
- */
-function buildEntityLookupIndex() {
-    workingLoadedEntities.entityIndex = {};
-    let indexedCount = 0;
-    let duplicateCount = 0;
-    let missingKeyCount = 0;
-
-    // Index VisionAppraisal entities
-    if (workingLoadedEntities.visionAppraisal?.entities) {
-        workingLoadedEntities.visionAppraisal.entities.forEach((entity, arrayIndex) => {
-            const keyInfo = getEntityKeyInfo(entity);
-            if (!keyInfo) {
-                missingKeyCount++;
-                console.warn(`⚠️ VisionAppraisal entity at index ${arrayIndex} has no valid key info`);
-                return;
-            }
-            const key = buildEntityIndexKey(keyInfo);
-            if (workingLoadedEntities.entityIndex[key]) {
-                duplicateCount++;
-                console.error(`🚨 DUPLICATE key in VisionAppraisal: ${key}`, {
-                    existing: workingLoadedEntities.entityIndex[key],
-                    duplicate: entity
-                });
-            }
-            workingLoadedEntities.entityIndex[key] = entity;
-            indexedCount++;
-        });
-    }
-
-    // Index Bloomerang entities (all collections)
-    if (workingLoadedEntities.bloomerang) {
-        for (const collection of ['individuals', 'households', 'nonhuman']) {
-            const entities = workingLoadedEntities.bloomerang[collection]?.entities;
-            if (entities) {
-                for (const [storageKey, entity] of Object.entries(entities)) {
-                    const keyInfo = getEntityKeyInfo(entity);
-                    if (!keyInfo) {
-                        missingKeyCount++;
-                        console.warn(`⚠️ Bloomerang ${collection} entity (key: ${storageKey}) has no valid key info`);
-                        continue;
-                    }
-                    const key = buildEntityIndexKey(keyInfo);
-                    if (workingLoadedEntities.entityIndex[key]) {
-                        duplicateCount++;
-                        console.error(`🚨 DUPLICATE key in Bloomerang: ${key}`, {
-                            existing: workingLoadedEntities.entityIndex[key],
-                            duplicate: entity
-                        });
-                    }
-                    workingLoadedEntities.entityIndex[key] = entity;
-                    indexedCount++;
-                }
-            }
-        }
-    }
-
-    console.log(`✅ Entity index built: ${indexedCount} entities indexed`);
-    if (duplicateCount > 0) {
-        console.warn(`⚠️ ${duplicateCount} duplicate keys found (see errors above)`);
-    }
-    if (missingKeyCount > 0) {
-        console.warn(`⚠️ ${missingKeyCount} entities without valid key info`);
-    }
-}
+// NOTE: buildEntityLookupIndex() was removed in Keyed Database migration.
+// Entity lookup now uses unifiedEntityDatabase.entities directly.
+// See reference_keyedDatabaseMigration.md Phase 5.
 
 /**
  * Look up an entity by its key info object
@@ -455,22 +387,24 @@ function getEntityByKeyInfo(keyInfo) {
  * @returns {Entity|null} The entity, or null if not found
  */
 function getBloomerangEntityByAccountNumber(accountNumber, locationType, locationValue, headStatus) {
-    if (!workingLoadedEntities.entityIndex) {
-        console.error('❌ Entity index not built. Call loadAllEntitiesIntoMemory() first.');
+    // Use Keyed Database (preferred) or fall back to legacy entityIndex
+    const db = window.unifiedEntityDatabase?.entities || workingLoadedEntities?.entityIndex;
+    if (!db) {
+        console.error('❌ No entity database available. Load entities first.');
         return null;
     }
 
     // If we have full key info, use direct lookup
     if (locationType && locationValue && headStatus) {
         const key = `bloomerang:${accountNumber}:${locationType}:${locationValue}:${headStatus}`;
-        return workingLoadedEntities.entityIndex[key] || null;
+        return db[key] || null;
     }
 
     // Otherwise, search for any key starting with bloomerang:<accountNumber>:
     const prefix = `bloomerang:${accountNumber}:`;
-    for (const key of Object.keys(workingLoadedEntities.entityIndex)) {
+    for (const key of Object.keys(db)) {
         if (key.startsWith(prefix)) {
-            return workingLoadedEntities.entityIndex[key];
+            return db[key];
         }
     }
 
@@ -485,19 +419,31 @@ function getBloomerangEntityByAccountNumber(accountNumber, locationType, locatio
  * @returns {Entity|null} The entity, or null if not found
  */
 function getVisionAppraisalEntity(locationType, locationValue) {
-    if (!workingLoadedEntities.entityIndex) {
-        console.error('❌ Entity index not built. Call loadAllEntitiesIntoMemory() first.');
+    // NOTE: This function is now a FALLBACK only.
+    // Primary lookup should use direct database key via reconcileMatch() in unifiedEntityBrowser.js
+    // The database key is preserved through the flow from findBestMatches() → Reconcile button → reconcileMatch()
+
+    // Use Keyed Database (preferred) or fall back to legacy entityIndex
+    const db = window.unifiedEntityDatabase?.entities || workingLoadedEntities?.entityIndex;
+    if (!db) {
+        console.error('❌ No entity database available. Load entities first.');
         return null;
     }
 
+    // Try direct key lookup
     const key = `visionAppraisal:${locationType}:${locationValue}`;
-    const entity = workingLoadedEntities.entityIndex[key];
+    let entity = db[key];
+    if (entity) return entity;
 
-    if (!entity) {
-        console.error(`❌ VisionAppraisal entity not found: type=${locationType}, value=${locationValue}`);
-    }
+    // Try alternate key format (FireNumber if we searched PID, or vice versa)
+    // This handles the case where key format differs from what was expected
+    const altType = locationType === 'PID' ? 'FireNumber' : 'PID';
+    const altKey = `visionAppraisal:${altType}:${locationValue}`;
+    entity = db[altKey];
+    if (entity) return entity;
 
-    return entity;
+    console.error(`❌ VisionAppraisal entity not found: type=${locationType}, value=${locationValue}`);
+    return null;
 }
 
 /**
@@ -553,7 +499,6 @@ function loadScriptAsync(src) {
 // Export for global use
 if (typeof window !== 'undefined') {
     window.loadAllEntitiesIntoMemory = loadAllEntitiesIntoMemory;
-    window.buildEntityLookupIndex = buildEntityLookupIndex;
     // New key-based functions
     window.getEntityKeyInfo = getEntityKeyInfo;
     window.buildEntityIndexKey = buildEntityIndexKey;

@@ -1269,9 +1269,14 @@ function findHouseholdMembers(householdWrapper) {
     }
 
     // FALLBACK: Search for related individuals by location identifier ONLY (Fire Number/PID)
-    // Access the loaded entities from the global workingLoadedEntities
-    if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
-        console.warn('⚠️ Cannot find household members - workingLoadedEntities not loaded');
+    // Use Keyed Database via compatibility layer
+    if (typeof getFilteredEntities !== 'function' || typeof isEntityDatabaseLoaded !== 'function') {
+        console.warn('⚠️ Cannot find household members - compatibility layer not available');
+        return { members: [], foundViaFallback: false };
+    }
+
+    if (!isEntityDatabaseLoaded()) {
+        console.warn('⚠️ Cannot find household members - entity database not loaded');
         return { members: [], foundViaFallback: false };
     }
 
@@ -1285,44 +1290,23 @@ function findHouseholdMembers(householdWrapper) {
 
     console.log('🏠 Fallback search - looking for members with location ID:', householdLocationId);
 
-    // Search VisionAppraisal individuals
-    if (workingLoadedEntities.visionAppraisal.loaded && workingLoadedEntities.visionAppraisal.entities) {
-        workingLoadedEntities.visionAppraisal.entities.forEach((entity, index) => {
-            if (getEntityType(entity) === 'Individual') {
-                const individualLocationId = getEntityLocationIdentifier(entity);
-                if (individualLocationId && householdLocationId === individualLocationId) {
-                    console.log('✅ Match by location ID:', individualLocationId);
-                    members.push({
-                        source: 'VisionAppraisal',
-                        sourceKey: 'visionappraisal',
-                        entityType: 'Individual',
-                        index: index,
-                        key: `va_${index}`,
-                        entity: entity
-                    });
-                }
-            }
-        });
-    }
+    // Get all Individual entities from Keyed Database
+    const individuals = getFilteredEntities('all', 'Individual');
 
-    // Search Bloomerang individuals
-    if (workingLoadedEntities.bloomerang && workingLoadedEntities.bloomerang.loaded &&
-        workingLoadedEntities.bloomerang.individuals && workingLoadedEntities.bloomerang.individuals.entities) {
-
-        Object.entries(workingLoadedEntities.bloomerang.individuals.entities).forEach(([key, entity]) => {
-            const individualLocationId = getEntityLocationIdentifier(entity);
-            if (individualLocationId && householdLocationId === individualLocationId) {
-                console.log('✅ Match by location ID:', individualLocationId);
-                members.push({
-                    source: 'Bloomerang',
-                    sourceKey: 'bloomerang',
-                    entityType: 'Individual',
-                    index: key,
-                    key: `bl_${key}`,
-                    entity: entity
-                });
-            }
-        });
+    for (const [key, entity] of Object.entries(individuals)) {
+        const individualLocationId = getEntityLocationIdentifier(entity);
+        if (individualLocationId && householdLocationId === individualLocationId) {
+            const isVisionAppraisal = key.startsWith('visionAppraisal:');
+            console.log('✅ Match by location ID:', individualLocationId);
+            members.push({
+                source: isVisionAppraisal ? 'VisionAppraisal' : 'Bloomerang',
+                sourceKey: isVisionAppraisal ? 'visionappraisal' : 'bloomerang',
+                entityType: 'Individual',
+                index: key,
+                key: key,
+                entity: entity
+            });
+        }
     }
 
     console.log(`🏠 Found ${members.length} household members via fallback search (location ID match)`);
