@@ -2,11 +2,65 @@
 
 ## AI_READING_INSTRUCTIONS
 ```yaml
-read_order: [COMPLETION_VERIFICATION_RULE, CURRENT_WORK_CONTEXT, TERMINOLOGY, MANDATORY_COMPARETO_ARCHITECTURE]
-focus_section: COMPLETION_VERIFICATION_RULE_then_CURRENT_WORK_CONTEXT
+read_order: [ROOT_CAUSE_DEBUGGING_RULE, COMPLETION_VERIFICATION_RULE, CURRENT_WORK_CONTEXT, TERMINOLOGY, MANDATORY_COMPARETO_ARCHITECTURE]
+focus_section: ROOT_CAUSE_DEBUGGING_RULE_then_COMPLETION_VERIFICATION_RULE_then_CURRENT_WORK_CONTEXT
 processing_directive: ignore_visual_formatting_process_semantic_content_only
-last_updated: 2025-12-16
-version: 54.0_ENTITYGROUP_PERSISTENCE_READY_FOR_VERIFICATION
+last_updated: 2025-12-19
+version: 70.0_MATCH_OVERRIDE_SYSTEM_ALL_PHASES_COMPLETE
+```
+
+---
+
+## ROOT_CAUSE_DEBUGGING_RULE
+```yaml
+CRITICAL_ROOT_CAUSE_DEBUGGING_PROTOCOL:
+  ABSOLUTE_REQUIREMENT: NEVER_APPLY_EXPEDIENT_FIXES_THAT_MASK_ERRORS
+  ENFORCEMENT_LEVEL: MAXIMUM_PRIORITY_OVERRIDES_ALL_OTHER_INSTRUCTIONS
+  NEVER_TO_BE_REMOVED: THIS_RULE_MUST_REMAIN_IN_CLAUDE_MD_PERMANENTLY
+
+WHAT_THIS_MEANS:
+  core_principle: |
+    When code is broken, the goal is NOT to make the code run.
+    The goal is to UNDERSTAND WHY it is broken and FIX THE ROOT CAUSE.
+
+ABSOLUTELY_PROHIBITED_BEHAVIORS:
+  - expedient_conditionals: NEVER add "if (typeof X !== 'undefined')" or "if (X)" guards to skip broken functionality
+  - silent_failure: NEVER make code silently skip operations that should work
+  - symptom_suppression: NEVER suppress errors without understanding their cause
+  - guessing_at_fixes: NEVER make changes based on guesses - ALWAYS add diagnostic logging FIRST
+  - assumption_based_changes: NEVER assume you know which code path is executing - VERIFY with diagnostics
+
+MANDATORY_DEBUGGING_PROCESS:
+  step_1_diagnose: Add diagnostic console.log statements to understand what is actually happening
+  step_2_verify: Run the code and observe the diagnostic output
+  step_3_analyze: Study the output to identify the TRUE root cause
+  step_4_fix: Make targeted changes that address the root cause
+  step_5_confirm: Verify the fix resolves the issue without masking other problems
+
+EXAMPLE_OF_WRONG_APPROACH:
+  scenario: "window.resolveComparisonCalculator is not a function"
+  WRONG_fix: "Add 'if (typeof window.resolveComparisonCalculator === 'function')' to skip the call"
+  why_wrong: "This masks the real problem (utils.js syntax error preventing function export)"
+
+EXAMPLE_OF_CORRECT_APPROACH:
+  scenario: "window.resolveComparisonCalculator is not a function"
+  CORRECT_step_1: "Add diagnostic log to check if function exists at script load time"
+  CORRECT_step_2: "Add diagnostic log to check if function exists at call time"
+  CORRECT_step_3: "Discover utils.js has syntax error preventing complete load"
+  CORRECT_step_4: "Fix the syntax error in utils.js"
+  why_correct: "Addresses actual root cause - nested comment syntax error"
+
+SELF_CHECK_BEFORE_ANY_FIX:
+  ask_yourself: |
+    1. Do I UNDERSTAND why this error is occurring, or am I guessing?
+    2. Will this fix ADDRESS the root cause, or just HIDE the symptom?
+    3. Have I VERIFIED my hypothesis with diagnostic output?
+    4. Would this code WORK CORRECTLY if the underlying system were healthy?
+  if_any_answer_is_no: STOP and add more diagnostics before proceeding
+
+PERMANENCE_RULE:
+  this_section: MUST_NEVER_be_removed_modified_or_weakened
+  priority: This_rule_takes_precedence_over_desire_to_quickly_resolve_errors
 ```
 
 ---
@@ -44,586 +98,305 @@ CLAUDE_MD_UPDATE_PROTECTION:
 
 ## CURRENT_WORK_CONTEXT
 ```yaml
-# December 16, 2025 - ENTITYGROUP PERSISTENCE READY FOR USER VERIFICATION
+# December 19, 2025 - Session 8
 
-immediate_status: ENTITYGROUP_PERSISTENCE_READY_FOR_USER_VERIFICATION
-current_focus: EntityGroup persistence with reference file companions - user verifying via Build New button
-next_action: User clicks "Build New" button to test full flow (build → display → save buttons)
+immediate_status: MATCH_OVERRIDE_SYSTEM_ALL_PHASES_COMPLETE
+current_focus: All 5 phases (A-E) of Match Override System implemented and user-verified
+next_action: System ready for production use - manage rules via Google Sheets
 
-# ENTITYGROUP PERSISTENCE - READY FOR USER VERIFICATION
-# Note: Console test with sampleSize:800 succeeded - files created on Google Drive
-entitygroup_persistence_enhancements:
-  status: READY_FOR_USER_VERIFICATION
-  purpose: Enable safe saving of EntityGroup databases with companion reference files
-
-  test_results_from_console:
-    command_run: "await buildEntityGroupDatabase({ sampleSize: 800 })"
-    outcome: SUCCESS
-    database_file_created: "1NRKzen-IjQcc950cCGPr96g8V15mEW74"
-    reference_file_created: "1nTFLPY5gKeCwWy9RA8H014f2R7y88n33"
-    database_size: "1.88 MB"
-    reference_size: "37.8 KB"
-    groups_built: 645
-    entities_assigned: 801
-
-  new_features:
-    reference_file:
-      description: Lightweight companion file for quick group membership lookup
-      structure:
-        metadata: {timestamp, totalGroups, totalMembers}
-        groups: {"index||foundingMemberKey": ["additionalMemberKey1", "additionalMemberKey2"]}
-      key_format: "{groupIndex}||{foundingMemberKey}" (|| separator unlikely in entity keys)
-      value_format: Array of additional member keys (excluding founding member)
-
-    save_buttons:
-      save_to_file_ids:
-        button_id: entityGroupSaveToFileIdBtn
-        function: saveEntityGroupToExistingFiles()
-        behavior: Saves database and reference to file IDs specified in input boxes
-      save_as_new_files:
-        button_id: entityGroupSaveAsNewBtn
-        function: saveEntityGroupToNewFiles()
-        behavior: Creates NEW files on Google Drive, reports IDs, updates input boxes
-
-    build_behavior_change:
-      old: buildEntityGroupDatabase() saved to hardcoded file ID (overwrote same file)
-      new: buildEntityGroupDatabase() saves BOTH database AND reference to NEW files, reports IDs
-
-  files_modified:
-    entityGroupBuilder_js:
-      new_functions:
-        - buildEntityGroupReferenceFile(groupDb) - Creates reference file object
-        - saveEntityGroupDatabaseToNewFile(groupDb, folderId, log) - Creates new database file
-        - saveEntityGroupReference(referenceData, fileId, log) - Updates existing reference file
-        - saveEntityGroupReferenceToNewFile(referenceData, folderId, log) - Creates new reference file
-        - saveEntityGroupDatabaseAndReference(groupDb, dbFileId, refFileId, log) - Saves both to existing
-        - saveEntityGroupDatabaseAndReferenceToNewFiles(groupDb, folderId, log) - Saves both to new
-      modified_functions:
-        - buildEntityGroupDatabase() - Now calls saveEntityGroupDatabaseAndReferenceToNewFiles()
-    entityGroupBrowser_js:
-      new_constants:
-        - ENTITYGROUP_REFERENCE_FILE_ID_STORAGE_KEY
-      new_functions:
-        - saveEntityGroupToExistingFiles() - Button handler for Save to File IDs
-        - saveEntityGroupToNewFiles() - Button handler for Save as New Files
-      modified_functions:
-        - restoreEntityGroupFileId() - Now restores both database and reference file IDs
-        - setupFileIdPersistence() - Now persists both file IDs
-        - setupEntityGroupButtons() - Now sets up both save buttons
-    index_html:
-      new_elements:
-        - entityGroupReferenceFileId input box
-        - entityGroupSaveToFileIdBtn button
-        - entityGroupSaveAsNewBtn button
-
-  design_rationale: |
-    User plans to add feature to edit group membership (add/remove members).
-    Need ability to save edited databases without accidentally overwriting clean originals.
-    Two file IDs (database + reference) kept in sync.
-    Save to New Files creates fresh copies for edited versions.
-
-  bug_fix_this_session:
-    issue: "TypeError: groupDb.groups is not iterable" when clicking Save as New Files
-    root_cause: EntityGroupDatabase stores groups as OBJECT (keyed by index), not array
-    original_code: "for (const group of groupDb.groups)" - fails on objects
-    fix_applied: "const groupsArray = Object.values(groupDb.groups)" - converts to iterable
-    lesson: Check existing code patterns (applyEntityGroupFilters already used Object.values)
-
-  browser_integration_note: |
-    When running buildEntityGroupDatabase() from console, results stored in window.entityGroupDatabase
-    but NOT displayed in browser (entityGroupBrowser.loadedDatabase not set).
-    Use "Build New" button instead - it sets both and calls applyEntityGroupFilters().
-    Or manually: entityGroupBrowser.loadedDatabase = window.entityGroupDatabase; applyEntityGroupFilters();
-
-# ENTITYGROUP BROWSER - USER VERIFIED WORKING
-entitygroup_browser:
-  status: USER_VERIFIED_WORKING
-  file_created: scripts/entityGroupBrowser.js
-  files_modified:
-    - index.html (HTML section, CSS styles, script include)
-    - scripts/unifiedEntityBrowser.js (exported basicEntityDetailsView)
-
-  features_implemented:
-    - Load EntityGroup database from Google Drive by file ID
-    - Build New button (builds EntityGroup database from loaded entities)
-    - Load Unified Database button (required to display founding member names)
-    - Filter dropdown (all, multi-member, single-member, prospects, donors, near misses)
-    - Sort dropdown (index, member count, name)
-    - Search functionality (name, address, member keys) - with robust type checking
-    - Results list with founding member name/address display
-    - View Group Details modal with enhanced features (see below)
-    - Group Stats modal (totals, composition, phase breakdown)
-    - Export to CSV
-    - File ID persistence in localStorage
-
-  view_group_details_modal_features:
-    founding_member_section:
-      - Highlighted box with purple left border
-      - Shows "Founding Member (Source)" label
-      - Name and address display
-      - View Details button (Entity Browser style - renderEntityDetailsWindow)
-    members_section:
-      - Each member shows name, address, source
-      - View Details button per member (Entity Browser style)
-      - Blue button for Bloomerang, red for VisionAppraisal
-    near_misses_section:
-      - Each near miss shows name and source
-      - View button per near miss (Entity Browser style)
-    consensus_entity_section:
-      - Shows type, name, address
-      - View Details (Drill-Down) button (basicEntityDetailsView - property explorer)
-
-  view_details_button_types:
-    entity_browser_style:
-      function: renderEntityDetailsWindow(entityWrapper)
-      used_by: [founding member, members, near misses]
-      description: Sophisticated HTML view matching Entity Browser View Details
-    drill_down_style:
-      function: basicEntityDetailsView(entityWrapper)
-      used_by: [consensus entity]
-      description: Interactive property explorer with Expand buttons for nested objects
-
-  key_design_decisions:
-    - Follows unifiedEntityBrowser.js pattern (separate .js file, innerHTML rendering)
-    - No embedded script tags in template literals (lesson learned)
-    - Modals created via DOM API with addEventListener (not inline onclick)
-    - Displays founding member name (not consensus) - requires Unified Database loaded
-    - Uses existing unifiedDatabaseFileId input for Load Unified Database button
-    - View Details buttons reuse same code as Entity Browser for consistency
-    - extractEntityAddress() made robust with String() wrapping and fallback component building
-
-  new_functions_this_session:
-    - viewMemberEntityDetails(key): Opens Entity Browser style view for any member
-    - viewConsensusEntityDetails(consensusEntity, groupIndex): Opens drill-down view for consensus
-
-  bug_fixes_this_session:
-    - Fixed search crash when address was object instead of string (type checking added)
-    - extractEntityAddress() now always returns string
-
-  lesson_learned: |
-    Modal close buttons must NOT use inline onclick with complex selectors like:
-    onclick="this.closest('div[style*=\"position: fixed\"]').remove()"
-    Instead, create elements via DOM and attach event listeners programmatically.
-
-# STRATIFIED SAMPLING - USER VERIFIED WORKING
-stratified_sampling:
-  status: USER_VERIFIED_WORKING
-  purpose: Fast testing of EntityGroup construction without full 20+ minute run
-  implementation:
-    file: scripts/matching/entityGroupBuilder.js
-    new_function: createStratifiedSample(entityDb, sampleSize, seed)
-    new_options:
-      - "sampleSize: number (null = full database)"
-      - "sampleSeed: number (default 12345 for reproducibility)"
-  usage:
-    full_run: "await buildEntityGroupDatabase()"
-    test_run: "await buildEntityGroupDatabase({ sampleSize: 200, googleDriveFileId: '1lxCsFOTOTgp4uxIBD_t0bgfJGUhxGuMJ' })"
-  test_file_id: "1lxCsFOTOTgp4uxIBD_t0bgfJGUhxGuMJ"
-
-# ALIAS CONSENSUS INTEGRATION - CODED, READY FOR USER VERIFICATION
-alias_consensus_integration:
-  status: CODED_READY_FOR_TESTING
-  purpose: Populate homonyms/synonyms/candidates in consensus entity Aliased properties
-
-  files_modified_this_session:
-    aliasClasses_js:
-      location: scripts/objectStructure/aliasClasses.js
-      new_methods:
-        - "Aliased.createConsensus(aliasedObjects, thresholds) - static factory method (lines 578-673)"
-        - "Aliased.mergeAlternatives(otherObjects, thresholds) - instance method (lines 685-728)"
-        - "Aliased._mergeSourceAlternatives(sourceAlternatives, sourceSimilarity, t) - private helper (lines 738-771)"
-    entityGroup_js:
-      location: scripts/objectStructure/entityGroup.js
-      changes:
-        - "_synthesizeConsensus() now calls _createAliasedConsensus() for name and locationIdentifier"
-        - "New _buildAliasThresholds() method (lines 199-223) - reads from MATCH_CRITERIA"
-        - "New _createAliasedConsensus() method (lines 233-249) - wrapper for Aliased.createConsensus()"
-
-  threshold_mapping:
-    source: window.MATCH_CRITERIA (from unifiedEntityBrowser.js)
-    name_thresholds:
-      homonym: MATCH_CRITERIA.trueMatch.nameAlone (0.875)
-      synonym: MATCH_CRITERIA.nearMatch.nameAlone (0.845)
-      candidate: 0.5 (floor)
-    contactInfo_thresholds:
-      homonym: MATCH_CRITERIA.trueMatch.contactInfoAlone (0.87)
-      synonym: MATCH_CRITERIA.nearMatch.contactInfoAlone (0.85)
-      candidate: 0.5 (floor)
-
-  design_decisions:
-    - Alias logic placed in Aliased class for reusability (not EntityGroup)
-    - Both static factory and instance methods provided for flexibility
-    - Thresholds reference MATCH_CRITERIA not hardcoded values
-    - Source alternatives merged with demotion based on source similarity
-
-# ENTITYGROUP IMPLEMENTATION - PRIOR SESSION WORK
-entitygroup_implementation:
-  status: CODED_READY_FOR_USER_VERIFICATION
-  files_created:
-    - scripts/objectStructure/entityGroup.js (EntityGroup and EntityGroupDatabase classes)
-    - scripts/matching/entityGroupBuilder.js (5-phase construction algorithm)
-  files_modified:
-    - index.html (added script includes)
-    - scripts/unifiedEntityBrowser.js (exported isTrueMatch, isNearMatch, MATCH_CRITERIA)
-
-  test_results_from_session:
-    total_groups: 2291
-    multi_member_groups: 785
-    single_member_groups: 1506
-    prospects: 1316
-    existing_donors: 975
-    entities_assigned: 4097
-    near_misses: 202
-
-  construction_phases:
-    phase_1: Bloomerang Households (426 found)
-    phase_2: VisionAppraisal Households (1406 processed)
-    phase_3: Bloomerang Individuals (remaining after Phase 1)
-    phase_4: VisionAppraisal Individuals (remaining after Phase 2)
-    phase_5: Remaining entity types (Business, LegalConstruct)
-
-  completed_features:
-    - Browser/viewing tools: USER_VERIFIED_WORKING (scripts/entityGroupBrowser.js)
-  pending_features:
-    - CSV output enhancement (basic export exists)
-    - Google Drive persistence (save EntityGroup database)
-
-# PRIOR WORK - KEYED DATABASE MIGRATION (USER VERIFIED WORKING)
-migration_plan_reference: reference_keyedDatabaseMigration.md
-key_preservation_plan: reference_keyPreservationPlan.md
-
-# KEY PRESERVATION IMPLEMENTATION - USER VERIFIED WORKING
-key_preservation:
-  problem_solved: Reconcile button was regenerating entity keys instead of using actual database keys
-  solution: Database keys now preserved through entire flow from findBestMatches() to reconcileMatch()
-  reference: reference_keyPreservationPlan.md
-  status: ALL_PHASES_USER_VERIFIED_WORKING
-
-  implementation_summary:
-    phase_A: findBestMatches() uses getAllEntitiesWithKeys() - stores targetDatabaseKey in match objects
-    phase_B: doReconcile() and reconcileMatch() accept and use database keys for direct lookup
-    phase_C: baseDatabaseKey passed from entityWrapper.key through options to findBestMatches()
-    phase_D: Self-comparison uses database key comparison instead of regenerating keys
-    cleanup: PID fallback hack removed from getVisionAppraisalEntity()
-
-  key_architectural_principle: |
-    Database keys are generated ONLY during database building (generateUnifiedEntityKey in unifiedDatabasePersistence.js).
-    Once loaded, entities carry their database keys through all flows.
-    getEntityKeyInfo() is now used ONLY for display purposes, not for entity lookup.
-
-# KEYED DATABASE MIGRATION STATUS
-keyed_database_migration:
-  roadmap_reference: reference_projectRoadmap.md Section 3
-  detailed_plan: reference_keyedDatabaseMigration.md
-  status: USER_VERIFIED_WORKING
-
-  coded_working:
-    save_keyed_database:
-      function: saveUnifiedDatabase() in unifiedDatabasePersistence.js
-      button: "💾 Record Unified Database" in index.html
-      status: WORKING
-    load_keyed_database:
-      function: loadUnifiedDatabase() in unifiedDatabasePersistence.js
-      button: "📂 Load Unified Database" in index.html
-      status: WORKING
-    compatibility_layer:
-      functions: [getEntityDatabase, getFilteredEntities, isEntityDatabaseLoaded, hasLoadedData, getAllEntitiesWithKeys]
-      purpose: Provide uniform access to Keyed Database
-      status: WORKING
-    key_preservation:
-      functions: [getAllEntitiesWithKeys returns [key, entity] pairs]
-      flow: entityWrapper.key → findBestMatches(options.baseDatabaseKey) → match.targetDatabaseKey → reconcileMatch()
-      status: WORKING
-
-# MIGRATION PHASES (see reference_keyedDatabaseMigration.md for full details)
-migration_phases:
-  phase_1:
-    description: Remove competing getAllSelectedEntities() from persistence module
-    file: unifiedDatabasePersistence.js
-    action: DELETE lines 688-711 and line 739
-    status: USER_VERIFIED_WORKING
-  phase_2:
-    description: Remove legacy fallbacks from unifiedEntityBrowser.js
-    files: unifiedEntityBrowser.js
-    actions_completed:
-      - Deleted getAllSelectedEntities() legacy fallback (was lines 311-385)
-      - Deleted generateUnifiedStats() legacy fallback (was lines 3224-3265)
-      - Fixed Data Source dropdown to auto-refresh display after change
-      - Fixed stats popup to extract .count from source objects
-    status: USER_VERIFIED_WORKING
-  phase_3:
-    description: Remove legacy fallback from universalEntityMatcher.js
-    file: universalEntityMatcher.js
-    actions_completed:
-      - Deleted getAllEntities() legacy fallback (was lines 686-706)
-      - Fixed getBloomerangEntityByAccountNumber() to use Keyed Database (loadAllEntitiesButton.js)
-      - Fixed getVisionAppraisalEntity() to use Keyed Database (loadAllEntitiesButton.js)
-      - Fixed reconcile modal View Details to check for unifiedEntityDatabase
-    status: USER_VERIFIED_WORKING
-  phase_4:
-    description: Migrate entityRenderer.js to use Keyed Database
-    file: entityRenderer.js
-    action: Rewrote findHouseholdMembersFallback() to use getFilteredEntities() compatibility layer
-    status: USER_VERIFIED_WORKING
-  phase_5:
-    description: Migrate loadAllEntitiesButton.js
-    file: loadAllEntitiesButton.js
-    actions_completed:
-      - Deleted buildEntityLookupIndex() function (was lines 363-425)
-      - Removed window.buildEntityLookupIndex export (was line 492)
-      - Rewrote entity counting to use Keyed Database metadata (lines 143-147)
-      - Added call to buildUnifiedEntityDatabase() (lines 135-141)
-      - PID fallback removed after key preservation fix (Dec 15 session)
-    status: USER_VERIFIED_WORKING
-  phase_6:
-    description: Wire load flow to auto-build Keyed Database
-    action: Auto-call buildUnifiedEntityDatabase() after source file load
-    status: USER_VERIFIED_WORKING
-
-# DEC 15 SESSION - KEY PRESERVATION IMPLEMENTATION
-dec15_session:
-  issue_discovered:
-    symptom: "Error - Base entity not found. Key - PID:203" when clicking Reconcile
-    root_cause: Code regenerated entity keys from properties instead of using actual database keys
-    detail: Entities stored by FireNumber (visionAppraisal:FireNumber:1510) but Reconcile code reconstructed key using PID (visionAppraisal:PID:203)
-
-  comprehensive_fix_implemented:
-    reference: reference_keyPreservationPlan.md
+# Session 8 - Phases B, C, D, E Completed
+session8_work:
+  match_override_system_completion:
     status: ALL_PHASES_USER_VERIFIED_WORKING
+    summary: Complete Match Override System with Google Sheets integration and UI
 
-    changes_to_universalEntityMatcher_js:
-      - findBestMatches() now uses getAllEntitiesWithKeys() to get [key, entity] pairs
-      - Match objects include targetDatabaseKey (actual database key)
-      - Result includes baseEntity.databaseKey
-      - Self-comparison uses database key comparison (not regenerated keys)
-
-    changes_to_unifiedEntityBrowser_js:
-      - analyzeSelectedEntityMatches() passes baseDatabaseKey via options
-      - displayMatchAnalysisResults() extracts databaseKey into baseEntityInfo
-      - doReconcile() accepts baseDatabaseKey and targetDatabaseKey parameters
-      - reconcileMatch() uses direct db[key] lookup first, legacy lookup as fallback
-
-    changes_to_loadAllEntitiesButton_js:
-      - Removed PID fallback hack from getVisionAppraisalEntity()
-      - Function is now a simple fallback (legacy lookup), not primary lookup
-
-    key_principle: |
-      Database keys generated ONLY during database building.
-      Once loaded, keys travel with entities through all flows.
-      getEntityKeyInfo() used ONLY for display, not lookup.
-
-# COMPLETED WORK SUMMARY (Dec 8-15, 2025)
-# For detailed session logs, see reference_sessionHistory.md
-
-completed_features:
-  keyed_database_persistence:
-    buttons: ["💾 Record Unified Database", "📂 Load Unified Database"]
+  phase_b_exclusions:
     status: USER_VERIFIED_WORKING
-  nonhumanname_class:
-    purpose: Handle Business/LegalConstruct entity names
+    test_performed: |
+      Loaded exclusion rule FE-TEST-001 between visionAppraisal:FireNumber:1658 and
+      bloomerang:439:SimpleIdentifiers:140 Foxcroft Drive, Doylestown, PA, 18901:na
+    evidence:
+      - Console log: "[OVERRIDE] Step 2 exclusion FE-TEST-001: visionAppraisal:FireNumber:1658 removed (DEFECTIVE_YIELDS)"
+      - Phase 1 natural matches decreased from 988 to 987
+      - Total groups increased from 2114 to 2115 (excluded entity formed own group)
+
+  phase_c_force_matches:
     status: USER_VERIFIED_WORKING
-  email_matching:
-    method: Split local part (0.8 fuzzy) + domain (0.2 exact)
+    test_performed: |
+      Force-matched two singleton entities: visionAppraisal:PID:278 and visionAppraisal:FireNumber:1429
+    evidence:
+      - Phase 2 shows "1 forced" in output
+      - Both entities ended up in same group (group 421, 2 members)
+      - Total groups decreased from 2114 to 2113 (two singletons merged)
+
+  phase_d_google_sheets:
     status: USER_VERIFIED_WORKING
-  fire_number_collision_handler:
-    stats: {merged: 8, suffixed: 59, unique_output: 2309}
+    sheet_ids:
+      FORCE_MATCH: '1WWq8rgVyIKgf3qhVpl5mBiVQllljum0JVm2e_h-WZo8'
+      FORCE_EXCLUDE: '1nZIqcBa3LW1DcUKXVr1jNCGsZqq6JLTaxJSpXSZyulk'
+    test_performed: |
+      Loaded 3 FORCE_MATCH and 2 FORCE_EXCLUDE rules from Google Sheets
+    evidence:
+      - Console: "[OVERRIDE] Loaded 3 FORCE_MATCH rules from sheet"
+      - Console: "[OVERRIDE] Loaded 2 FORCE_EXCLUDE rules from sheet"
+      - Phase 2 shows "3 forced" (the 3 rules connecting to FireNumber:995)
+    functions_added:
+      - loadRulesFromGoogleSheets() in matchOverrideManager.js
+      - fetchSheetData() in matchOverrideManager.js
+      - MatchOverrideManager.prototype.loadFromGoogleSheets()
+
+  phase_e_ui_integration:
+    status: CODED_READY_FOR_TESTING
+    changes:
+      - index.html: Added checkbox "Load override rules" next to Build New button (line 721-724)
+      - entityGroupBrowser.js: Modified buildNewEntityGroupDatabase() to check checkbox (lines 373-429)
+    behavior:
+      - Checkbox checked (default): Loads rules from Google Sheets before building
+      - Checkbox unchecked: Clears rules and builds without overrides
+      - Success message shows rule counts: "(Override rules: X FM, Y FE)"
+
+# Previous Session Work (Session 7)
+session7_work:
+  phase_b_implementation:
     status: USER_VERIFIED_WORKING
-  permutation_memory_fix:
-    solution: MAX_WORDS_FOR_PERMUTATION = 7
+    file_modified: scripts/matching/entityGroupBuilder.js
+    changes:
+      - Added buildGroupForFounder() function implementing 8-step algorithm
+      - Modified all 5 phase execution functions to use buildGroupForFounder()
+      - All phases track forcedAdded count and handle founderForced + forcedFromNaturals arrays
+    backward_compatible: Yes - when no rules loaded, hasOverrides=false skips Steps 2-8
+
+# Session 6 - Phase A Implementation Complete
+session6_work:
+  phase_a_implementation:
     status: USER_VERIFIED_WORKING
-  true_near_match_checkboxes:
-    purpose: Auto-detect and display True Match / Near Match status in Analyze Matches UI
-    location: unifiedEntityBrowser.js (MATCH_CRITERIA config, isTrueMatch(), isNearMatch())
+    file_created: scripts/matching/matchOverrideManager.js
+    html_updated: index.html (added script tag before entityGroupBuilder.js)
+    test_results:
+      all_classes_exist: PASS (ForceMatchRule, ForceExcludeRule, MatchOverrideManager, window.matchOverrideManager)
+      rule_creation_validation: PASS (8 tests)
+      manager_rule_loading: PASS (2 tests)
+      lookup_methods: PASS (5 tests)
+      eight_step_helpers: PASS (6 tests - all exclusion resolution functions working)
+    override_logs_verified:
+      - "Step 2 exclusion FE-CD: D removed (DEFECTIVE_YIELDS)"
+      - "Step 4 OnConflict exclusion FE-HI: I removed (DEFECTIVE_YIELDS)"
+      - "Step 7 Priority exclusion FE-EJ: J removed (priority E wins)"
+      - "Step 8 OnConflict exclusion FE-KM: M removed (DEFECTIVE_YIELDS)"
+
+  algorithm_refinement:
+    status: DESIGN_FINALIZED
+    spec_file: reference_matchOverrideSystem.md (v2.0)
+    key_insight: Sequence matters - 8 steps with priority hierarchy
+
+  eight_step_algorithm:
+    step_1: Find natural matches from algorithmic comparison
+    step_2: Resolve exclusions among natural matches (founder-forced in list wins, else OnConflict)
+    step_3: Generate founder forced matches (not already in naturals)
+    step_4: Resolve exclusions among founder forced (stupid case - OnConflict)
+    step_5: Check founder forced vs natural matches (founder forced wins)
+    step_6: Generate forced matches from surviving natural matches
+    step_7: Check forced-from-naturals vs founder forced (founder wins)
+    step_8: Resolve exclusions among forced-from-naturals (OnConflict)
+
+  priority_hierarchy:
+    tier_1: Founder-forced (F→X) - highest priority
+    tier_2: Natural match - middle priority
+    tier_3: Forced-from-natural (A→X where A is natural match) - lowest priority
+    same_tier_resolution: OnConflict rules (DEFECTIVE_YIELDS, OTHER_YIELDS, USE_SIMILARITY)
+
+  key_behaviors:
+    - Losers stay in pool for future groups (not permanently excluded)
+    - Lineage is lost when natural match is booted (their force-matches never collected)
+    - Founding member F cannot yield (owns the group)
+
+# Session 5 - Match Override System Design (Initial)
+session5_work:
+  match_override_system:
+    status: DESIGN_REFINED_IN_SESSION_6
+    spec_file: reference_matchOverrideSystem.md
+    implementation_plan: reference_matchOverrideImplementationPlan.md
+    purpose: Correct algorithmic matching errors via Google Sheets rules
+
+    force_match_design:
+      sheet_columns: [RuleID, RuleType, EntityKey1, EntityKey2, AnchorOverride, Reason, Status]
+
+    force_exclude_design:
+      sheet_columns: [RuleID, RuleType, DefectiveKey, OtherKey, OnConflict, Reason, Status]
+      on_conflict_options: [DEFECTIVE_YIELDS (default), OTHER_YIELDS, USE_SIMILARITY]
+
+    implementation_phases:
+      phase_a: Foundation - data structures, hardcoded test rules
+      phase_b: Exclusion integration - wire into buildGroupForFounder()
+      phase_c: Force-match integration - collect and resolve in 8-step algorithm
+      phase_d: Google Sheets integration - load rules from actual sheets
+      phase_e: UI integration - browser controls, status updates
+
+  csv_export:
+    status: CODED_IN_ENTITYGROUPBROWSER
+    location: scripts/entityGroupBrowser.js (lines 1356-1912)
+    functions: [exportEntityGroupsToCSV, downloadCSVExport]
+    format: 54-column per reference_csvExportSpecification.md
+
+# Session 4 - Name Comparison Rule and Diagnostic Cleanup
+session4_work:
+  name_comparison_rule:
     status: USER_VERIFIED_WORKING
+    location: scripts/utils.js defaultWeightedComparison() (lines 623-651)
+    rule: |
+      When comparing IndividualName objects where both names have exactly 2 of 3 fields
+      (firstName, lastName, otherNames) but are missing DIFFERENT fields, do NOT normalize
+      the weights. Use full weight sum (1.0) to properly penalize the mismatch.
+    example: |
+      Name A: firstName="John", lastName="Smith", otherNames="" (missing otherNames)
+      Name B: firstName="", lastName="Smith", otherNames="John" (missing firstName)
+      Before: Only lastName compared, normalized to 0.5 weight → inflated score
+      After: All three weights active (0.5+0.4+0.1=1.0), mismatches properly reduce score
 
-google_drive_analysis:
-  status: CODED_READY_FOR_TESTING
-  folder_id: "1f1b7MHXsNKr3qXmqOAcLdzQVZ3sZD2tL"
-  key_file: scripts/matching/entityAnalysisToGoogleDrive.js
+  diagnostic_cleanup:
+    status: CLEANED
+    removed_from:
+      - universalEntityMatcher.js: Same-location VA diagnostic logs (lines 387-395)
+      - entityGroupBuilder.js: SAME-LOCATION BUG diagnostic logs (lines 588-599)
+      - unifiedEntityBrowser.js: Orphaned END DIAGNOSTIC log (line 1627)
 
-# PROJECT STACK (outermost to innermost)
-project_layers:
-  layer_1_analyze_matches_ui:
-    status: USER_VERIFIED_WORKING
-    features_verified:
-      - View Details button in reconciliation modal: WORKING
-      - Top Matches summary section: WORKING (sorted by score descending)
-      - Reconcile button: WORKING
-      - True Match / Near Match checkboxes: USER_VERIFIED_WORKING
-    features_coded_not_tested:
-      - CSV export
-    detail_reference: reference_analyzeMatchesUI.md
+# Session 3 - Same-Location Entity Grouping Bug FIX
+same_location_fix:
+  status: USER_VERIFIED_WORKING
 
-  layer_2_reconcile_feature:
-    status: USER_VERIFIED_WORKING
-    purpose: Display detailed breakdown of similarity calculation
-    verified: Name Component Breakdown table displays correctly
-    view_details_buttons: Added to both Base Entity and Target Entity cards in reconciliation modal
-    detail_reference: reference_reconcileFeatureSpec.md
-    CRITICAL_LESSON: Do NOT use ${...} interpolations inside <script> blocks in template literals
+  fix_implemented:
+    location: scripts/matching/universalEntityMatcher.js
+    changes:
+      - Added extractNameFromEntity() helper (lines 268-277)
+      - Added extractContactInfoFromEntity() helper (lines 284-293)
+      - Added compareSameLocationEntities() function (lines 303-366)
+      - Modified universalCompareTo() to check same-location FIRST, before routing (lines 378-390)
+    key_insight: Check for same-location at TOP of universalCompareTo() before fire number context is lost
 
-  layer_3_entity_key_uniqueness:
-    status: USER_VERIFIED_WORKING
-    bloomerang_format: "bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>"
-    visionappraisal_format: "visionAppraisal:<locationType>:<locationValue>"
-    note: Remaining DUPLICATE errors are from PID/FireNumber issue (separate concern, not blocking)
+  sampled_test_results:
+    test_type: Sampled database build (~1500 entities)
+    fire_72_groups_found: 13
+    problem_groups_found: 0
+    summary: "✓ SUCCESS: No VisionAppraisal same-location grouping bugs detected!"
 
-  layer_4_detailed_compareto:
-    status: STEPS_1_5_USER_VERIFIED_WORKING
-    purpose: compareTo(other, true) returns breakdown objects
-    remaining: Step 6 (CSS styling) - minor polish
+# EntityGroup Database Property Names (IMPORTANT)
+entitygroup_structure:
+  correct_property_names:
+    - index: (not groupIndex)
+    - consensusEntity: (not consensus)
+    - foundingMemberKey: (not foundingMember)
+    - memberKeys: array of member database keys
+    - nearMissKeys: array of near miss database keys
+  access_pattern: window.entityGroupDatabase.groups[index]
 
-  layer_5_compareto_architecture:
-    status: ALL_4_PHASES_TESTED_WORKING
-    phases: IndividualName, Address, ContactInfo, Entity
-    detail_reference: reference_compareToDirectImplementationPlan.md
+# EARLIER VERIFIED WORK (retained for context)
+deep_consensus_building:
+  status: USER_VERIFIED_WORKING
+  location: scripts/objectStructure/entityGroup.js
 
-  layer_6_fire_number_handler:
-    status: USER_VERIFIED_WORKING
-    disable_flag: COLLISION_HANDLER_DISABLED = false (ENABLED)
-    implementation:
-      - Uses crossTypeNameComparison from utils.js (handles IndividualName vs HouseholdName vs SimpleIdentifiers)
-      - Uses compareSecondaryAddressesOnly (excludes primary Block Island addresses)
-      - Address preservation logic (preserves owner address when name-only match)
-      - Merges store entity in otherInfo.subdivision[pid]
-      - Suffixes modify both locationIdentifier.primaryAlias.term and entity.fireNumber
-    thresholds:
-      overall: 0.75
-      name: 0.95
-      contactInfo: 0.95
-    weights:
-      name: 0.7
-      contactInfo: 0.3
-    shared_functions_in_utils_js:
-      - extractNameString: line 244
-      - crossTypeNameComparison: line 286
+contactinfo_comparison_fixes:
+  status: USER_VERIFIED_WORKING
+  summary: Threshold-based secondary exclusion, dynamic weighting, phase order swap
 
-# MATCH CONFIGURATION (CURRENT)
-match_config:
-  percentileThreshold: 98
-  minimumGroupSize: 10
-  minimumScoreDefault: 0.31
-  nameScoreOverride: 0.985
-  individualToIndividual_minimumCutoff: 0.75  # Changed from 0.65 this session
-  selection_rule: "98th percentile OR top 10; include all 100% matches beyond that count"
+extractFireNumberFromEntity_fix:
+  status: USER_VERIFIED_WORKING
 
-# CRITICAL LESSONS PRESERVED
-critical_lessons:
-  template_literals: Do NOT use ${...} interpolations inside <script> blocks in template literals
-  key_changes: When adding new key components, ADD to existing format, do NOT replace elements
-  source_identification: Use sourceMap-based test (locationIdentifier.primaryAlias.sourceMap contains 'bloomerang'), NOT accountNumber property
-  autocompact_recovery: Consult reference docs before code analysis after autocompact
-  fire_number_collision: Cannot use full universalCompareTo - entities have same primary address; must use NAME ONLY + SECONDARY ADDRESS ONLY comparison
+same_location_comparison:
+  status: USER_VERIFIED_WORKING
+  note: universalCompareTo() now checks same-location FIRST before routing; full database build verified
 
-# FULL PROJECT CONTEXT
-full_context_reference: reference_currentWorkInProgress.md
+# OVERALL PROJECT STATUS
+all_foundational_layers: USER_VERIFIED_WORKING
+entitygroup_system: USER_VERIFIED_WORKING (same-location fix verified)
+keyed_database_migration: USER_VERIFIED_WORKING
+key_preservation: USER_VERIFIED_WORKING
+comparison_architecture: USER_VERIFIED_WORKING
+deep_consensus_building: USER_VERIFIED_WORKING
+
+# PENDING WORK (order updated)
+pending:
+  - Match Override System Phase B: Wire 8-step algorithm into entityGroupBuilder.js (NEXT)
+  - Match Override System Phases C-E: See reference_matchOverrideImplementationPlan.md
 ```
 
 ---
 
 ## TERMINOLOGY
 ```yaml
-# CRITICAL: Use these terms consistently to avoid confusion
-
 KEYED_DATABASE:
   variable: unifiedEntityDatabase
-  description: Single flat structure where ALL entities (both sources) stored together
   access_pattern: unifiedEntityDatabase.entities[key]
   key_format_visionappraisal: "visionAppraisal:FireNumber:1510"
   key_format_bloomerang: "bloomerang:12345:SimpleIdentifiers:...:head"
-  buttons:
-    save: "💾 Record Unified Database"
-    load: "📂 Load Unified Database"
-  characteristics:
-    - Source-agnostic access (same pattern for all entities)
-    - Saved to / loaded from Google Drive
-    - THIS IS THE TARGET ARCHITECTURE
-
-LEGACY_UNIFIED_DATABASE:
-  variable: workingLoadedEntities
-  description: Original structure holding VisionAppraisal and Bloomerang in SEPARATE sub-structures
-  access_pattern_visionappraisal: workingLoadedEntities.visionAppraisal.entities[index]
-  access_pattern_bloomerang: workingLoadedEntities.bloomerang.individuals.entities[key]
-  button: "Load All Entities Into Memory"
-  characteristics:
-    - Requires source-specific navigation code
-    - Different paths for different sources
-    - THIS IS BEING MIGRATED AWAY FROM
-
-MIGRATION_GOAL:
-  from: Functions reading from Legacy Unified Database (navigating separate structures)
-  to: Functions reading from Keyed Database (single keyed structure)
-  reference: reference_keyedDatabaseMigration.md
+  load_buttons: ["📂 Load Unified Database", "Load All Entities Into Memory"]
 
 ENTITYGROUP_DATABASE:
   description: Collection of EntityGroups representing matched real-world persons/households
-  purpose: Consolidate entities from multiple sources into unified groups for prospect identification and reporting
   construction_function: buildEntityGroupDatabase() in scripts/matching/entityGroupBuilder.js
-  classes:
-    EntityGroup: Container for matched entities (founding member, members, near-misses, consensus)
-    EntityGroupDatabase: Container for all EntityGroups with construction orchestration
-  key_properties:
-    EntityGroup: [index, foundingMemberKey, memberKeys, nearMissKeys, hasBloomerangMember, consensusEntity, constructionPhase]
-    EntityGroupDatabase: [groups, nextIndex, assignedEntityKeys (Set), constructionConfig, stats]
-  five_phase_construction:
-    phase_1: Bloomerang Households (seed groups from existing donors)
-    phase_2: VisionAppraisal Households (match or form new groups)
-    phase_3: Bloomerang Individuals (remaining after Phase 1)
-    phase_4: VisionAppraisal Individuals (remaining after Phase 2)
-    phase_5: Remaining entity types (Business, LegalConstruct)
-  key_rule: Once assigned to a group, an entity cannot join other groups
-  near_miss_rule: Near misses are recorded but NOT marked as assigned (can still form own groups)
+  browser_file: scripts/entityGroupBrowser.js
+  five_phase_construction: [Bloomerang Households, VisionAppraisal Households, VisionAppraisal Individuals, Bloomerang Individuals, Remaining]
+
+SAME_LOCATION_ENTITIES:
+  definition: Two Block Island entities with suffixed fire numbers sharing same base (e.g., 72J vs 72W)
+  significance: Different owners at same physical property - primary addresses match trivially
+  comparison_method: Use compareSecondaryAddressesOnly() instead of full contactInfo comparison
+
+CONTACTINFO_WEIGHTING:
+  best_address_match: Single best score across all address comparisons (primary and secondary)
+  primary_involved_weights: address 0.75, email 0.25 (when primary-to-primary or primary-to-secondary)
+  secondary_only_weights: address 0.65, email 0.35 (when secondary-to-secondary is best)
+  exclusion_threshold: 0.87 (MATCH_CRITERIA.trueMatch.contactInfoAlone)
+
+MATCH_OVERRIDE_SYSTEM:
+  description: Google Sheets-based rules to correct algorithmic matching errors
+  status: ALL_PHASES_COMPLETE (A-E)
+  rule_types:
+    FORCE_MATCH: Ensure two entities end up in same group (anchor/dependent model)
+    FORCE_EXCLUDE: Prevent two entities from being in same group (defective/other model)
+  google_sheets:
+    FORCE_MATCH_SHEET_ID: '1WWq8rgVyIKgf3qhVpl5mBiVQllljum0JVm2e_h-WZo8'
+    FORCE_EXCLUDE_SHEET_ID: '1nZIqcBa3LW1DcUKXVr1jNCGsZqq6JLTaxJSpXSZyulk'
+    force_match_columns: [RuleID, EntityKey1, EntityKey2, AnchorOverride, Reason, Status]
+    force_exclude_columns: [RuleID, DefectiveKey, OtherKey, OnConflict, Reason, Status]
+  anchor_determination: Earlier phase entity is anchor (unless AnchorOverride specified)
+  on_conflict_options: DEFECTIVE_YIELDS (default), OTHER_YIELDS, USE_SIMILARITY
+  ui_integration: Checkbox "Load override rules" next to Build New button (checked by default)
+  usage: |
+    1. Add rules to Google Sheets (FORCE_MATCH and/or FORCE_EXCLUDE)
+    2. Click "Build New" with checkbox checked
+    3. Rules automatically load from sheets and apply during build
+  console_command: await window.matchOverrideManager.loadFromGoogleSheets()
+  spec_files: [reference_matchOverrideSystem.md, reference_matchOverrideImplementationPlan.md]
+  implementation_files:
+    - scripts/matching/matchOverrideManager.js (Phase A + D)
+    - scripts/matching/entityGroupBuilder.js (Phase B + C - buildGroupForFounder)
+    - scripts/entityGroupBrowser.js (Phase E - UI checkbox)
+    - index.html (Phase E - checkbox HTML)
 ```
 
 ---
 
 ## MANDATORY_COMPARETO_ARCHITECTURE
 ```yaml
-# THESE REQUIREMENTS MUST BE FOLLOWED FOR ALL COMPARISON OPERATIONS
-
 CORE_RULE:
   requirement: EVERY_APPLICATION_DEFINED_CLASS_MUST_USE_ITS_NATIVE_COMPARETO_METHOD
   scope: Entity, ContactInfo, IndividualName, Address, AttributedTerm, etc.
-  not_applicable_to: JavaScript primitives (strings, numbers)
-  correct_pattern: |
-    // Application class - use native compareTo
-    let similarity = name.compareTo(otherName);
-    // String at leaf node - use levenshteinSimilarity
-    let similarity = levenshteinSimilarity(firstName, otherFirstName);
-  wrong_pattern: |
-    // WRONG: Extracting value from application class
-    let similarity = levenshteinSimilarity(attributedTerm.term, other.term);
 
-CALL_CHAIN:
-  Entity.compareTo: calls contactInfo.compareTo, otherInfo.compareTo
-  ContactInfo.compareTo: calls primaryAddress.compareTo, name.compareTo
-  IndividualName.compareTo: uses levenshteinSimilarity on strings
-  Address.compareTo: uses levenshteinSimilarity on strings
-  leaf_nodes: Classes whose weighted properties are strings
+MULTIPLE_COMPARISON_ENTRY_POINTS:
+  critical_understanding: |
+    Entity comparisons flow through TWO separate code paths:
+    1. entity.compareTo() → entityWeightedComparison (in utils.js)
+    2. universalCompareTo() → compareIndividualToEntityDirect (in universalEntityMatcher.js)
+    Changes affecting comparison logic may need to be applied to BOTH paths.
 
 CALCULATOR_REGISTRY:
   location: scripts/utils.js COMPARISON_CALCULATOR_REGISTRY
-  calculators:
-    - defaultWeightedComparison: Vowel-weighted Levenshtein for names
-    - addressWeightedComparison: PO Box vs General, Block Island detection
-    - contactInfoWeightedComparison: Sophisticated address matching
-    - entityWeightedComparison: Full entity with weight boost
+  calculators: [defaultWeightedComparison, addressWeightedComparison, contactInfoWeightedComparison, entityWeightedComparison]
 
-SERIALIZATION_PATTERN:
-  problem: Functions cannot survive JSON serialization
-  solution: Store calculator NAME as string, resolve at runtime
-  class_properties: [comparisonWeights, comparisonCalculatorName, comparisonCalculator]
-
-DETAILED_PARAMETER:
-  signature: compareTo(other, detailed = false)
-  detailed_false: Returns number (0-1 similarity)
-  detailed_true: Returns {overallSimilarity, components, method, ...}
-  status: STEPS_1_4_TESTED_WORKING
-
-WEIGHT_BOOST:
-  applies_to: NAME_ONLY (never contactInfo)
-  perfect_match: +12% weight if name is 100%
-  high_match: +6% weight if name is >95%
+SAME_LOCATION_HANDLING:
+  trigger: areSameLocationEntities(entity1, entity2) returns true
+  action: Use compareSecondaryAddressesOnly() instead of contactInfo.compareTo()
+  applies_to: Both entityWeightedComparison AND compareIndividualToEntityDirect
 ```
 
 ---
@@ -633,236 +406,118 @@ WEIGHT_BOOST:
 APPLICATION_STARTUP:
   command: cd /home/robert-benjamin/RPBprojects/VisionAppraisal/BIRAVA2025/BIRAVA2025 && node servers/server.js
   url: http://127.0.0.1:1337/
-  api: http://127.0.0.99:3000/csv-file?file=filename.json
 
 ENTITY_MEMORY_ACCESS:
-  # PREFERRED: Keyed Database (target architecture)
-  keyed_database:
-    load_option_1: Click "📂 Load Unified Database" (from Google Drive)
-    load_option_2: Click "Load All Entities Into Memory" (builds from source files)
-    global_object: unifiedEntityDatabase
-    access_any_entity: unifiedEntityDatabase.entities[key]
-    count_check: Object.keys(unifiedEntityDatabase.entities).length
-  # LEGACY: Only used during migration (being phased out)
-  legacy_unified_database:
-    global_object: workingLoadedEntities
-    bloomerang: workingLoadedEntities.bloomerang.individuals.entities[key]
-    visionappraisal: workingLoadedEntities.visionAppraisal.entities[index]
-    note: DO_NOT_USE_IN_NEW_CODE
+  preferred: unifiedEntityDatabase.entities[key]
+  count_check: Object.keys(unifiedEntityDatabase.entities).length
 
-BROWSER_FILE_DOWNLOAD:
-  pattern: |
-    const blob = new Blob([content], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "file.csv";
-    document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
-
-STANDARD_BROWSER_TEST_PROTOCOL:
-  AI_MUST_PROVIDE:
-    1_browser_refresh: YES_or_NO
-    2_entity_regeneration: YES_or_NO
-    3_entity_loading: YES_or_NO
-    4_console_command: Exact command
-  SCRIPT_PATTERN: fetch('./scripts/testing/testName.js').then(r => r.text()).then(eval)
-
-ENTITY_TESTING_SEQUENCE:
-  step_1: readBloomerangWithEntities(true, 'BATCH_ID') with SAVE=true
-  step_2: Capture new config file ID from console
-  step_3: User enters file ID in input box
-  step_4: Click Load button
-  step_5: Verify loaded entities
+DEBUGGING_PROTOCOL:
+  ALWAYS: Add diagnostic console.log to verify code path BEFORE making changes
+  NEVER: Assume which code path is being executed
+  REASON: Multiple entry points exist for same operations
 
 CRITICAL_LESSONS:
-  template_literals: Do NOT use ${...} interpolations inside <script> blocks
-  key_changes: When adding key components, ADD don't replace
-  autocompact: Consult reference docs before code analysis after autocompact
-  server_routes: Specific routes before catch-all
-  household_processing: Never return null (causes data loss)
-```
-
----
-
-## DATA_CONTEXT
-```yaml
-entities_in_memory: 4105
-visionappraisal: 2317 entities
-bloomerang_individuals: 1792
-
-entity_types:
-  Individual: 363
-  AggregateHousehold: 931
-  Business: 211
-  LegalConstruct: 812
-
-multi_pid_fire_numbers: 17
+  - template_literals: Do NOT use ${...} interpolations inside <script> blocks
+  - multiple_comparison_paths: Both entityWeightedComparison AND compareIndividualToEntityDirect are active
+  - code_path_verification: Use diagnostic console.logs before making changes
+  - oauth_token_expiration: Tokens expire after 1 hour - long operations must save promptly
+  - function_return_values: Always assign return values (e.g., window.unifiedEntityDatabase = buildUnifiedEntityDatabase())
+  - saved_vs_memory: Always rebuild EntityGroup database to test code changes; loaded files reflect OLD code
 ```
 
 ---
 
 ## REFERENCE_NAVIGATION
 ```yaml
-# WHEN TO READ WHICH REFERENCE DOCUMENT
-
-KEYED_DATABASE_MIGRATION:
-  reference_keyedDatabaseMigration.md: Complete 6-phase migration plan from Legacy to Keyed Database
-  READ_WHEN: Working on any migration phase, understanding database architecture
-  NOTE: THIS IS THE CURRENT PRIORITY WORK
-
 CURRENT_WORK:
-  reference_currentWorkInProgress.md: Full nested project context, all 6 layers detailed
-  READ_WHEN: Starting session, need complete context on current work
-
-RECONCILE_FEATURE:
-  reference_reconcileFeatureSpec.md: Architecture, functions to implement, critical lessons
-  READ_WHEN: Working on Reconcile button or detailed comparison display
-
-ENTITY_KEYS:
-  reference_entityKeyUniqueness.md: Key format evolution, collision fixes
-  READ_WHEN: Working on entity lookup or index building
-
-COMPARETO:
-  reference_compareToDirectImplementationPlan.md: All 4 phases, calculators, test results
-  READ_WHEN: Working on any compareTo or weighted comparison
-
-ANALYZE_MATCHES:
-  reference_analyzeMatchesUI.md: 6 features, CSS, data flow
-  READ_WHEN: Working on match analysis window
-
-PROJECT_OVERVIEW:
-  reference_projectOverview.md: Business goals, multi-level plan, blocking chain
-  READ_WHEN: Need high-level project understanding
-
-PROJECT_ROADMAP:
-  reference_projectRoadmap.md: 8-step strategic roadmap including five-step process, match recognition, entityGroups, reports
-  READ_WHEN: Discussing future plans, prioritization, or strategic direction
-  NOTE: High-level outline only - each step requires specific discussion before implementation
-
-ENTITYGROUP:
-  class_file: scripts/objectStructure/entityGroup.js
-  builder_file: scripts/matching/entityGroupBuilder.js
-  READ_WHEN: Working on EntityGroup construction, browsing, or export
-  entry_point: buildEntityGroupDatabase() - runs 5-phase construction algorithm
-
-SERIALIZATION:
-  reference_serializationArchitecture.md: CLASS_REGISTRY, fromSerializedData pattern
-  READ_WHEN: Working with entity serialization
+  reference_currentWorkInProgress.md: Project layer stack, current status
+  READ_WHEN: Starting session, need context on current work
 
 SESSION_HISTORY:
-  reference_sessionHistory.md: Resolved issues, completed verifications
+  reference_sessionHistory.md: Detailed logs of completed sessions
   READ_WHEN: Checking what was already tried/fixed
-```
 
----
+PROJECT_ROADMAP:
+  reference_projectRoadmap.md: 8-step strategic roadmap
+  READ_WHEN: Discussing future plans or prioritization
 
-## ALGORITHMIC_RESOURCES
-```yaml
-vowel_weighted_levenshtein:
-  location: scripts/matchingTools.js levenshteinDistance()
-  vowel_vowel_penalty: ~0.079 (low)
-  consonant_consonant_penalty: 1.0
-  status: INTEGRATED_INTO_COMPARETO
+ENTITYGROUP:
+  scripts/objectStructure/entityGroup.js: EntityGroup and EntityGroupDatabase classes
+  scripts/matching/entityGroupBuilder.js: 5-phase construction algorithm
+  scripts/entityGroupBrowser.js: Browser tool + CSV export
+  reference_csvExportSpecification.md: CSV export format for prospects/donors
 
-permutation_name_comparison:
-  location: scripts/utils.js permutationBasedNameComparison()
-  integration: defaultWeightedComparison returns MAX(weighted, permutation)
-  test_file: scripts/testing/testPermutationNameComparison.js (28 tests passing)
-  haircut_formula: "(1 - (1 - smaller/larger)^2.5)"  # Changed from ^3 to ^2.5 this session
-  final_adjustment: -0.01 from permutation score  # Changed from -0.04 this session
+MATCH_OVERRIDE_SYSTEM:
+  reference_matchOverrideSystem.md: Complete design specification (AGREED)
+  reference_matchOverrideImplementationPlan.md: 5-phase incremental implementation plan
+  scripts/matching/matchOverrideManager.js: ALL PHASES COMPLETE - data structures, 8-step helpers, Google Sheets
+  scripts/matching/entityGroupBuilder.js: buildGroupForFounder() implements 8-step algorithm
+  scripts/entityGroupBrowser.js: UI checkbox integration for loading override rules
+  google_sheets:
+    FORCE_MATCH: '1WWq8rgVyIKgf3qhVpl5mBiVQllljum0JVm2e_h-WZo8'
+    FORCE_EXCLUDE: '1nZIqcBa3LW1DcUKXVr1jNCGsZqq6JLTaxJSpXSZyulk'
+  READ_WHEN: Managing match override rules or debugging grouping issues
 
-component_weights:
-  lastName: 0.5
-  firstName: 0.4
-  otherNames: 0.1
+COMPARISON_ARCHITECTURE:
+  reference_compareToDirectImplementationPlan.md: compareTo implementation details
+  READ_WHEN: Working on comparison logic
 
-phase_weights:
-  individual: {name: 0.5, contactInfo: 0.3, otherInfo: 0.15, legacyInfo: 0.05}
-  household: {name: 0.4, contactInfo: 0.4, otherInfo: 0.15, legacyInfo: 0.05}
-
-address_weights_pobox: {secUnitNum: 0.4, city: 0.25, state: 0.15, zipCode: 0.2}
-address_weights_general: {streetNumber: 0.3, streetName: 0.2, zipCode: 0.4, state: 0.1}
-contactinfo_weights: {primaryAddress: 0.6, secondaryAddress: 0.2, email: 0.2}
-email_comparison:
-  method: split_local_and_domain
-  weights: {localPart: 0.8, domain: 0.2}
-  local_part: fuzzy_levenshtein
-  domain: exact_match_only
+KEYED_DATABASE:
+  reference_keyedDatabaseMigration.md: Migration plan details
+  reference_keyPreservationPlan.md: Key preservation architecture
 ```
 
 ---
 
 ## BLOCKING_STATUS_TRACKER
 ```yaml
-# CURRENT WORK: ENTITYGROUP BROWSER ENHANCEMENTS - USER VERIFIED WORKING
 current_work:
-  entitygroup_browser:
-    description: EntityGroup Browser with View Details enhancements for viewing member and consensus entities
-    status: USER_VERIFIED_WORKING
-    session: December 16, 2025
-    files_modified:
-      - scripts/entityGroupBrowser.js (View Details functions, search bug fix)
-      - scripts/unifiedEntityBrowser.js (exported basicEntityDetailsView)
-    view_details_features:
-      - Founding member View Details button (Entity Browser style)
-      - Member View Details buttons (Entity Browser style)
-      - Near miss View buttons (Entity Browser style)
-      - Consensus entity View Details (Drill-Down) button (property explorer style)
-  entitygroup_construction:
-    description: EntityGroup and EntityGroupDatabase classes with 5-phase construction algorithm
-    status: USER_VERIFIED_WORKING
-    files_created:
-      - scripts/objectStructure/entityGroup.js
-      - scripts/matching/entityGroupBuilder.js
-    test_results:
-      total_groups: 2291
-      multi_member: 785
-      single_member: 1506
-      entities_assigned: 4097
-      near_misses: 202
+  match_override_system:
+    status: ALL_PHASES_COMPLETE
+    phases_completed:
+      phase_a: USER_VERIFIED_WORKING (data structures, 8-step helpers)
+      phase_b: USER_VERIFIED_WORKING (exclusion integration)
+      phase_c: USER_VERIFIED_WORKING (force-match integration)
+      phase_d: USER_VERIFIED_WORKING (Google Sheets loading)
+      phase_e: CODED_READY_FOR_TESTING (UI checkbox integration)
+    spec_file: reference_matchOverrideSystem.md
+    implementation_plan: reference_matchOverrideImplementationPlan.md
 
-# COMPLETED WORK: KEYED DATABASE MIGRATION AND KEY PRESERVATION
+  same_location_fix:
+    status: USER_VERIFIED_WORKING
+    description: Fix implemented in universalCompareTo() - checks same-location BEFORE routing
+
+  csv_export:
+    status: CODED_IN_ENTITYGROUPBROWSER
+    location: scripts/entityGroupBrowser.js (lines 1356-1912)
+
 completed_work:
-  keyed_database_migration:
-    description: Migrated from Legacy Unified Database to Keyed Database
-    reference: reference_keyedDatabaseMigration.md
-    status: ALL_PHASES_USER_VERIFIED_WORKING
-    completed: December 15, 2025
-  key_preservation:
-    description: Database keys now preserved through entire flow
-    reference: reference_keyPreservationPlan.md
-    status: ALL_PHASES_USER_VERIFIED_WORKING
-    completed: December 15, 2025
+  match_override_system_complete: USER_VERIFIED_WORKING (Dec 19 session 8 - all 5 phases)
+  match_override_phase_a: USER_VERIFIED_WORKING (Dec 18 session 6)
+  match_override_phase_b: USER_VERIFIED_WORKING (Dec 19 session 8)
+  match_override_phase_c: USER_VERIFIED_WORKING (Dec 19 session 8)
+  match_override_phase_d: USER_VERIFIED_WORKING (Dec 19 session 8)
+  match_override_phase_e: CODED_READY_FOR_TESTING (Dec 19 session 8)
+  same_location_fix: USER_VERIFIED_WORKING (Dec 18 session 6)
+  name_comparison_different_missing_fields: USER_VERIFIED_WORKING (Dec 18 session 4)
+  diagnostic_log_cleanup: CLEANED (Dec 18 session 4)
+  alternatives_deduplication: USER_VERIFIED_WORKING (Dec 18 session 2)
+  utils_syntax_fix: USER_VERIFIED_WORKING (Dec 18 session 2)
+  deep_consensus_building: USER_VERIFIED_WORKING (Dec 18)
+  contactinfo_comparison_fixes: USER_VERIFIED_WORKING (Dec 17 evening)
+  entitygroup_browser: USER_VERIFIED_WORKING
+  entitygroup_persistence: USER_VERIFIED_WORKING
+  keyed_database_migration: USER_VERIFIED_WORKING
+  key_preservation: USER_VERIFIED_WORKING
+  all_foundational_layers: USER_VERIFIED_WORKING
+  extractFireNumberFromEntity_fix: USER_VERIFIED_WORKING
 
-# MIGRATION PHASE STATUS - ALL COMPLETE
-migration_phases:
-  phase_1_remove_competing_function: USER_VERIFIED_WORKING
-  phase_2_remove_browser_legacy_fallbacks: USER_VERIFIED_WORKING
-  phase_3_remove_matcher_legacy_fallback: USER_VERIFIED_WORKING
-  phase_4_migrate_entity_renderer: USER_VERIFIED_WORKING
-  phase_5_migrate_load_button: USER_VERIFIED_WORKING
-  phase_6_wire_auto_build: USER_VERIFIED_WORKING
+known_issues:
+  none_currently_open: All known issues resolved
 
-# RESOLVED (moved to reference_sessionHistory.md for details)
-resolved_items:
-  - NonHumanName implementation (Dec 14) - USER_VERIFIED_WORKING
-  - Email matching improvement (Dec 14) - USER_VERIFIED_WORKING
-  - Fire number collision handler (Dec 8) - USER_VERIFIED_WORKING
-  - Entity key uniqueness (Dec 7) - USER_VERIFIED_WORKING
-  - View button entity lookup (Dec 6) - RESOLVED with storage key architecture
-  - Cross-type name comparison (Dec 5) - RESOLVED in universalEntityMatcher
-  - HouseholdInformation (Dec 3) - USER_VERIFIED_WORKING
-  - All 4 phases compareTo (Dec 1) - ALL_TESTED_WORKING
-  - Serialization (Nov 30) - RESOLVED
-  - Empty name records (Nov 30) - RESOLVED
-
-# PENDING WORK (not blocking, deferred)
 pending_work:
-  - EntityGroup Google Drive persistence: READY_FOR_USER_VERIFICATION (save buttons implemented, console test passed)
-  - Full production EntityGroup database run (20+ minutes)
-  - CSV output enhancement for EntityGroups
-  - Alias consensus integration testing
-  - Category 2 files (analysis/diagnostic) migration
-  - Category 3 files (tests) migration
+  - Phase E UI testing: Test checkbox integration via browser (optional - console works)
+  - Production data review: Build with real override rules and verify results
 ```
 
 ---
@@ -872,9 +527,10 @@ pending_work:
 development_protocol: INCREMENTAL_TESTING_REQUIRED
 workflow: [make_single_change, test_immediately, verify_functionality, proceed]
 
-testing_preferences:
-  PREFERRED: Write test code to app files (regression value) OR display for console copy-paste
-  AVOID: Full HTML test page without justification
+debugging_protocol:
+  FIRST: Add diagnostic console.log to verify code path
+  THEN: Analyze output to understand actual execution
+  FINALLY: Make targeted changes to correct location
 
 completion_requirements:
   forbidden: [COMPLETE, IMPLEMENTED, SOLVED, ACHIEVED, DONE, SUCCESSFUL]
@@ -888,109 +544,112 @@ MANDATORY_BACKUP:
 
 ## SESSION_METADATA
 ```yaml
-last_updated: December_16_2025
-document_version: 54.0_ENTITYGROUP_PERSISTENCE_READY_FOR_VERIFICATION
-previous_version: 53.0_ENTITYGROUP_REFERENCE_FILE_AND_SAVE_BUTTONS
+last_updated: December_19_2025
+document_version: 70.0_MATCH_OVERRIDE_SYSTEM_ALL_PHASES_COMPLETE
+previous_version: 69.0_PHASE_B_READY_FOR_TESTING
 
-# CURRENT STATE
-current_state:
-  entitygroup_persistence: READY_FOR_USER_VERIFICATION (console test passed, awaiting Build New button test)
-  entitygroup_browser: USER_VERIFIED_WORKING (with View Details enhancements)
-  alias_consensus_integration: CODED_READY_FOR_USER_VERIFICATION
-  entitygroup_construction: USER_VERIFIED_WORKING
-  keyed_database_migration: ALL_PHASES_USER_VERIFIED_WORKING
-  key_preservation: ALL_PHASES_USER_VERIFIED_WORKING
-  all_foundational_layers: USER_VERIFIED_WORKING
+session_summary:
+  dec19_session8:
+    status: MATCH_OVERRIDE_SYSTEM_ALL_PHASES_COMPLETE
+    focus: Complete Match Override System - Phases B, C, D, E
+    deliverables:
+      - Phase B: Exclusion rules tested and verified working
+      - Phase C: Force-match rules tested and verified working
+      - Phase D: Google Sheets integration (loadRulesFromGoogleSheets, loadFromGoogleSheets)
+      - Phase E: UI checkbox in entityGroupBrowser.js and index.html
+    test_evidence:
+      phase_b: "[OVERRIDE] Step 2 exclusion FE-TEST-001: visionAppraisal:FireNumber:1658 removed"
+      phase_c: "Phase 2 complete: 511 groups, 409 natural matches, 1 forced"
+      phase_d: "[OVERRIDE] Loaded 3 FORCE_MATCH rules from sheet, Loaded 2 FORCE_EXCLUDE rules"
+    files_modified:
+      - scripts/matching/matchOverrideManager.js (added Google Sheets functions)
+      - scripts/entityGroupBrowser.js (added checkbox handling in buildNewEntityGroupDatabase)
+      - index.html (added loadOverrideRulesCheckbox)
 
-# DEC 16 SESSION - ENTITYGROUP PERSISTENCE (LATEST)
-dec16_session_part4:
-  focus: EntityGroup persistence with companion reference files
-  work_completed:
-    - Implemented buildEntityGroupReferenceFile(groupDb) function
-    - Implemented saveEntityGroupDatabaseToNewFile() for creating new database files
-    - Implemented saveEntityGroupReferenceToNewFile() for creating new reference files
-    - Implemented saveEntityGroupDatabaseAndReference() for saving to existing files
-    - Implemented saveEntityGroupDatabaseAndReferenceToNewFiles() for creating both new files
-    - Modified buildEntityGroupDatabase() to auto-save both files to NEW locations
-    - Added Reference File ID input box to UI
-    - Added "Save to File IDs" and "Save as New Files" buttons
-    - Fixed bug: groups is object not array - use Object.values()
-  test_results:
-    console_command: "await buildEntityGroupDatabase({ sampleSize: 800 })"
-    database_file_id: "1NRKzen-IjQcc950cCGPr96g8V15mEW74"
-    reference_file_id: "1nTFLPY5gKeCwWy9RA8H014f2R7y88n33"
-    groups_built: 645
-    entities_assigned: 801
-  pending_verification:
-    - User to test "Build New" button flow (builds + displays + enables save buttons)
-    - User to test "Save to File IDs" button
-    - User to test "Save as New Files" button
+  dec18_session6:
+    status: PHASE_A_USER_VERIFIED_WORKING
+    focus: Phase A implementation and testing
+    deliverables:
+      - scripts/matching/matchOverrideManager.js: Complete Phase A implementation
+      - index.html: Added script tag to load matchOverrideManager.js
+    implementation_details:
+      - ForceMatchRule class with validate(), involvesKey(), getPartnerKey()
+      - ForceExcludeRule class with validate(), matchesPair(), determineLoser()
+      - MatchOverrideManager class with 8-step algorithm helper methods
+      - resolveExclusionsWithPriority() for Step 2
+      - resolveExclusionsOnConflict() for Steps 4 and 8
+      - removeExcludedByPriority() and removeExcludedKeysByPriority() for Steps 5 and 7
+    test_results: All 24 tests passed in browser console
 
-# DEC 16 SESSION - ENTITYGROUP BROWSER VIEW DETAILS (EARLIER)
-dec16_session_part3:
-  focus: Enhanced View Details buttons in EntityGroup Browser View Group Details modal
-  work_completed:
-    - Added View Details button for founding member (Entity Browser style)
-    - Added View Details button for each group member (Entity Browser style)
-    - Added View button for each near miss (Entity Browser style)
-    - Added View Details (Drill-Down) button for consensus entity (basicEntityDetailsView style)
-    - Created viewMemberEntityDetails(key) function - reuses renderEntityDetailsWindow
-    - Created viewConsensusEntityDetails(consensusEntity, groupIndex) function - uses basicEntityDetailsView
-    - Exported basicEntityDetailsView to window scope in unifiedEntityBrowser.js
-    - Fixed search crash (address.toLowerCase error) - added type checking in groupMatchesSearch
-    - Enhanced extractEntityAddress() to always return string with fallback component building
-  design_decisions:
-    - Two View Details styles for different purposes (entity view vs property explorer)
-    - All member View Details buttons use same renderer as Entity Browser for consistency
-    - Consensus entity uses drill-down style for exploring synthesized structure
-    - Type safety added to search function to handle unexpected data structures
+  dec18_session5:
+    status: DESIGN_AGREED
+    focus: Manual Match Override System design
+    deliverables:
+      - reference_matchOverrideSystem.md: Complete design specification
+      - reference_matchOverrideImplementationPlan.md: 5-phase implementation plan
+    key_decisions:
+      - FORCE_MATCH: Anchor/dependent model with phase-based anchor determination
+      - FORCE_EXCLUDE: Defective/other model with OnConflict options
+      - OnConflict values: DEFECTIVE_YIELDS, OTHER_YIELDS, USE_SIMILARITY
+      - Founding member exception: Cannot yield if founding member (owns group)
+      - BATCH CONFLICT RESOLUTION: Exclusions resolved during findMatchesForEntity() batch,
+        not incrementally. Loser stays in pool for future groups.
+    implementation_location:
+      - scripts/matching/matchOverrideManager.js (to be created)
+      - findMatchesForEntity() in entityGroupBuilder.js (exclusion checks)
+      - Phase execution functions (force-match application)
 
-# DEC 16 SESSION - ALIAS CONSENSUS INTEGRATION (EARLIER)
-dec16_session_part2:
-  focus: Alias categorization in consensus entity synthesis
-  work_completed:
-    - Added Aliased.createConsensus() static method to aliasClasses.js (lines 578-673)
-    - Added Aliased.mergeAlternatives() instance method to aliasClasses.js (lines 685-728)
-    - Added Aliased._mergeSourceAlternatives() helper to aliasClasses.js (lines 738-771)
-    - Updated EntityGroup._synthesizeConsensus() to use createConsensus for name/locationIdentifier
-    - Added EntityGroup._buildAliasThresholds() method (lines 199-223)
-    - Added EntityGroup._createAliasedConsensus() wrapper method (lines 233-249)
-  design_decisions:
-    - Alias logic placed in Aliased class (not EntityGroup) for reusability
-    - Both static factory and instance methods provided
-    - Thresholds read from MATCH_CRITERIA, not hardcoded
-    - Homonyms use True Match thresholds, Synonyms use Near Match thresholds
-    - Source alternatives demoted based on source similarity to consensus primary
+  dec18_session4:
+    status: USER_VERIFIED_WORKING
+    focus: Name comparison rule for different missing fields + diagnostic cleanup
+    changes:
+      - Added rule in defaultWeightedComparison(): when both IndividualNames have 2 of 3 fields
+        but are missing DIFFERENT fields, do not normalize weights (use full 1.0 weight sum)
+      - Removed diagnostic logs from universalEntityMatcher.js, entityGroupBuilder.js,
+        and unifiedEntityBrowser.js that were added during same-location debugging
 
-# DEC 16 SESSION - ENTITYGROUP IMPLEMENTATION (EARLIEST)
-dec16_session_part1:
-  work_completed:
-    - Created EntityGroup class (scripts/objectStructure/entityGroup.js)
-    - Created EntityGroupDatabase class (same file)
-    - Created 5-phase construction algorithm (scripts/matching/entityGroupBuilder.js)
-    - Added script includes to index.html
-    - Exported isTrueMatch, isNearMatch, MATCH_CRITERIA from unifiedEntityBrowser.js
-    - Fixed universalEntityMatcher.js include (was dynamic, now static script)
-  test_run_results:
-    total_groups: 2291
-    multi_member_groups: 785
-    single_member_groups: 1506
-    prospects: 1316
-    existing_donors: 975
-    entities_assigned: 4097
-    near_misses: 202
+  dec18_session3:
+    status: USER_VERIFIED_WORKING
+    focus: Same-location entity grouping bug FIX
+    problem_solved: |
+      VisionAppraisal entities at same physical location (72A, 72B, 72C at 72 West Side Road)
+      were incorrectly grouped together because household comparison functions lost fire number context.
 
-next_priorities:
-  reference: reference_projectRoadmap.md
-  completed: EntityGroup Browser with View Details enhancements
-  pending_features:
-    - CSV output enhancement for EntityGroups
-    - Google Drive persistence (save EntityGroup database)
+    fix_implemented:
+      file: scripts/matching/universalEntityMatcher.js
+      key_change: Added same-location check at TOP of universalCompareTo() BEFORE routing
+      new_functions:
+        - extractNameFromEntity() (lines 268-277)
+        - extractContactInfoFromEntity() (lines 284-293)
+        - compareSameLocationEntities() (lines 303-366)
+      modified_function: universalCompareTo() (lines 378-400)
 
-# SESSION HISTORY REFERENCE
-# Detailed session logs for Dec 8-15, 2025 have been migrated to reference_sessionHistory.md
-# This includes: key preservation, keyed database migration, NonHumanName, email matching,
-# score discrepancy fixes, permutation memory fix, fire number collision handler
+    test_results:
+      sampled_build: ~1500 entities
+      fire_72_groups: 13 groups found
+      problem_groups: 0 (all suffixed fire#s now in separate groups)
+      diagnostic_output: "✓ SUCCESS: No VisionAppraisal same-location grouping bugs detected!"
+
+    next_step: Run full database build for final verification, then proceed to CSV export
+
+  dec18_session2:
+    - Added Alternatives.deduplicate() method in aliasClasses.js (lines 378-395)
+    - Fixed utils.js syntax error (nested block comment with JSDoc)
+    - Added ROOT_CAUSE_DEBUGGING_RULE to CLAUDE.md
+
+  dec18_session1:
+    - Implemented deep consensus building for EntityGroup consensus entities
+    - Removed minimum threshold for candidate category
+    - Full database test passed (The Nature Conservancy 116 members)
+
+  dec17_evening:
+    - Implemented threshold-based secondary address exclusion
+    - Implemented new contactInfo weighting logic
+    - Swapped phase 3 and 4 (VisionAppraisal Individuals before Bloomerang)
+
+  dec17_earlier:
+    - Implemented same-location entity comparison (secondary addresses only)
+    - Fixed extractFireNumberFromEntity to check constructor.name === 'FireNumber'
 
 working_directory: /home/robert-benjamin/RPBprojects/VisionAppraisal/BIRAVA2025
 platform: linux

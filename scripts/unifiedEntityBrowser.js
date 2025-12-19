@@ -547,6 +547,24 @@ function showAllEntities() {
 }
 
 /**
+ * Refresh the Unified Browser display when data is already loaded
+ * (e.g., when loaded via EntityGroup Browser or other means)
+ */
+function refreshUnifiedBrowserDisplay() {
+    if (!hasLoadedData()) {
+        showUnifiedStatus('No data loaded. Use "Load All Data Sources" or load via EntityGroup Browser first.', 'error');
+        return;
+    }
+
+    showUnifiedStatus('Refreshing display...', 'loading');
+    showAllEntities();
+    showUnifiedStatus('Display refreshed successfully', 'success');
+}
+
+// Export for HTML onclick
+window.refreshUnifiedBrowserDisplay = refreshUnifiedBrowserDisplay;
+
+/**
  * Apply current filters and search
  */
 function applyCurrentFilters() {
@@ -1624,7 +1642,6 @@ async function analyzeSelectedEntityMatches() {
             console.log('  -> This fallback is BROKEN for cross-type comparisons!');
             matchResults = performBasicMatchAnalysis(entity, entityWrapper);
         }
-        console.log('=== END DIAGNOSTIC ===')
 
         // Display results in a new window
         displayMatchAnalysisResults(entityWrapper, matchResults);
@@ -2621,11 +2638,13 @@ function reconcileMatch(baseSource, baseKeyType, baseKeyValue, baseAccountNumber
         baseKeyValue,
         baseAccountNumber,
         baseHeadStatus,
+        baseDatabaseKey,
         targetSource,
         targetKeyType,
         targetKeyValue,
         targetAccountNumber,
-        targetHeadStatus
+        targetHeadStatus,
+        targetDatabaseKey
     });
 
     // Display the reconciliation modal
@@ -3029,44 +3048,29 @@ function displayReconciliationModal(data) {
     htmlContent += 'function viewEntityDetails(which) {';
     htmlContent += '  var metadata = window._reconcileMetadata;';
     htmlContent += '  if (!metadata) { alert("Metadata not available"); return; }';
-    htmlContent += '  var source, keyType, keyValue, accountNumber, headStatus;';
+    htmlContent += '  var source, databaseKey;';
     htmlContent += '  if (which === "base") {';
     htmlContent += '    source = metadata.baseSource;';
-    htmlContent += '    keyType = metadata.baseKeyType;';
-    htmlContent += '    keyValue = metadata.baseKeyValue;';
-    htmlContent += '    accountNumber = metadata.baseAccountNumber;';
-    htmlContent += '    headStatus = metadata.baseHeadStatus;';
+    htmlContent += '    databaseKey = metadata.baseDatabaseKey;';
     htmlContent += '  } else {';
     htmlContent += '    source = metadata.targetSource;';
-    htmlContent += '    keyType = metadata.targetKeyType;';
-    htmlContent += '    keyValue = metadata.targetKeyValue;';
-    htmlContent += '    accountNumber = metadata.targetAccountNumber;';
-    htmlContent += '    headStatus = metadata.targetHeadStatus;';
+    htmlContent += '    databaseKey = metadata.targetDatabaseKey;';
     htmlContent += '  }';
-    htmlContent += '  if (!window.opener || (!window.opener.unifiedEntityDatabase && !window.opener.workingLoadedEntities)) {';
-    htmlContent += '    alert("Parent window not available. Please keep the main browser window open.");';
+    htmlContent += '  var db = window.opener.getEntityDatabase ? window.opener.getEntityDatabase() : null;';
+    htmlContent += '  if (!db) {';
+    htmlContent += '    alert("Entity database not available. Please keep the main browser window open.");';
     htmlContent += '    return;';
     htmlContent += '  }';
-    htmlContent += '  var entity = null;';
-    htmlContent += '  var entityKey = keyType + ":" + keyValue;';
-    htmlContent += '  if (source === "bloomerang") {';
-    htmlContent += '    if (window.opener.getBloomerangEntityByAccountNumber && accountNumber) {';
-    htmlContent += '      entity = window.opener.getBloomerangEntityByAccountNumber(accountNumber, keyType, keyValue, headStatus);';
-    htmlContent += '    }';
-    htmlContent += '  } else if (source === "visionAppraisal") {';
-    htmlContent += '    if (window.opener.getVisionAppraisalEntity) {';
-    htmlContent += '      entity = window.opener.getVisionAppraisalEntity(keyType, keyValue);';
-    htmlContent += '    }';
-    htmlContent += '  }';
+    htmlContent += '  var entity = databaseKey ? db[databaseKey] : null;';
     htmlContent += '  if (!entity) {';
-    htmlContent += '    alert("Entity not found: " + source + " " + entityKey);';
+    htmlContent += '    alert("Entity not found: " + databaseKey);';
     htmlContent += '    return;';
     htmlContent += '  }';
     htmlContent += '  var entityType = entity.constructor ? entity.constructor.name : "Unknown";';
     htmlContent += '  var sourceName = source === "bloomerang" ? "Bloomerang" : "VisionAppraisal";';
     htmlContent += '  var entityWrapper = {';
     htmlContent += '    entity: entity,';
-    htmlContent += '    key: entityKey,';
+    htmlContent += '    key: databaseKey,';
     htmlContent += '    source: sourceName,';
     htmlContent += '    sourceKey: source,';
     htmlContent += '    entityType: entityType';

@@ -41,7 +41,7 @@ async function loadAllEntitiesIntoMemory() {
         await loadVisionAppraisalEntitiesWorking();
 
         // Step 4: Load Bloomerang collections
-        console.log('\n👥 Loading Bloomerang collections...');
+        // Note: loadBloomerangCollectionsWorking() logs its own "Loading Bloomerang collections..." message
 
         // CRITICAL: Get config file ID from input box (if available)
         // WARNING: If testing newly saved entities, you MUST manually enter the new config file ID
@@ -51,13 +51,9 @@ async function loadAllEntitiesIntoMemory() {
         if (typeof getBloomerangConfigFileId === 'function') {
             try {
                 configFileId = getBloomerangConfigFileId();
-                if (configFileId) {
-                    console.log('📄 Using config file ID from input:', configFileId);
-                    console.log('🔍 TESTING NOTE: If this is a test, verify this is the NEW config file ID from recent processing');
-                }
+                // Note: loadBloomerangCollectionsWorking() logs the config file ID it receives
             } catch (error) {
                 console.log('⚠️ No config file ID provided, using default folder search');
-                console.log('🚨 WARNING: This will load OLD entity files, not newly saved ones!');
                 configFileId = null;
             }
         }
@@ -135,7 +131,7 @@ async function loadAllEntitiesIntoMemory() {
         // Step 6: Build Keyed Database from loaded entities
         console.log('\n🔑 Building Keyed Database...');
         if (typeof buildUnifiedEntityDatabase === 'function') {
-            buildUnifiedEntityDatabase();
+            window.unifiedEntityDatabase = buildUnifiedEntityDatabase();
         } else {
             console.error('❌ buildUnifiedEntityDatabase not available - Keyed Database not built');
         }

@@ -1,7 +1,7 @@
 # Current Work In Progress - Nested Project Layers
 
 **Created**: December 7, 2025
-**Last Updated**: December 16, 2025
+**Last Updated**: December 18, 2025
 **Purpose**: Track the layered/nested projects currently in progress to prevent context loss during AI session transitions
 
 ---
@@ -10,18 +10,19 @@
 
 ```
 LAYER 1: EntityGroup Database (Step 4 of Roadmap)
-    Status: CODED_READY_FOR_USER_VERIFICATION
+    Status: USER_VERIFIED_WORKING (browser + persistence)
     Files: scripts/objectStructure/entityGroup.js, scripts/matching/entityGroupBuilder.js
+    Browser: scripts/entityGroupBrowser.js
     Reference: reference_projectRoadmap.md Section 4
          |
          v
 LAYER 2: Analyze Matches UI (6-feature enhancement)
-    Status: USER_VERIFIED_WORKING (True Match / Near Match checkboxes verified)
+    Status: USER_VERIFIED_WORKING
     Reference: reference_analyzeMatchesUI.md
          |
          v
 LAYER 3: Reconcile Button Feature
-    Status: USER_VERIFIED_WORKING (Name breakdown displays correctly)
+    Status: USER_VERIFIED_WORKING
     Reference: reference_reconcileFeatureSpec.md
          |
          v
@@ -31,18 +32,17 @@ LAYER 4: Entity Key Uniqueness Fix
          |
          v
 LAYER 5: Detailed compareTo Parameter Flow
-    Status: STEPS 1-5 USER_VERIFIED_WORKING, Step 6 (CSS) pending (minor)
+    Status: USER_VERIFIED_WORKING (Step 6 CSS minor)
     Reference: reference_compareToDirectImplementationPlan.md
          |
          v
 LAYER 6: compareTo Architecture (4 phases)
-    Status: ALL 4 PHASES TESTED WORKING
+    Status: USER_VERIFIED_WORKING
     Reference: reference_compareToDirectImplementationPlan.md
          |
          v
 LAYER 7: Fire Number Collision Handler
     Status: USER_VERIFIED_WORKING (ENABLED)
-    Disable flag: COLLISION_HANDLER_DISABLED = false
     Reference: reference_fireNumberCollisionPlan.md
 ```
 
@@ -50,9 +50,11 @@ LAYER 7: Fire Number Collision Handler
 
 ## Current Status Summary
 
-**LAYER 1 ENTITYGROUP DATABASE: CODED_READY_FOR_USER_VERIFICATION**
+**ALL FOUNDATIONAL LAYERS: USER_VERIFIED_WORKING**
 
-### Test Results (December 16, 2025)
+### EntityGroup System (Layer 1)
+
+#### Core Implementation - USER_VERIFIED_WORKING
 | Metric | Value |
 |--------|-------|
 | Total Groups | 2291 |
@@ -63,132 +65,79 @@ LAYER 7: Fire Number Collision Handler
 | Entities Assigned | 4097 |
 | Near Misses | 202 |
 
-### Files Created
-- `scripts/objectStructure/entityGroup.js` - EntityGroup and EntityGroupDatabase classes
-- `scripts/matching/entityGroupBuilder.js` - 5-phase construction algorithm
+#### Browser Tool - USER_VERIFIED_WORKING
+File: `scripts/entityGroupBrowser.js`
 
-### Files Modified
-- `index.html` - Added script includes
-- `scripts/unifiedEntityBrowser.js` - Exported isTrueMatch, isNearMatch, MATCH_CRITERIA
+Features:
+- Load EntityGroup database from Google Drive
+- Build New button (constructs from loaded entities, auto-saves to Google Drive)
+- Filter (all, multi-member, single-member, prospects, donors, near misses)
+- Sort (index, member count, name)
+- Search (name, address, member keys)
+- View Group Details modal with View Details buttons for all entities
+- Group Stats modal
+- Export to CSV
+- File ID persistence in localStorage
 
-### 5-Phase Construction Algorithm
-1. **Phase 1**: Bloomerang Households (426 found)
-2. **Phase 2**: VisionAppraisal Households (1406 processed)
-3. **Phase 3**: Bloomerang Individuals (remaining after Phase 1)
-4. **Phase 4**: VisionAppraisal Individuals (remaining after Phase 2)
-5. **Phase 5**: Remaining entity types (Business, LegalConstruct)
+#### Persistence - USER_VERIFIED_WORKING
+- Reference file companion (lightweight group membership lookup)
+- Two input boxes: Database File ID, Reference File ID
+- "Save to File IDs" button
+- "Save as New Files" button
+- buildEntityGroupDatabase() auto-saves both files to NEW locations
 
-### Pending Features
-- Browser/viewing tools for EntityGroups
-- CSV output for EntityGroups
-- Google Drive persistence (save/load)
-- Consensus entity synthesis (_synthesizeConsensus is placeholder)
+#### Pending Features
+- CSV output enhancement (more detailed format)
+- Alias consensus integration testing
+
+---
+
+## Same-Location Entity Comparison (Dec 17-18, 2025)
+
+**Purpose**: Prevent inflated contactInfo similarity for entities at same physical location.
+
+**Trigger Condition**: Two Block Island entities with suffixed fire numbers sharing same base (e.g., 72J vs 72W).
+
+**Behavior**: When detected, uses `compareSecondaryAddressesOnly()` instead of full contactInfo comparison.
+
+**Status**: FIX_IMPLEMENTED_READY_FOR_VERIFICATION (Dec 18, 2025)
+
+### Dec 17 - Initial Implementation
+**Files Affected**:
+- `scripts/utils.js` - Detection functions and entityWeightedComparison modification
+- `scripts/matching/universalEntityMatcher.js` - compareIndividualToEntityDirect modification
+
+### Dec 18 - universalCompareTo Fix (Session 3)
+**Problem Discovered**: Household comparison functions lost fire number context when iterating over embedded individuals.
+
+**Root Cause**: `universalCompareTo()` routed to specialized functions (compareHouseholdToHousehold, etc.) which compared embedded individuals that lacked fire numbers.
+
+**Fix Implemented**: Added same-location check at TOP of `universalCompareTo()` BEFORE routing:
+- Added `extractNameFromEntity()` helper (lines 268-277)
+- Added `extractContactInfoFromEntity()` helper (lines 284-293)
+- Added `compareSameLocationEntities()` function (lines 303-366)
+- Modified `universalCompareTo()` to check same-location FIRST (lines 378-400)
+
+**Test Results**: Sampled database build showed 0 problem groups for fire# 72 entities.
+
+**Reference**: reference_sameLocationFix.md for full specification
 
 ---
 
 ## Completed Foundational Work
 
-### Keyed Database Migration (Dec 14-15, 2025) - USER_VERIFIED_WORKING
+### Keyed Database Migration - USER_VERIFIED_WORKING
 - All 6 migration phases complete
 - Reference: reference_keyedDatabaseMigration.md
 
-### Key Preservation (Dec 15, 2025) - USER_VERIFIED_WORKING
-- Database keys flow through entire system (findBestMatches → reconcileMatch)
+### Key Preservation - USER_VERIFIED_WORKING
+- Database keys flow through entire system
 - Reference: reference_keyPreservationPlan.md
 
-### True Match / Near Match Criteria (Dec 15-16, 2025) - USER_VERIFIED_WORKING
-- isTrueMatch() and isNearMatch() functions in unifiedEntityBrowser.js
-- MATCH_CRITERIA configuration exported for use by EntityGroup construction
-- Checkboxes in Analyze Matches UI auto-detect match status
-
-### NonHumanName Implementation (Dec 14, 2025) - USER_VERIFIED_WORKING
-- NonHumanName class for Business/LegalConstruct entities
-
-### Email Matching Improvement (Dec 14, 2025) - USER_VERIFIED_WORKING
-- Split local part (0.8 fuzzy) + domain (0.2 exact)
-
-### Fire Number Collision Handler (Dec 8, 2025) - USER_VERIFIED_WORKING
-- Stats: {merged: 8, suffixed: 59, unique_output: 2309}
-- COLLISION_HANDLER_DISABLED = false (ENABLED)
-
----
-
-## Layer 2: Analyze Matches UI Enhancement
-
-### Six Features
-| # | Feature | Status |
-|---|---------|--------|
-| 1 | View Details button on each row | USER_VERIFIED_WORKING |
-| 2 | Complete name + one-line address display | USER_VERIFIED_WORKING |
-| 3 | Top Matches summary section | USER_VERIFIED_WORKING |
-| 4 | 98th percentile in filter row | USER_VERIFIED_WORKING |
-| 5 | CSV export option | CODED_NOT_TESTED |
-| 6 | True Match / Near Match checkboxes | USER_VERIFIED_WORKING |
-
----
-
-## Layer 3: Reconcile Button Feature
-
-### Status: USER_VERIFIED_WORKING
-- Name Component Breakdown table displays correctly
-- Shows weights, similarities, and contributions for each component
-- View Details buttons added to both Base Entity and Target Entity cards
-
-### Critical Lesson
-Do NOT use ${...} interpolations inside `<script>` blocks in template literals.
-
----
-
-## Layer 4: Entity Key Uniqueness
-
-### Status: USER_VERIFIED_WORKING
-
-### Key Formats
-- **Bloomerang**: `bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>`
-- **VisionAppraisal**: `visionAppraisal:<locationType>:<locationValue>`
-
----
-
-## Layer 5: Detailed compareTo Parameter Flow
-
-### Status: STEPS 1-5 USER_VERIFIED_WORKING
-
-### Solution
-Updated entire call chain to pass detailed parameter:
-```
-compareTo(other, detailed=false)
-  → genericObjectCompareTo(obj1, obj2, excludedProperties, detailed=false)
-    → comparisonCalculator.call(obj1, obj2, detailed)
-```
-
-### Remaining
-- Step 6: Add CSS styling for reconciliation display (minor polish)
-
----
-
-## Layer 6: compareTo Architecture
-
-### Status: ALL 4 PHASES TESTED WORKING
-- Phase 1: IndividualName - TESTED WORKING
-- Phase 2: Address - TESTED WORKING
-- Phase 3: ContactInfo - TESTED WORKING
-- Phase 4: Entity - TESTED WORKING
-
-See: reference_compareToDirectImplementationPlan.md
-
----
-
-## Layer 7: Fire Number Collision Handler
-
-### Status: USER_VERIFIED_WORKING (December 8, 2025)
-- Located in: scripts/dataSources/fireNumberCollisionHandler.js
-- COLLISION_HANDLER_DISABLED = false (ENABLED)
-- Uses crossTypeNameComparison from utils.js
-
-### Test Stats
-- Merged same owner: 8
-- Suffixed different owner: 59
-- Unique entities in output: 2309
+### Comparison Architecture - USER_VERIFIED_WORKING
+- All 4 phases of compareTo architecture working
+- Detailed parameter flow working
+- Reference: reference_compareToDirectImplementationPlan.md
 
 ---
 
@@ -206,15 +155,17 @@ selection_rule: "98th percentile OR top 10; include all 100% matches beyond that
 
 ---
 
-## Critical Lessons Preserved
+## Critical Lessons
 
 1. **Template Literals**: Do NOT use ${...} interpolations inside `<script>` blocks
-2. **Key Changes**: When adding new key components, ADD to existing format, do NOT replace elements
-3. **Source Identification**: Use sourceMap-based test (locationIdentifier.primaryAlias.sourceMap contains 'bloomerang'), NOT accountNumber property
-4. **Fire Number Collision**: Cannot use full universalCompareTo - entities have same primary address; must use NAME ONLY + SECONDARY ADDRESS ONLY comparison
-5. **Key Preservation**: Database keys generated ONLY during database building; once loaded, keys travel with entities through all flows
+2. **Key Changes**: When adding new key components, ADD to existing format, do NOT replace
+3. **Fire Number Collision**: Must use secondary addresses only (same primary address)
+4. **Same-Location Entities**: Entities with same-base fire numbers need special comparison
+5. **OAuth Token Expiration**: Long operations must save promptly (tokens expire after 1 hour)
+6. **Code Path Verification**: Use diagnostic console.logs before making changes
+7. **Multiple Comparison Entry Points**: Changes may be needed in both `entityWeightedComparison` and `compareIndividualToEntityDirect`
 
 ---
 
-**Document Version**: 2.0
-**Last Updated**: December 16, 2025
+**Document Version**: 4.0
+**Last Updated**: December 18, 2025

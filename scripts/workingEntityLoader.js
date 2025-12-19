@@ -259,14 +259,12 @@ async function loadBloomerangCollectionsWorking(configFileId = null) {
         if (configFileId) {
             // Use specific config file ID provided
             console.log('📄 Using provided config file ID:', configFileId);
-            console.log('🔍 DEBUG: This is the config file that tells us which entity files to load');
             const configResponse = await gapi.client.drive.files.get({
                 fileId: configFileId,
                 alt: 'media'
             });
             config = JSON.parse(configResponse.body);
             console.log('📄 Config loaded:', config.metadata?.description || 'Config file');
-            console.log('🔍 DEBUG: Config entity file IDs:', config.entities || 'NO ENTITIES IN CONFIG');
 
         } else {
             // Fall back to original folder search method
@@ -296,15 +294,12 @@ async function loadBloomerangCollectionsWorking(configFileId = null) {
         workingLoadedEntities.bloomerang = {};
 
         for (const [type, fileId] of Object.entries(fileIds)) {
-            console.log(`🔍 DEBUG: Loading ${type} entities from file ID: ${fileId}`);
-            console.log(`🔍 DEBUG: This file was created when? Check metadata...`);
             const response = await gapi.client.drive.files.get({fileId, alt: 'media'});
 
             // CRITICAL: Use deserializeWithTypes to reconstruct class instances with methods
             // This ensures IndividualName objects have compareTo() method and comparisonCalculator
             let collectionData;
             if (typeof deserializeWithTypes === 'function') {
-                console.log(`🔄 Using deserializeWithTypes for ${type} to restore class instances`);
                 collectionData = deserializeWithTypes(response.body);
             } else {
                 console.warn(`⚠️  deserializeWithTypes not available for ${type} - falling back to JSON.parse (methods will not be available)`);
@@ -313,8 +308,6 @@ async function loadBloomerangCollectionsWorking(configFileId = null) {
 
             workingLoadedEntities.bloomerang[type] = collectionData;
             console.log(`✅ ${type}: ${collectionData.metadata.totalEntities} entities`);
-            console.log(`🔍 DEBUG: ${type} entities created at:`, collectionData.metadata.created);
-            console.log(`🔍 DEBUG: Are these the entities with secondary addresses we just processed?`);
         }
 
         workingLoadedEntities.bloomerang.loaded = true;

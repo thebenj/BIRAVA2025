@@ -67,7 +67,7 @@ class AttributedTerm {
         // Weighted comparison architecture properties
         this.comparisonWeights = null;                    // Object: {propName: weight, ...}
         this.comparisonCalculatorName = 'defaultWeightedComparison';  // Serializable string name
-        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
+        this.comparisonCalculator = window.resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
     }
 
     /**
@@ -188,7 +188,7 @@ class AttributedTerm {
         // Restore comparison properties from serialized data if present
         if (data.comparisonCalculatorName) {
             term.comparisonCalculatorName = data.comparisonCalculatorName;
-            term.comparisonCalculator = resolveComparisonCalculator(data.comparisonCalculatorName);
+            term.comparisonCalculator = window.resolveComparisonCalculator(data.comparisonCalculatorName);
         }
         if (data.comparisonWeights) {
             term.comparisonWeights = data.comparisonWeights;
@@ -371,6 +371,30 @@ class Aliases {
     }
 
     /**
+     * Deduplicate each category by removing identical entries.
+     * Two entries are considered identical if their trimmed term values match exactly (case-sensitive).
+     * Each category (homonyms, synonyms, candidates) is deduplicated independently.
+     */
+    deduplicate() {
+        // Helper to deduplicate an array of AttributedTerms by trimmed term value
+        const dedupeArray = (arr) => {
+            const seen = new Set();
+            return arr.filter(item => {
+                const key = (item.term || '').toString().trim();
+                if (seen.has(key)) {
+                    return false;
+                }
+                seen.add(key);
+                return true;
+            });
+        };
+
+        this.homonyms = dedupeArray(this.homonyms);
+        this.synonyms = dedupeArray(this.synonyms);
+        this.candidates = dedupeArray(this.candidates);
+    }
+
+    /**
      * LEGACY: Serialize Aliases to JSON-compatible object
      * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
      * @returns {Object} Serialized representation
@@ -422,7 +446,7 @@ class Aliased {
         // Weighted comparison architecture properties
         this.comparisonWeights = null;                    // Object: {propName: weight, ...}
         this.comparisonCalculatorName = 'defaultWeightedComparison';  // Serializable string name
-        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
+        this.comparisonCalculator = window.resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
     }
 
     /**
@@ -540,7 +564,7 @@ class Aliased {
         // Restore comparison properties from serialized data if present
         if (data.comparisonCalculatorName) {
             aliased.comparisonCalculatorName = data.comparisonCalculatorName;
-            aliased.comparisonCalculator = resolveComparisonCalculator(data.comparisonCalculatorName);
+            aliased.comparisonCalculator = window.resolveComparisonCalculator(data.comparisonCalculatorName);
         }
         if (data.comparisonWeights) {
             aliased.comparisonWeights = data.comparisonWeights;
@@ -572,7 +596,7 @@ class Aliased {
      * @param {Object} thresholds - Categorization thresholds
      * @param {number} thresholds.homonym - Minimum similarity for homonym (e.g., 0.875)
      * @param {number} thresholds.synonym - Minimum similarity for synonym (e.g., 0.845)
-     * @param {number} thresholds.candidate - Minimum similarity for candidate (e.g., 0.5)
+     * @param {number} thresholds.candidate - (Unused) No minimum for candidates - all variants below synonym become candidates
      * @returns {Aliased|null} New Aliased instance with populated alternatives, or null if empty input
      */
     static createConsensus(aliasedObjects, thresholds) {
@@ -637,7 +661,7 @@ class Aliased {
         }
         if (bestObject.comparisonCalculatorName) {
             consensus.comparisonCalculatorName = bestObject.comparisonCalculatorName;
-            consensus.comparisonCalculator = resolveComparisonCalculator(bestObject.comparisonCalculatorName);
+            consensus.comparisonCalculator = window.resolveComparisonCalculator(bestObject.comparisonCalculatorName);
         }
 
         // Step 3: Categorize other primaries into alternatives
@@ -648,12 +672,14 @@ class Aliased {
             const similarity = similarityScores[bestIndex][i];
 
             // Add other's primary to appropriate category
+            // Note: No minimum threshold for candidates - all non-homonym/synonym variants are captured
             if (otherObject.primaryAlias) {
                 if (similarity >= t.homonym) {
                     consensus.alternatives.add(otherObject.primaryAlias, 'homonyms');
                 } else if (similarity >= t.synonym) {
                     consensus.alternatives.add(otherObject.primaryAlias, 'synonyms');
-                } else if (similarity >= t.candidate) {
+                } else {
+                    // All other variants become candidates (no minimum threshold)
                     consensus.alternatives.add(otherObject.primaryAlias, 'candidates');
                 }
             }
@@ -669,6 +695,9 @@ class Aliased {
             consensus._mergeSourceAlternatives(bestObject.alternatives, 1.0, t);
         }
 
+        // Step 5: Deduplicate each alternatives category
+        consensus.alternatives.deduplicate();
+
         return consensus;
     }
 
@@ -680,7 +709,7 @@ class Aliased {
      * @param {Object} thresholds - Categorization thresholds
      * @param {number} thresholds.homonym - Minimum similarity for homonym (e.g., 0.875)
      * @param {number} thresholds.synonym - Minimum similarity for synonym (e.g., 0.845)
-     * @param {number} thresholds.candidate - Minimum similarity for candidate (e.g., 0.5)
+     * @param {number} thresholds.candidate - (Unused) No minimum for candidates - all variants below synonym become candidates
      */
     mergeAlternatives(otherObjects, thresholds) {
         if (!otherObjects || otherObjects.length === 0) return;
@@ -707,6 +736,7 @@ class Aliased {
             }
 
             // Add other's primary to appropriate category
+            // Note: No minimum threshold for candidates - all non-homonym/synonym variants are captured
             if (otherObject.primaryAlias) {
                 // Don't add if it matches our primary
                 if (otherObject.primaryAlias.term !== this.primaryAlias.term) {
@@ -714,7 +744,8 @@ class Aliased {
                         this.alternatives.add(otherObject.primaryAlias, 'homonyms');
                     } else if (similarity >= t.synonym) {
                         this.alternatives.add(otherObject.primaryAlias, 'synonyms');
-                    } else if (similarity >= t.candidate) {
+                    } else {
+                        // All other variants become candidates (no minimum threshold)
                         this.alternatives.add(otherObject.primaryAlias, 'candidates');
                     }
                 }
@@ -737,13 +768,8 @@ class Aliased {
      */
     _mergeSourceAlternatives(sourceAlternatives, sourceSimilarity, t) {
         // If source is highly similar (homonym-level), its alternatives get promoted
-        // If source is moderately similar, its alternatives become candidates
-        // If source is dissimilar, we don't merge its alternatives
-
-        if (sourceSimilarity < t.candidate) {
-            // Source too dissimilar - don't merge its alternatives
-            return;
-        }
+        // If source is moderately similar or dissimilar, its alternatives become candidates
+        // No minimum threshold - all alternatives are captured
 
         const allSourceTerms = sourceAlternatives.getAllAttributedTerms();
 
@@ -765,8 +791,10 @@ class Aliased {
             } else if (sourceSimilarity >= t.synonym) {
                 // Source is a synonym - demote all its alternatives to candidates
                 this.alternatives.add(term, 'candidates');
+            } else {
+                // Source is dissimilar - all its alternatives become candidates
+                this.alternatives.add(term, 'candidates');
             }
-            // If source similarity < synonym threshold but >= candidate, we already skipped above
         }
     }
 
@@ -1727,7 +1755,7 @@ class Address extends ComplexIdentifiers {
             zipCode: 'conditional'
         };
         this.comparisonCalculatorName = 'addressWeightedComparison';
-        this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
+        this.comparisonCalculator = window.resolveComparisonCalculator(this.comparisonCalculatorName);
     }
 
     /**

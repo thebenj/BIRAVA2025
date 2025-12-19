@@ -638,9 +638,12 @@
                         </select>
                     </div>
 
-                    <div class="control-group" style="display: flex; align-items: flex-end;">
+                    <div class="control-group" style="display: flex; align-items: flex-end; gap: 10px;">
                         <button id="unifiedLoadDataBtn" class="action-button" style="background-color: #28a745; padding: 10px 20px; font-weight: 600;">
                             📁 Load All Data Sources
+                        </button>
+                        <button id="unifiedRefreshDisplayBtn" class="action-button" style="background-color: #17a2b8; padding: 10px 20px; font-weight: 600;" onclick="refreshUnifiedBrowserDisplay()">
+                            🔄 Refresh Display
                         </button>
                     </div>
                 </div>
@@ -715,6 +718,10 @@
                     <button id="entityGroupBuildBtn" class="action-button" style="background-color: #ff9800; padding: 10px 20px; font-weight: 600;">
                         🔨 Build New
                     </button>
+                    <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; color: #495057; cursor: pointer;">
+                        <input type="checkbox" id="loadOverrideRulesCheckbox" checked style="cursor: pointer;">
+                        Load override rules
+                    </label>
                     <span style="color: #999; margin: 0 5px;">|</span>
                     <button id="entityGroupSaveToFileIdBtn" class="action-button" style="background-color: #17a2b8; padding: 10px 16px; font-weight: 600;">
                         💾 Save to File IDs
@@ -790,6 +797,31 @@
                 <button id="entityGroupViewDetailsBtn" class="action-button">👁️ View Group Details</button>
                 <button id="entityGroupExportBtn" class="action-button">📄 Export Groups</button>
                 <button id="entityGroupStatsBtn" class="action-button">📊 Group Stats</button>
+            </div>
+            <div class="action-buttons" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+                <button id="csvExportBtn" class="action-button" onclick="downloadCSVExport()" style="background: #28a745; color: white;">📥 Export CSV (Prospects + Donors)</button>
+                <label style="display: inline-flex; align-items: center; margin-left: 15px; font-size: 13px;">
+                    <input type="checkbox" id="csvIncludeNearMisses" checked style="margin-right: 5px;">
+                    Include Near Misses
+                </label>
+            </div>
+
+            <!-- Entity Comparison Tool -->
+            <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #495057;">Entity Comparison Tool</div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <input type="text" id="compareEntityKey1" placeholder="Entity 1 Key (e.g., visionAppraisal:FireNumber:1418)"
+                           style="padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 12px; font-family: monospace;">
+                    <input type="text" id="compareEntityKey2" placeholder="Entity 2 Key (e.g., visionAppraisal:FireNumber:423)"
+                           style="padding: 6px 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 12px; font-family: monospace;">
+                    <button onclick="runEntityComparison()"
+                            style="padding: 8px 16px; background: #6c5ce7; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                        Compare Entities (output to console)
+                    </button>
+                </div>
+                <div style="font-size: 11px; color: #6c757d; margin-top: 6px;">
+                    Open browser DevTools (F12) to see comparison results
+                </div>
             </div>
         </div>
     </div>
@@ -1292,6 +1324,9 @@
 
     <!-- Unified Database Persistence -->
     <script src="./scripts/unifiedDatabasePersistence.js"></script>
+
+    <!-- Match Override Manager (must load before entityGroupBuilder) -->
+    <script src="./scripts/matching/matchOverrideManager.js"></script>
 
     <!-- Entity Group Builder -->
     <script src="./scripts/matching/entityGroupBuilder.js"></script>

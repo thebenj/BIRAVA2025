@@ -103,11 +103,11 @@ async function buildEntityGroupDatabase(options = {}) {
     log('\n--- Phase 2: VisionAppraisal Households ---');
     executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log);
 
-    log('\n--- Phase 3: Remaining Bloomerang Individuals ---');
-    executePhase3_BloomerangIndividuals(groupDb, entityDb, log);
-
-    log('\n--- Phase 4: Remaining VisionAppraisal Individuals ---');
+    log('\n--- Phase 3: Remaining VisionAppraisal Individuals ---');
     executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log);
+
+    log('\n--- Phase 4: Remaining Bloomerang Individuals ---');
+    executePhase3_BloomerangIndividuals(groupDb, entityDb, log);
 
     log('\n--- Phase 5: Remaining Entity Types ---');
     executePhase5_RemainingEntities(groupDb, entityDb, log);
@@ -162,6 +162,7 @@ function executePhase1_BloomerangHouseholds(groupDb, entityDb, log) {
     let groupsCreated = 0;
     let membersAdded = 0;
     let nearMissesAdded = 0;
+    let forcedAdded = 0;
 
     // Get all Bloomerang AggregateHouseholds
     const bloomerangHouseholds = getEntitiesBySourceAndType(entityDb, 'bloomerang', 'AggregateHousehold');
@@ -180,28 +181,55 @@ function executePhase1_BloomerangHouseholds(groupDb, entityDb, log) {
         group.updateBloomerangFlag(true);  // Bloomerang entity
         groupsCreated++;
 
-        // Find matches among all remaining unassigned entities
-        const matches = findMatchesForEntity(key, entity, groupDb, entityDb);
+        // Use 8-step algorithm to build group membership
+        const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
-        // Add true matches as members
-        for (const match of matches.trueMatches) {
+        // Add natural matches as members
+        for (const match of groupMembers.naturalMatches) {
+            const matchEntity = match.entity || entityDb[match.key];
             if (groupDb.addMemberToGroup(group.index, match.key)) {
                 group.updateBloomerangFlag(isBloomerangKey(match.key));
                 membersAdded++;
 
                 // If matched entity is a household, mark its individuals as assigned too
-                markHouseholdIndividualsAsAssigned(match.key, match.entity, groupDb, entityDb);
+                if (matchEntity) {
+                    markHouseholdIndividualsAsAssigned(match.key, matchEntity, groupDb, entityDb);
+                }
+            }
+        }
+
+        // Add founder forced matches
+        for (const forcedKey of groupMembers.founderForced) {
+            const forcedEntity = entityDb[forcedKey];
+            if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                forcedAdded++;
+                if (forcedEntity) {
+                    markHouseholdIndividualsAsAssigned(forcedKey, forcedEntity, groupDb, entityDb);
+                }
+            }
+        }
+
+        // Add forced-from-naturals
+        for (const forcedKey of groupMembers.forcedFromNaturals) {
+            const forcedEntity = entityDb[forcedKey];
+            if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                forcedAdded++;
+                if (forcedEntity) {
+                    markHouseholdIndividualsAsAssigned(forcedKey, forcedEntity, groupDb, entityDb);
+                }
             }
         }
 
         // Add near misses (not marked as assigned)
-        for (const nearMiss of matches.nearMisses) {
+        for (const nearMiss of groupMembers.nearMisses) {
             groupDb.addNearMissToGroup(group.index, nearMiss.key);
             nearMissesAdded++;
         }
     }
 
-    log(`Phase 1 complete: ${groupsCreated} groups created, ${membersAdded} additional members, ${nearMissesAdded} near misses`);
+    log(`Phase 1 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
 }
 
 /**
@@ -213,6 +241,7 @@ function executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log) {
     let groupsCreated = 0;
     let membersAdded = 0;
     let nearMissesAdded = 0;
+    let forcedAdded = 0;
 
     // Get all VisionAppraisal AggregateHouseholds
     const vaHouseholds = getEntitiesBySourceAndType(entityDb, 'visionAppraisal', 'AggregateHousehold');
@@ -231,27 +260,53 @@ function executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log) {
         group.updateBloomerangFlag(false);  // VisionAppraisal entity
         groupsCreated++;
 
-        // Find matches among all remaining unassigned entities
-        const matches = findMatchesForEntity(key, entity, groupDb, entityDb);
+        // Use 8-step algorithm to build group membership
+        const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
-        // Add true matches as members
-        for (const match of matches.trueMatches) {
+        // Add natural matches as members
+        for (const match of groupMembers.naturalMatches) {
+            const matchEntity = match.entity || entityDb[match.key];
             if (groupDb.addMemberToGroup(group.index, match.key)) {
                 group.updateBloomerangFlag(isBloomerangKey(match.key));
                 membersAdded++;
+                if (matchEntity) {
+                    markHouseholdIndividualsAsAssigned(match.key, matchEntity, groupDb, entityDb);
+                }
+            }
+        }
 
-                markHouseholdIndividualsAsAssigned(match.key, match.entity, groupDb, entityDb);
+        // Add founder forced matches
+        for (const forcedKey of groupMembers.founderForced) {
+            const forcedEntity = entityDb[forcedKey];
+            if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                forcedAdded++;
+                if (forcedEntity) {
+                    markHouseholdIndividualsAsAssigned(forcedKey, forcedEntity, groupDb, entityDb);
+                }
+            }
+        }
+
+        // Add forced-from-naturals
+        for (const forcedKey of groupMembers.forcedFromNaturals) {
+            const forcedEntity = entityDb[forcedKey];
+            if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                forcedAdded++;
+                if (forcedEntity) {
+                    markHouseholdIndividualsAsAssigned(forcedKey, forcedEntity, groupDb, entityDb);
+                }
             }
         }
 
         // Add near misses
-        for (const nearMiss of matches.nearMisses) {
+        for (const nearMiss of groupMembers.nearMisses) {
             groupDb.addNearMissToGroup(group.index, nearMiss.key);
             nearMissesAdded++;
         }
     }
 
-    log(`Phase 2 complete: ${groupsCreated} groups created, ${membersAdded} additional members, ${nearMissesAdded} near misses`);
+    log(`Phase 2 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
 }
 
 /**
@@ -262,6 +317,7 @@ function executePhase3_BloomerangIndividuals(groupDb, entityDb, log) {
     let groupsCreated = 0;
     let membersAdded = 0;
     let nearMissesAdded = 0;
+    let forcedAdded = 0;
 
     // Get all Bloomerang Individuals
     const bloomerangIndividuals = getEntitiesBySourceAndType(entityDb, 'bloomerang', 'Individual');
@@ -280,23 +336,41 @@ function executePhase3_BloomerangIndividuals(groupDb, entityDb, log) {
         group.updateBloomerangFlag(true);
         groupsCreated++;
 
-        // Find matches
-        const matches = findMatchesForEntity(key, entity, groupDb, entityDb);
+        // Use 8-step algorithm to build group membership
+        const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
-        for (const match of matches.trueMatches) {
+        // Add natural matches
+        for (const match of groupMembers.naturalMatches) {
             if (groupDb.addMemberToGroup(group.index, match.key)) {
                 group.updateBloomerangFlag(isBloomerangKey(match.key));
                 membersAdded++;
             }
         }
 
-        for (const nearMiss of matches.nearMisses) {
+        // Add founder forced matches
+        for (const forcedKey of groupMembers.founderForced) {
+            if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                forcedAdded++;
+            }
+        }
+
+        // Add forced-from-naturals
+        for (const forcedKey of groupMembers.forcedFromNaturals) {
+            if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                forcedAdded++;
+            }
+        }
+
+        // Add near misses
+        for (const nearMiss of groupMembers.nearMisses) {
             groupDb.addNearMissToGroup(group.index, nearMiss.key);
             nearMissesAdded++;
         }
     }
 
-    log(`Phase 3 complete: ${groupsCreated} groups created, ${membersAdded} additional members, ${nearMissesAdded} near misses`);
+    log(`Phase 3 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
 }
 
 /**
@@ -307,6 +381,7 @@ function executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log) {
     let groupsCreated = 0;
     let membersAdded = 0;
     let nearMissesAdded = 0;
+    let forcedAdded = 0;
 
     // Get all VisionAppraisal Individuals
     const vaIndividuals = getEntitiesBySourceAndType(entityDb, 'visionAppraisal', 'Individual');
@@ -325,23 +400,41 @@ function executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log) {
         group.updateBloomerangFlag(false);
         groupsCreated++;
 
-        // Find matches
-        const matches = findMatchesForEntity(key, entity, groupDb, entityDb);
+        // Use 8-step algorithm to build group membership
+        const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
-        for (const match of matches.trueMatches) {
+        // Add natural matches
+        for (const match of groupMembers.naturalMatches) {
             if (groupDb.addMemberToGroup(group.index, match.key)) {
                 group.updateBloomerangFlag(isBloomerangKey(match.key));
                 membersAdded++;
             }
         }
 
-        for (const nearMiss of matches.nearMisses) {
+        // Add founder forced matches
+        for (const forcedKey of groupMembers.founderForced) {
+            if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                forcedAdded++;
+            }
+        }
+
+        // Add forced-from-naturals
+        for (const forcedKey of groupMembers.forcedFromNaturals) {
+            if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                forcedAdded++;
+            }
+        }
+
+        // Add near misses
+        for (const nearMiss of groupMembers.nearMisses) {
             groupDb.addNearMissToGroup(group.index, nearMiss.key);
             nearMissesAdded++;
         }
     }
 
-    log(`Phase 4 complete: ${groupsCreated} groups created, ${membersAdded} additional members, ${nearMissesAdded} near misses`);
+    log(`Phase 4 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
 }
 
 /**
@@ -353,6 +446,7 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
     let groupsCreated = 0;
     let membersAdded = 0;
     let nearMissesAdded = 0;
+    let forcedAdded = 0;
 
     const otherTypes = ['Business', 'LegalConstruct', 'CompositeHousehold', 'NonHuman'];
 
@@ -369,16 +463,31 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
             group.updateBloomerangFlag(true);
             groupsCreated++;
 
-            const matches = findMatchesForEntity(key, entity, groupDb, entityDb);
+            // Use 8-step algorithm to build group membership
+            const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
-            for (const match of matches.trueMatches) {
+            for (const match of groupMembers.naturalMatches) {
                 if (groupDb.addMemberToGroup(group.index, match.key)) {
                     group.updateBloomerangFlag(isBloomerangKey(match.key));
                     membersAdded++;
                 }
             }
 
-            for (const nearMiss of matches.nearMisses) {
+            for (const forcedKey of groupMembers.founderForced) {
+                if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                    forcedAdded++;
+                }
+            }
+
+            for (const forcedKey of groupMembers.forcedFromNaturals) {
+                if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                    forcedAdded++;
+                }
+            }
+
+            for (const nearMiss of groupMembers.nearMisses) {
                 groupDb.addNearMissToGroup(group.index, nearMiss.key);
                 nearMissesAdded++;
             }
@@ -398,23 +507,38 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
             group.updateBloomerangFlag(false);
             groupsCreated++;
 
-            const matches = findMatchesForEntity(key, entity, groupDb, entityDb);
+            // Use 8-step algorithm to build group membership
+            const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
-            for (const match of matches.trueMatches) {
+            for (const match of groupMembers.naturalMatches) {
                 if (groupDb.addMemberToGroup(group.index, match.key)) {
                     group.updateBloomerangFlag(isBloomerangKey(match.key));
                     membersAdded++;
                 }
             }
 
-            for (const nearMiss of matches.nearMisses) {
+            for (const forcedKey of groupMembers.founderForced) {
+                if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                    forcedAdded++;
+                }
+            }
+
+            for (const forcedKey of groupMembers.forcedFromNaturals) {
+                if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                    forcedAdded++;
+                }
+            }
+
+            for (const nearMiss of groupMembers.nearMisses) {
                 groupDb.addNearMissToGroup(group.index, nearMiss.key);
                 nearMissesAdded++;
             }
         }
     }
 
-    log(`Phase 5 complete: ${groupsCreated} groups created, ${membersAdded} additional members, ${nearMissesAdded} near misses`);
+    log(`Phase 5 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
 }
 
 // =============================================================================
@@ -554,6 +678,10 @@ function findMatchesForEntity(baseKey, baseEntity, groupDb, entityDb) {
     const trueMatches = [];
     const nearMisses = [];
 
+    // Extract fire number from base entity once (for same-location detection)
+    const baseFn = (typeof extractFireNumberFromEntity === 'function')
+        ? extractFireNumberFromEntity(baseEntity) : null;
+
     for (const [targetKey, targetEntity] of Object.entries(entityDb)) {
         // Skip self
         if (targetKey === baseKey) continue;
@@ -599,6 +727,103 @@ function findMatchesForEntity(baseKey, baseEntity, groupDb, entityDb) {
     }
 
     return { trueMatches, nearMisses };
+}
+
+/**
+ * Build group membership for a founding entity using the 8-step algorithm.
+ * This implements the full match override system with priority hierarchy:
+ * Founder-forced > Natural matches > Forced-from-naturals
+ *
+ * @param {string} founderKey - Database key of the founding entity
+ * @param {Entity} founderEntity - The founding entity
+ * @param {EntityGroupDatabase} groupDb - The group database
+ * @param {Object} entityDb - The entity database
+ * @returns {Object} { naturalMatches, founderForced, forcedFromNaturals, nearMisses }
+ */
+function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
+    const overrideManager = window.matchOverrideManager;
+    const hasOverrides = overrideManager &&
+                         (overrideManager.forceMatchRules.length > 0 ||
+                          overrideManager.forceExcludeRules.length > 0);
+
+    // Step 1: Find natural matches from algorithmic comparison
+    const { trueMatches: rawNaturalMatches, nearMisses } = findMatchesForEntity(
+        founderKey, founderEntity, groupDb, entityDb
+    );
+
+    // If no override rules loaded, return simple result (backward compatible)
+    if (!hasOverrides) {
+        return {
+            naturalMatches: rawNaturalMatches,
+            founderForced: [],
+            forcedFromNaturals: [],
+            nearMisses: nearMisses
+        };
+    }
+
+    // Convert trueMatches to format expected by override manager
+    // (objects with .key and .score properties)
+    let naturalMatches = rawNaturalMatches.map(m => ({
+        key: m.key,
+        score: m.scores?.overall || 0,
+        entity: m.entity,
+        scores: m.scores
+    }));
+
+    // Step 2: Resolve exclusions among natural matches
+    // Priority: if one is also in founder's force-match list, it wins
+    const founderForceList = overrideManager.getForceMatchesFor(founderKey);
+    naturalMatches = overrideManager.resolveExclusionsWithPriority(
+        naturalMatches,
+        founderForceList
+    );
+
+    // Step 3: Generate founder forced matches (not already in naturalMatches)
+    const naturalMatchKeys = new Set(naturalMatches.map(m => m.key));
+    let founderForced = founderForceList.filter(key =>
+        !naturalMatchKeys.has(key) &&
+        !groupDb.isEntityAssigned(key) &&
+        entityDb[key]  // Key exists in database
+    );
+
+    // Step 4: Resolve exclusions among founder forced matches (stupid case - user error)
+    // Both are same tier, so use OnConflict rules
+    founderForced = overrideManager.resolveExclusionsOnConflict(founderForced);
+
+    // Step 5: Check founder forced vs natural matches (founder forced wins)
+    naturalMatches = overrideManager.removeExcludedByPriority(naturalMatches, founderForced);
+
+    // Step 6: Generate forced matches from surviving natural matches
+    let forcedFromNaturals = [];
+    const allCollectedKeys = new Set([
+        ...naturalMatches.map(m => m.key),
+        ...founderForced
+    ]);
+
+    for (const match of naturalMatches) {
+        const forcedKeys = overrideManager.getForceMatchesFor(match.key);
+        for (const key of forcedKeys) {
+            if (!allCollectedKeys.has(key) &&
+                !forcedFromNaturals.includes(key) &&
+                !groupDb.isEntityAssigned(key) &&
+                entityDb[key]) {
+                forcedFromNaturals.push(key);
+            }
+        }
+    }
+
+    // Step 7: Check forced-from-naturals vs founder forced (founder wins)
+    forcedFromNaturals = overrideManager.removeExcludedKeysByPriority(forcedFromNaturals, founderForced);
+
+    // Step 8: Resolve exclusions among forced-from-naturals
+    forcedFromNaturals = overrideManager.resolveExclusionsOnConflict(forcedFromNaturals);
+
+    return {
+        naturalMatches: naturalMatches,  // Array of {key, score, entity, scores}
+        founderForced: founderForced,    // Array of keys
+        forcedFromNaturals: forcedFromNaturals,  // Array of keys
+        nearMisses: nearMisses
+    };
 }
 
 /**
@@ -1081,6 +1306,7 @@ if (typeof module !== 'undefined' && module.exports) {
         getEntitiesBySourceAndType,
         isBloomerangKey,
         findMatchesForEntity,
+        buildGroupForFounder,
         createStratifiedSample,
         ENTITYGROUP_DATABASE_FILE_ID
     };
@@ -1100,6 +1326,7 @@ if (typeof window !== 'undefined') {
     window.getEntitiesBySourceAndType = getEntitiesBySourceAndType;
     window.isBloomerangKey = isBloomerangKey;
     window.findMatchesForEntity = findMatchesForEntity;
+    window.buildGroupForFounder = buildGroupForFounder;
     window.createStratifiedSample = createStratifiedSample;
     window.ENTITYGROUP_DATABASE_FILE_ID = ENTITYGROUP_DATABASE_FILE_ID;
 }

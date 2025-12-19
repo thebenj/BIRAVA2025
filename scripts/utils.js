@@ -621,7 +621,36 @@ function defaultWeightedComparison(otherObject, detailed = false) {
     }
 
     // Calculate final weighted similarity (0-1 range)
-    const weightedSimilarity = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+    // SPECIAL RULE: For IndividualName, if both sides have exactly 2 of 3 fields
+    // but are missing DIFFERENT fields, do NOT normalize - use full weight sum (1.0)
+    let effectiveTotalWeight = totalWeight;
+
+    const isIndividualNameComparison = this.comparisonWeights &&
+        'firstName' in this.comparisonWeights &&
+        'lastName' in this.comparisonWeights &&
+        'otherNames' in this.comparisonWeights;
+
+    if (isIndividualNameComparison) {
+        // Check which fields each side has populated
+        const nameFields = ['firstName', 'lastName', 'otherNames'];
+        const thisHas = nameFields.filter(f => this[f] && String(this[f]).trim() !== '');
+        const otherHas = nameFields.filter(f => otherObject[f] && String(otherObject[f]).trim() !== '');
+
+        // Both have exactly 2 fields populated?
+        if (thisHas.length === 2 && otherHas.length === 2) {
+            // Find which field each is missing
+            const thisMissing = nameFields.find(f => !thisHas.includes(f));
+            const otherMissing = nameFields.find(f => !otherHas.includes(f));
+
+            // If they're missing DIFFERENT fields, don't normalize
+            if (thisMissing !== otherMissing) {
+                // Use full weight (sum of all configured weights) instead of just compared fields
+                effectiveTotalWeight = Object.values(this.comparisonWeights).reduce((a, b) => a + b, 0);
+            }
+        }
+    }
+
+    const weightedSimilarity = effectiveTotalWeight > 0 ? totalWeightedScore / effectiveTotalWeight : 0;
 
     // For IndividualName objects, also calculate permutation-based score
     // and return the better of the two
@@ -752,6 +781,20 @@ function getComponentSimilarity(val1, val2) {
 }
 
 /**
+ * Get exact match (1 or 0) for street numbers
+ * Used for Block Island fire numbers where partial matches are not meaningful
+ * @param {AttributedTerm|string} num1 - First street number
+ * @param {AttributedTerm|string} num2 - Second street number
+ * @returns {number} 1 for exact match, 0 otherwise
+ */
+function getExactStreetNumberMatch(num1, num2) {
+    if (!num1 || !num2) return 0;
+    const str1 = num1.term !== undefined ? String(num1.term) : String(num1);
+    const str2 = num2.term !== undefined ? String(num2.term) : String(num2);
+    return str1.toLowerCase() === str2.toLowerCase() ? 1 : 0;
+}
+
+/**
  * Get similarity between two state values
  * For 2-letter state codes: exact match only (1.0 or 0.0)
  * For longer state names: use levenshteinSimilarity
@@ -804,8 +847,17 @@ function addressWeightedComparison(otherObject, detailed = false) {
     const thisIsPOBox = isPOBoxAddress(thisAddr);
     const otherIsPOBox = isPOBoxAddress(otherAddr);
 
-    // If either is a PO Box, use PO Box comparison for both
-    if (thisIsPOBox || otherIsPOBox) {
+    // If one is PO Box and one is NOT, compare only city/state/zip
+    // (A PO Box and a street address are different location types - can't compare specifics)
+    // Create stripped copies with only location data and pass to general comparison
+    if (thisIsPOBox !== otherIsPOBox) {
+        const strippedThis = { city: thisAddr.city, state: thisAddr.state, zipCode: thisAddr.zipCode };
+        const strippedOther = { city: otherAddr.city, state: otherAddr.state, zipCode: otherAddr.zipCode };
+        return compareGeneralStreetAddresses(strippedThis, strippedOther, detailed);
+    }
+
+    // If BOTH are PO Box, use PO Box comparison
+    if (thisIsPOBox && otherIsPOBox) {
         return comparePOBoxAddresses(thisAddr, otherAddr, detailed);
     }
 
@@ -938,25 +990,26 @@ function compareBlockIslandAddresses(addr1, addr2, detailed = false) {
 
     if (hasZip02807) {
         // Weights: streetNumber 0.85, streetName 0.15
-        const streetNumSim = getComponentSimilarity(addr1.streetNumber, addr2.streetNumber);
+        // Street number uses exact match (fire numbers must match exactly)
+        const streetNumSim = getExactStreetNumberMatch(addr1.streetNumber, addr2.streetNumber);
         const streetNameSim = getComponentSimilarity(addr1.streetName, addr2.streetName);
 
         result = round10(0.85 * streetNumSim + 0.15 * streetNameSim);
         if (detailed) {
             components = {
-                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 0.85, contribution: round10(0.85 * streetNumSim), method: 'levenshtein' },
+                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 0.85, contribution: round10(0.85 * streetNumSim), method: 'exactMatch' },
                 streetName: { baseValue: addr1.streetName || '', targetValue: addr2.streetName || '', similarity: round10(streetNameSim), weight: 0.15, contribution: round10(0.15 * streetNameSim), method: 'levenshtein' }
             };
             method = 'BlockIsland_withZip';
         }
     } else {
         // No zip but confirmed BI via street database + city
-        // Only compare street number
-        const streetNumSim = getComponentSimilarity(addr1.streetNumber, addr2.streetNumber);
+        // Only compare street number (exact match for fire numbers)
+        const streetNumSim = getExactStreetNumberMatch(addr1.streetNumber, addr2.streetNumber);
         result = round10(streetNumSim);
         if (detailed) {
             components = {
-                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 1.0, contribution: round10(streetNumSim), method: 'levenshtein' }
+                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 1.0, contribution: round10(streetNumSim), method: 'exactMatch' }
             };
             method = 'BlockIsland_noZip';
         }
@@ -1165,14 +1218,23 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
     }
 
     // Step 2: Find best secondary address match, excluding addresses used in primary match
+    // ONLY if the primary match was a true match (score >= MATCH_CRITERIA.trueMatch.contactInfoAlone)
     let secondarySimilarity = 0;
 
-    // Get secondary addresses, excluding any used in primary match
+    // Get the address exclusion threshold from MATCH_CRITERIA (default 0.87 if not available)
+    const addressExclusionThreshold = (typeof window !== 'undefined' && window.MATCH_CRITERIA)
+        ? window.MATCH_CRITERIA.trueMatch.contactInfoAlone
+        : 0.87;
+
+    // Only exclude secondary addresses from pool if primary match score meets true match threshold
+    const shouldExcludeFromPool = primarySimilarity >= addressExclusionThreshold;
+
+    // Get secondary addresses, excluding any used in primary match ONLY if match was strong enough
     const thisSecondaries = (thisCI.secondaryAddress || []).filter((addr, idx) => {
-        return addr && idx !== thisPrimaryMatchedIndex;
+        return addr && (!shouldExcludeFromPool || idx !== thisPrimaryMatchedIndex);
     });
     const otherSecondaries = (otherCI.secondaryAddress || []).filter((addr, idx) => {
-        return addr && idx !== otherPrimaryMatchedIndex;
+        return addr && (!shouldExcludeFromPool || idx !== otherPrimaryMatchedIndex);
     });
 
     // Also exclude primaryAddress if it was the matched one
@@ -1251,25 +1313,41 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
         }
     }
 
-    // Step 4: Determine which components have data to compare
-    // Only weight components where BOTH sides have data (don't penalize for missing data)
-    const hasPrimaryData = thisCI.primaryAddress && otherCI.primaryAddress;
-    const hasSecondaryData = thisSecondaries.length > 0 && otherSecondaries.length > 0;
+    // Step 4: Determine best address match and match type
+    // Find the single best address match across all comparisons
+    const hasAnyPrimaryMatch = primarySimilarity > 0;
+    const hasSecondaryMatch = secondarySimilarity > 0;
+    const hasAddressData = hasAnyPrimaryMatch || hasSecondaryMatch;
     const hasEmailData = thisEmail && otherEmail;
 
-    // Step 5: Apply weighting only to components with data
-    // Base weights: primary 0.6, secondary 0.2, email 0.2
-    const baseWeights = { primaryAddress: 0.6, secondaryAddress: 0.2, email: 0.2 };
+    // Determine best address similarity and whether it involved a primary address
+    let bestAddressSimilarity = 0;
+    let bestMatchType = null; // 'primary' or 'secondary'
+
+    if (hasAddressData) {
+        if (primarySimilarity >= secondarySimilarity) {
+            bestAddressSimilarity = primarySimilarity;
+            bestMatchType = 'primary'; // primary-to-primary or primary-to-secondary
+        } else {
+            bestAddressSimilarity = secondarySimilarity;
+            bestMatchType = 'secondary'; // secondary-to-secondary only
+        }
+    }
+
+    // Step 5: Apply weighting based on match type
+    // Primary involved (primary vs primary OR primary vs secondary): address 0.75, email 0.25
+    // Secondary to secondary only: address 0.65, email 0.35
+    // Weights are normalized if either component is missing
+    const baseWeights = bestMatchType === 'secondary'
+        ? { address: 0.65, email: 0.35 }
+        : { address: 0.75, email: 0.25 };
+
     let totalWeight = 0;
     let weightedSum = 0;
 
-    if (hasPrimaryData) {
-        weightedSum += baseWeights.primaryAddress * primarySimilarity;
-        totalWeight += baseWeights.primaryAddress;
-    }
-    if (hasSecondaryData) {
-        weightedSum += baseWeights.secondaryAddress * secondarySimilarity;
-        totalWeight += baseWeights.secondaryAddress;
+    if (hasAddressData) {
+        weightedSum += baseWeights.address * bestAddressSimilarity;
+        totalWeight += baseWeights.address;
     }
     if (hasEmailData) {
         weightedSum += baseWeights.email * emailSimilarity;
@@ -1296,37 +1374,30 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
     const components = {};
     let weightedValueSum = 0;
 
-    if (hasPrimaryData) {
-        const actualWeight = round10(baseWeights.primaryAddress / totalWeight);
-        const similarity = round10(primarySimilarity);
+    if (hasAddressData) {
+        const actualWeight = round10(baseWeights.address / totalWeight);
+        const similarity = round10(bestAddressSimilarity);
         const weightedValue = round10(actualWeight * similarity);
-        // Get subordinate address comparison details
+        // Get subordinate address comparison details if primary match was best
         let subordinateDetails = null;
-        if (matchedBaseAddress && matchedTargetAddress && typeof matchedBaseAddress.compareTo === 'function') {
+        if (bestMatchType === 'primary' && matchedBaseAddress && matchedTargetAddress && typeof matchedBaseAddress.compareTo === 'function') {
             subordinateDetails = matchedBaseAddress.compareTo(matchedTargetAddress, true);
         }
-        components.primaryAddress = {
+        components.bestAddress = {
             actualWeight: actualWeight,
             similarity: similarity,
             weightedValue: weightedValue,
-            baseValue: matchedBaseAddress ? (matchedBaseAddress.toString ? matchedBaseAddress.toString() : String(matchedBaseAddress)) : '',
-            targetValue: matchedTargetAddress ? (matchedTargetAddress.toString ? matchedTargetAddress.toString() : String(matchedTargetAddress)) : '',
-            matchDirection: matchDirection,
+            matchType: bestMatchType, // 'primary' or 'secondary'
+            primarySimilarity: round10(primarySimilarity),
+            secondarySimilarity: round10(secondarySimilarity),
+            baseValue: bestMatchType === 'primary' && matchedBaseAddress
+                ? (matchedBaseAddress.toString ? matchedBaseAddress.toString() : String(matchedBaseAddress))
+                : (thisSecondaries.length > 0 ? 'secondary addresses' : ''),
+            targetValue: bestMatchType === 'primary' && matchedTargetAddress
+                ? (matchedTargetAddress.toString ? matchedTargetAddress.toString() : String(matchedTargetAddress))
+                : (otherSecondaries.length > 0 ? 'secondary addresses' : ''),
+            matchDirection: bestMatchType === 'primary' ? matchDirection : 'secondary-to-secondary',
             subordinateDetails: subordinateDetails
-        };
-        weightedValueSum += weightedValue;
-    }
-
-    if (hasSecondaryData) {
-        const actualWeight = round10(baseWeights.secondaryAddress / totalWeight);
-        const similarity = round10(secondarySimilarity);
-        const weightedValue = round10(actualWeight * similarity);
-        components.secondaryAddress = {
-            actualWeight: actualWeight,
-            similarity: similarity,
-            weightedValue: weightedValue,
-            baseCount: thisSecondaries.length,
-            targetCount: otherSecondaries.length
         };
         weightedValueSum += weightedValue;
     }
@@ -1351,10 +1422,15 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
 
     // Include matched address details for reconciliation
     const addressMatch = {
-        baseAddress: matchedBaseAddress,
-        targetAddress: matchedTargetAddress,
-        matchDirection: matchDirection,
-        similarity: primarySimilarity
+        bestAddressSimilarity: bestAddressSimilarity,
+        matchType: bestMatchType,
+        primaryMatch: {
+            baseAddress: matchedBaseAddress,
+            targetAddress: matchedTargetAddress,
+            matchDirection: matchDirection,
+            similarity: primarySimilarity
+        },
+        secondarySimilarity: secondarySimilarity
     };
 
     return {
@@ -1403,28 +1479,50 @@ function entityWeightedComparison(otherObject, detailed = false) {
     const hasNameData = thisEntity.name && otherEntity.name &&
                         typeof thisEntity.name.compareTo === 'function';
     if (hasNameData) {
-        // Always get detailed result for name, extract score
-        const nameResult = thisEntity.name.compareTo(otherEntity.name, true);
-        if (typeof nameResult === 'number') {
-            nameSimilarity = nameResult;
-            nameDetailedResult = { overallSimilarity: nameResult };
-        } else {
-            nameSimilarity = nameResult.overallSimilarity;
-            nameDetailedResult = nameResult;
+        try {
+            // Always get detailed result for name, extract score
+            const nameResult = thisEntity.name.compareTo(otherEntity.name, true);
+            if (typeof nameResult === 'number') {
+                nameSimilarity = nameResult;
+                nameDetailedResult = { overallSimilarity: nameResult };
+            } else {
+                nameSimilarity = nameResult.overallSimilarity;
+                nameDetailedResult = nameResult;
+            }
+        } catch (nameError) {
+            // nameSimilarity remains null - will be treated as missing data
         }
     }
 
     const hasContactInfoData = thisEntity.contactInfo && otherEntity.contactInfo &&
                                typeof thisEntity.contactInfo.compareTo === 'function';
+
+    // Check for same-location scenario: when two Block Island entities have suffixed
+    // fire numbers with the same base (e.g., 72J vs 72W), they are different owners
+    // at the same physical property. Primary address comparison would be meaningless.
+    const isSameLocation = areSameLocationEntities(thisEntity, otherEntity);
+
     if (hasContactInfoData) {
-        // Always get detailed result for contactInfo, extract score
-        const contactResult = thisEntity.contactInfo.compareTo(otherEntity.contactInfo, true);
-        if (typeof contactResult === 'number') {
-            contactInfoSimilarity = contactResult;
-            contactInfoDetailedResult = { overallSimilarity: contactResult };
+        if (isSameLocation) {
+            // Same location: use secondary addresses only (primary addresses would match trivially)
+            contactInfoSimilarity = compareSecondaryAddressesOnly(thisEntity.contactInfo, otherEntity.contactInfo);
+            const fn1 = extractFireNumberFromEntity(thisEntity);
+            const fn2 = extractFireNumberFromEntity(otherEntity);
+            contactInfoDetailedResult = {
+                overallSimilarity: contactInfoSimilarity,
+                method: 'sameLocation_secondaryAddressesOnly',
+                note: `Same location (${fn1} vs ${fn2}): primary address excluded from comparison`
+            };
         } else {
-            contactInfoSimilarity = contactResult.overallSimilarity;
-            contactInfoDetailedResult = contactResult;
+            // Different locations: use full contactInfo comparison
+            const contactResult = thisEntity.contactInfo.compareTo(otherEntity.contactInfo, true);
+            if (typeof contactResult === 'number') {
+                contactInfoSimilarity = contactResult;
+                contactInfoDetailedResult = { overallSimilarity: contactResult };
+            } else {
+                contactInfoSimilarity = contactResult.overallSimilarity;
+                contactInfoDetailedResult = contactResult;
+            }
         }
     }
 
@@ -1467,7 +1565,7 @@ function entityWeightedComparison(otherObject, detailed = false) {
     let totalWeight = 0;
     let weightedSum = 0;
 
-    if (hasNameData) {
+    if (hasNameData && nameSimilarity !== null) {
         weightedSum += weights.name * nameSimilarity;
         totalWeight += weights.name;
     }
@@ -1513,7 +1611,9 @@ function entityWeightedComparison(otherObject, detailed = false) {
     const MISSING_CONTACTINFO_PENALTY = 0.03;
     let totalPenalty = 0;
 
-    if (!hasNameData) {
+    // Check if name data is truly missing (either no compareTo method or comparison threw error)
+    const nameDataMissing = !hasNameData || nameSimilarity === null;
+    if (nameDataMissing) {
         totalPenalty += MISSING_NAME_PENALTY;
     }
     if (!hasContactInfoData) {
@@ -2305,6 +2405,151 @@ function testAddressParsing() {
 // ============================================================================
 
 // ============================================================================
+// SAME-LOCATION ENTITY COMPARISON (SUFFIXED FIRE NUMBERS)
+// When two Block Island entities have suffixed fire numbers with the same base
+// (e.g., 72J vs 72W), they are different owners at the same physical location.
+// Primary address comparison would be meaningless, so we use secondary addresses only.
+// ============================================================================
+
+/**
+ * Extract fire number from an entity
+ * ONLY returns a value if the entity's locationIdentifier is actually a FireNumber type.
+ * Returns null for PID or other identifier types.
+ *
+ * @param {Entity} entity - Entity to extract fire number from
+ * @returns {string|null} Fire number as string, or null if not found or not a FireNumber type
+ */
+function extractFireNumberFromEntity(entity) {
+    if (!entity) return null;
+
+    // Direct fireNumber property (explicit fire number)
+    if (entity.fireNumber) {
+        return String(entity.fireNumber);
+    }
+
+    // Check locationIdentifier - but ONLY if it's actually a FireNumber type
+    if (entity.locationIdentifier) {
+        const locIdType = entity.locationIdentifier.constructor?.name;
+
+        // Only proceed if this is a FireNumber identifier, not PID or other types
+        if (locIdType === 'FireNumber') {
+            if (entity.locationIdentifier.primaryAlias?.term) {
+                return String(entity.locationIdentifier.primaryAlias.term);
+            }
+        }
+
+        // Check for nested fireNumber property (may exist on some entity structures)
+        if (entity.locationIdentifier.fireNumber) {
+            if (typeof entity.locationIdentifier.fireNumber === 'string' ||
+                typeof entity.locationIdentifier.fireNumber === 'number') {
+                return String(entity.locationIdentifier.fireNumber);
+            }
+            if (entity.locationIdentifier.fireNumber.primaryAlias?.term) {
+                return String(entity.locationIdentifier.fireNumber.primaryAlias.term);
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Check if a fire number has a letter suffix (indicating collision-resolved entity)
+ * Examples: "72J", "1510A", "234B" → true
+ * Examples: "72", "1510", "234" → false
+ * @param {string} fireNumber - Fire number to check
+ * @returns {boolean} True if has letter suffix
+ */
+function hasFireNumberSuffix(fireNumber) {
+    if (!fireNumber) return false;
+    // Fire number with suffix: digits followed by one or more letters at the end
+    return /^\d+[A-Za-z]+$/.test(String(fireNumber).trim());
+}
+
+/**
+ * Extract the base fire number (without letter suffix)
+ * Examples: "72J" → "72", "1510A" → "1510", "234" → "234"
+ * @param {string} fireNumber - Fire number (possibly with suffix)
+ * @returns {string} Base fire number without suffix
+ */
+function getBaseFireNumber(fireNumber) {
+    if (!fireNumber) return '';
+    const str = String(fireNumber).trim();
+    // Remove trailing letters
+    const match = str.match(/^(\d+)/);
+    return match ? match[1] : str;
+}
+
+/**
+ * Check if two entities are at the same Block Island location (same base fire number, different suffixes)
+ * This indicates different owners at the same physical property.
+ * @param {Entity} entity1 - First entity
+ * @param {Entity} entity2 - Second entity
+ * @returns {boolean} True if same location (should use secondary-only comparison)
+ */
+function areSameLocationEntities(entity1, entity2) {
+    const fn1 = extractFireNumberFromEntity(entity1);
+    const fn2 = extractFireNumberFromEntity(entity2);
+
+    // Both must have fire numbers
+    if (!fn1 || !fn2) return false;
+
+    // If fire numbers are identical, not a collision case
+    if (fn1 === fn2) return false;
+
+    // At least one must have a suffix (collision-resolved)
+    if (!hasFireNumberSuffix(fn1) && !hasFireNumberSuffix(fn2)) return false;
+
+    // Base fire numbers must match
+    const base1 = getBaseFireNumber(fn1);
+    const base2 = getBaseFireNumber(fn2);
+
+    return base1 === base2;
+}
+
+/**
+ * Compare secondary addresses only (excluding primary addresses)
+ * Used when entities share the same primary location (e.g., same base fire number)
+ * and primary address comparison would be meaningless.
+ *
+ * @param {ContactInfo} contactInfo1 - First ContactInfo
+ * @param {ContactInfo} contactInfo2 - Second ContactInfo
+ * @returns {number} Similarity score 0-1
+ */
+function compareSecondaryAddressesOnly(contactInfo1, contactInfo2) {
+    // Get secondary addresses from both
+    // Note: property is named "secondaryAddress" (singular) but holds array
+    const secondary1 = contactInfo1?.secondaryAddress || [];
+    const secondary2 = contactInfo2?.secondaryAddress || [];
+
+    // If neither has secondary addresses, return 0 (can't determine similarity)
+    if (secondary1.length === 0 && secondary2.length === 0) {
+        return 0;
+    }
+
+    // If only one has secondary addresses, return 0
+    if (secondary1.length === 0 || secondary2.length === 0) {
+        return 0;
+    }
+
+    // Compare secondary addresses using existing Address.compareTo()
+    // Find best match between secondary addresses
+    let bestSimilarity = 0;
+    for (const addr1 of secondary1) {
+        for (const addr2 of secondary2) {
+            if (addr1 && addr2 && typeof addr1.compareTo === 'function') {
+                const similarity = addr1.compareTo(addr2);
+                if (similarity > bestSimilarity) {
+                    bestSimilarity = similarity;
+                }
+            }
+        }
+    }
+
+    return bestSimilarity;
+}
+
+// ============================================================================
 // BROWSER AND NODE.JS EXPORTS
 // ============================================================================
 
@@ -2326,6 +2571,15 @@ if (typeof window !== 'undefined') {
     window.getStateSimilarity = getStateSimilarity;
     window.genericObjectCompareTo = genericObjectCompareTo;
     window.simpleStringMatch = simpleStringMatch;
+    // Same-location entity comparison utilities
+    window.extractFireNumberFromEntity = extractFireNumberFromEntity;
+    window.hasFireNumberSuffix = hasFireNumberSuffix;
+    window.getBaseFireNumber = getBaseFireNumber;
+    window.areSameLocationEntities = areSameLocationEntities;
+    window.compareSecondaryAddressesOnly = compareSecondaryAddressesOnly;
+    // Comparison calculator registry and resolver
+    window.COMPARISON_CALCULATOR_REGISTRY = COMPARISON_CALCULATOR_REGISTRY;
+    window.resolveComparisonCalculator = resolveComparisonCalculator;
 }
 
 // Export for Node.js
@@ -2346,5 +2600,400 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports.getStateSimilarity = getStateSimilarity;
     module.exports.genericObjectCompareTo = genericObjectCompareTo;
     module.exports.simpleStringMatch = simpleStringMatch;
+    // Same-location entity comparison utilities
+    module.exports.extractFireNumberFromEntity = extractFireNumberFromEntity;
+    module.exports.hasFireNumberSuffix = hasFireNumberSuffix;
+    module.exports.getBaseFireNumber = getBaseFireNumber;
+    module.exports.areSameLocationEntities = areSameLocationEntities;
+    module.exports.compareSecondaryAddressesOnly = compareSecondaryAddressesOnly;
 }
+
+// ============================================================================
+// DIAGNOSTIC TRACING FUNCTION (COMMENTED OUT - Dec 18, 2025)
+// Uncomment to debug entity comparison issues
+// ============================================================================
+
+/*
+// Trace the complete similarity calculation between two entities.
+// Outputs every step of the logical path and all calculation results.
+//
+// Usage: traceEntityComparison('visionAppraisal:PID:364', 'visionAppraisal:PID:363')
+//
+// @param {string} key1 - Database key for first entity
+// @param {string} key2 - Database key for second entity
+function traceEntityComparison(key1, key2) {
+    console.log('═══════════════════════════════════════════════════════════════════');
+    console.log('ENTITY COMPARISON TRACE');
+    console.log('═══════════════════════════════════════════════════════════════════');
+    console.log(`Entity 1 Key: ${key1}`);
+    console.log(`Entity 2 Key: ${key2}`);
+    console.log('');
+
+    // Step 1: Retrieve entities
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 1: ENTITY RETRIEVAL');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+        console.error('ERROR: unifiedEntityDatabase not loaded');
+        return null;
+    }
+
+    const entity1 = window.unifiedEntityDatabase.entities[key1];
+    const entity2 = window.unifiedEntityDatabase.entities[key2];
+
+    if (!entity1) {
+        console.error(`ERROR: Entity not found for key: ${key1}`);
+        return null;
+    }
+    if (!entity2) {
+        console.error(`ERROR: Entity not found for key: ${key2}`);
+        return null;
+    }
+
+    console.log(`Entity 1 Type: ${entity1.constructor?.name}`);
+    console.log(`Entity 1 Name: ${entity1.name?.toString?.() || 'N/A'}`);
+    console.log(`Entity 2 Type: ${entity2.constructor?.name}`);
+    console.log(`Entity 2 Name: ${entity2.name?.toString?.() || 'N/A'}`);
+    console.log('');
+
+    // Step 2: Same-location check
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 2: SAME-LOCATION CHECK (areSameLocationEntities)');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    const fn1 = extractFireNumberFromEntity(entity1);
+    const fn2 = extractFireNumberFromEntity(entity2);
+    console.log(`extractFireNumberFromEntity(entity1): "${fn1}"`);
+    console.log(`extractFireNumberFromEntity(entity2): "${fn2}"`);
+
+    const bothHaveFireNumbers = fn1 && fn2;
+    console.log(`Both have fire numbers? ${bothHaveFireNumbers}`);
+
+    if (bothHaveFireNumbers) {
+        const areIdentical = fn1 === fn2;
+        console.log(`Fire numbers identical? ${areIdentical} (${fn1} === ${fn2})`);
+
+        const hasSuffix1 = hasFireNumberSuffix(fn1);
+        const hasSuffix2 = hasFireNumberSuffix(fn2);
+        console.log(`hasFireNumberSuffix("${fn1}"): ${hasSuffix1}`);
+        console.log(`hasFireNumberSuffix("${fn2}"): ${hasSuffix2}`);
+        console.log(`At least one has suffix? ${hasSuffix1 || hasSuffix2}`);
+
+        if (hasSuffix1 || hasSuffix2) {
+            const base1 = getBaseFireNumber(fn1);
+            const base2 = getBaseFireNumber(fn2);
+            console.log(`getBaseFireNumber("${fn1}"): "${base1}"`);
+            console.log(`getBaseFireNumber("${fn2}"): "${base2}"`);
+            console.log(`Base fire numbers match? ${base1 === base2}`);
+        }
+    }
+
+    const isSameLocation = areSameLocationEntities(entity1, entity2);
+    console.log(`\n>>> areSameLocationEntities RESULT: ${isSameLocation}`);
+    console.log('');
+
+    // Step 3: Component data availability
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 3: COMPONENT DATA AVAILABILITY');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    const hasNameData = entity1.name && entity2.name && typeof entity1.name.compareTo === 'function';
+    const hasContactInfoData = entity1.contactInfo && entity2.contactInfo && typeof entity1.contactInfo.compareTo === 'function';
+    const hasOtherInfoData = entity1.otherInfo && entity2.otherInfo && typeof entity1.otherInfo.compareTo === 'function';
+    const hasLegacyInfoData = entity1.legacyInfo && entity2.legacyInfo && typeof entity1.legacyInfo.compareTo === 'function';
+
+    console.log(`hasNameData: ${hasNameData}`);
+    console.log(`  - entity1.name exists: ${!!entity1.name}`);
+    console.log(`  - entity2.name exists: ${!!entity2.name}`);
+    console.log(`  - entity1.name.compareTo is function: ${typeof entity1.name?.compareTo === 'function'}`);
+    console.log(`hasContactInfoData: ${hasContactInfoData}`);
+    console.log(`  - entity1.contactInfo exists: ${!!entity1.contactInfo}`);
+    console.log(`  - entity2.contactInfo exists: ${!!entity2.contactInfo}`);
+    console.log(`  - entity1.contactInfo.compareTo is function: ${typeof entity1.contactInfo?.compareTo === 'function'}`);
+    console.log(`hasOtherInfoData: ${hasOtherInfoData}`);
+    console.log(`hasLegacyInfoData: ${hasLegacyInfoData}`);
+    console.log('');
+
+    // Step 4: Name comparison
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 4: NAME COMPARISON');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    let nameSimilarity = null;
+    let nameDetailedResult = null;
+
+    if (hasNameData) {
+        console.log(`Entity 1 Name Type: ${entity1.name.constructor?.name}`);
+        console.log(`Entity 1 Name Value: ${entity1.name.toString?.()}`);
+        console.log(`Entity 2 Name Type: ${entity2.name.constructor?.name}`);
+        console.log(`Entity 2 Name Value: ${entity2.name.toString?.()}`);
+
+        const nameResult = entity1.name.compareTo(entity2.name, true);
+        if (typeof nameResult === 'number') {
+            nameSimilarity = nameResult;
+            nameDetailedResult = { overallSimilarity: nameResult };
+        } else {
+            nameSimilarity = nameResult.overallSimilarity;
+            nameDetailedResult = nameResult;
+        }
+
+        console.log(`\n>>> NAME SIMILARITY: ${nameSimilarity}`);
+        console.log('>>> NAME DETAILED RESULT:');
+        console.log(JSON.stringify(nameDetailedResult, null, 2));
+    } else {
+        console.log('Name comparison SKIPPED (missing data)');
+    }
+    console.log('');
+
+    // Step 5: ContactInfo comparison
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 5: CONTACTINFO COMPARISON');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    let contactInfoSimilarity = null;
+    let contactInfoDetailedResult = null;
+    let contactInfoMethod = 'none';
+
+    if (hasContactInfoData) {
+        if (isSameLocation) {
+            contactInfoMethod = 'sameLocation_secondaryAddressesOnly';
+            console.log(`>>> BRANCH TAKEN: Same location - using compareSecondaryAddressesOnly()`);
+
+            // Show secondary addresses
+            const secondary1 = entity1.contactInfo?.secondaryAddress || [];
+            const secondary2 = entity2.contactInfo?.secondaryAddress || [];
+            console.log(`Entity 1 secondary addresses count: ${secondary1.length}`);
+            secondary1.forEach((addr, i) => console.log(`  [${i}]: ${addr?.toString?.() || JSON.stringify(addr)}`));
+            console.log(`Entity 2 secondary addresses count: ${secondary2.length}`);
+            secondary2.forEach((addr, i) => console.log(`  [${i}]: ${addr?.toString?.() || JSON.stringify(addr)}`));
+
+            contactInfoSimilarity = compareSecondaryAddressesOnly(entity1.contactInfo, entity2.contactInfo);
+            contactInfoDetailedResult = {
+                overallSimilarity: contactInfoSimilarity,
+                method: contactInfoMethod,
+                note: `Same location (${fn1} vs ${fn2}): primary address excluded`
+            };
+        } else {
+            contactInfoMethod = 'standard_compareTo';
+            console.log(`>>> BRANCH TAKEN: Different locations - using full contactInfo.compareTo()`);
+
+            // Show primary addresses
+            console.log(`Entity 1 primary address: ${entity1.contactInfo?.primaryAddress?.toString?.() || 'N/A'}`);
+            console.log(`Entity 2 primary address: ${entity2.contactInfo?.primaryAddress?.toString?.() || 'N/A'}`);
+
+            const contactResult = entity1.contactInfo.compareTo(entity2.contactInfo, true);
+            if (typeof contactResult === 'number') {
+                contactInfoSimilarity = contactResult;
+                contactInfoDetailedResult = { overallSimilarity: contactResult };
+            } else {
+                contactInfoSimilarity = contactResult.overallSimilarity;
+                contactInfoDetailedResult = contactResult;
+            }
+        }
+
+        console.log(`\n>>> CONTACTINFO SIMILARITY: ${contactInfoSimilarity}`);
+        console.log(`>>> CONTACTINFO METHOD: ${contactInfoMethod}`);
+        console.log('>>> CONTACTINFO DETAILED RESULT:');
+        console.log(JSON.stringify(contactInfoDetailedResult, null, 2));
+    } else {
+        console.log('ContactInfo comparison SKIPPED (missing data)');
+    }
+    console.log('');
+
+    // Step 6: OtherInfo comparison
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 6: OTHERINFO COMPARISON');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    let otherInfoSimilarity = null;
+    if (hasOtherInfoData) {
+        otherInfoSimilarity = entity1.otherInfo.compareTo(entity2.otherInfo);
+        console.log(`>>> OTHERINFO SIMILARITY: ${otherInfoSimilarity}`);
+    } else {
+        console.log('OtherInfo comparison SKIPPED (missing data)');
+    }
+    console.log('');
+
+    // Step 7: LegacyInfo comparison
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 7: LEGACYINFO COMPARISON');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    let legacyInfoSimilarity = null;
+    if (hasLegacyInfoData) {
+        legacyInfoSimilarity = entity1.legacyInfo.compareTo(entity2.legacyInfo);
+        console.log(`>>> LEGACYINFO SIMILARITY: ${legacyInfoSimilarity}`);
+    } else {
+        console.log('LegacyInfo comparison SKIPPED (missing data)');
+    }
+    console.log('');
+
+    // Step 8: Weight calculation
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 8: WEIGHT CALCULATION');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    const baseWeights = entity1.comparisonWeights || {
+        name: 0.5,
+        contactInfo: 0.3,
+        otherInfo: 0.15,
+        legacyInfo: 0.05
+    };
+
+    console.log('Base Weights:');
+    console.log(`  name: ${baseWeights.name}`);
+    console.log(`  contactInfo: ${baseWeights.contactInfo}`);
+    console.log(`  otherInfo: ${baseWeights.otherInfo}`);
+    console.log(`  legacyInfo: ${baseWeights.legacyInfo}`);
+
+    let weights = { ...baseWeights };
+    let boostAmount = 0;
+
+    if (nameSimilarity !== null) {
+        if (nameSimilarity === 1.0) {
+            boostAmount = 0.12;
+            console.log(`\nName boost: +12% (name similarity = 1.0 perfect match)`);
+        } else if (nameSimilarity > 0.95) {
+            boostAmount = 0.06;
+            console.log(`\nName boost: +6% (name similarity > 0.95)`);
+        } else {
+            console.log(`\nName boost: 0% (name similarity ${nameSimilarity} <= 0.95)`);
+        }
+    } else {
+        console.log(`\nName boost: 0% (no name data)`);
+    }
+
+    if (boostAmount > 0) {
+        const nonBoostCategories = ['contactInfo', 'otherInfo', 'legacyInfo'];
+        const totalNonBoostWeight = nonBoostCategories.reduce((sum, cat) => sum + weights[cat], 0);
+
+        console.log(`Redistributing ${boostAmount} from non-name categories (total: ${totalNonBoostWeight})`);
+
+        nonBoostCategories.forEach(cat => {
+            const proportion = weights[cat] / totalNonBoostWeight;
+            const reduction = boostAmount * proportion;
+            console.log(`  ${cat}: ${weights[cat]} - ${reduction.toFixed(4)} = ${(weights[cat] - reduction).toFixed(4)}`);
+            weights[cat] -= reduction;
+        });
+        weights.name += boostAmount;
+        console.log(`  name: ${baseWeights.name} + ${boostAmount} = ${weights.name}`);
+    }
+
+    console.log('\nAdjusted Weights:');
+    console.log(`  name: ${weights.name}`);
+    console.log(`  contactInfo: ${weights.contactInfo}`);
+    console.log(`  otherInfo: ${weights.otherInfo}`);
+    console.log(`  legacyInfo: ${weights.legacyInfo}`);
+    console.log('');
+
+    // Step 9: Weighted sum calculation
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 9: WEIGHTED SUM CALCULATION');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    let totalWeight = 0;
+    let weightedSum = 0;
+
+    console.log('Components contributing to weighted sum:');
+
+    if (hasNameData) {
+        const contribution = weights.name * nameSimilarity;
+        console.log(`  name: ${weights.name} × ${nameSimilarity} = ${contribution}`);
+        weightedSum += contribution;
+        totalWeight += weights.name;
+    }
+
+    if (hasContactInfoData) {
+        const contribution = weights.contactInfo * contactInfoSimilarity;
+        console.log(`  contactInfo: ${weights.contactInfo} × ${contactInfoSimilarity} = ${contribution}`);
+        weightedSum += contribution;
+        totalWeight += weights.contactInfo;
+    }
+
+    if (hasOtherInfoData) {
+        const contribution = weights.otherInfo * otherInfoSimilarity;
+        console.log(`  otherInfo: ${weights.otherInfo} × ${otherInfoSimilarity} = ${contribution}`);
+        weightedSum += contribution;
+        totalWeight += weights.otherInfo;
+    }
+
+    if (hasLegacyInfoData) {
+        const contribution = weights.legacyInfo * legacyInfoSimilarity;
+        console.log(`  legacyInfo: ${weights.legacyInfo} × ${legacyInfoSimilarity} = ${contribution}`);
+        weightedSum += contribution;
+        totalWeight += weights.legacyInfo;
+    }
+
+    console.log(`\nWeighted Sum: ${weightedSum}`);
+    console.log(`Total Weight: ${totalWeight}`);
+    console.log('');
+
+    // Step 10: Normalization and penalties
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('STEP 10: NORMALIZATION AND PENALTIES');
+    console.log('───────────────────────────────────────────────────────────────────');
+
+    const PRECISION = 10000000000;
+    const round10 = (val) => Math.round(val * PRECISION) / PRECISION;
+
+    let overallSimilarity = round10(weightedSum / totalWeight);
+    console.log(`Normalized Score: ${weightedSum} / ${totalWeight} = ${overallSimilarity}`);
+
+    const MISSING_NAME_PENALTY = 0.04;
+    const MISSING_CONTACTINFO_PENALTY = 0.03;
+    let totalPenalty = 0;
+
+    if (!hasNameData) {
+        totalPenalty += MISSING_NAME_PENALTY;
+        console.log(`Missing name penalty: -${MISSING_NAME_PENALTY}`);
+    }
+    if (!hasContactInfoData) {
+        totalPenalty += MISSING_CONTACTINFO_PENALTY;
+        console.log(`Missing contactInfo penalty: -${MISSING_CONTACTINFO_PENALTY}`);
+    }
+
+    if (totalPenalty > 0) {
+        const beforePenalty = overallSimilarity;
+        overallSimilarity = round10(Math.max(0, overallSimilarity - totalPenalty));
+        console.log(`Total penalty: ${totalPenalty}`);
+        console.log(`Score after penalty: ${beforePenalty} - ${totalPenalty} = ${overallSimilarity}`);
+    } else {
+        console.log('No penalties applied');
+    }
+    console.log('');
+
+    // Step 11: Final result
+    console.log('═══════════════════════════════════════════════════════════════════');
+    console.log('FINAL RESULT');
+    console.log('═══════════════════════════════════════════════════════════════════');
+    console.log(`>>> OVERALL SIMILARITY: ${overallSimilarity}`);
+    console.log('');
+
+    // Also call the actual compareTo to verify
+    console.log('───────────────────────────────────────────────────────────────────');
+    console.log('VERIFICATION: Calling entity1.compareTo(entity2, true)');
+    console.log('───────────────────────────────────────────────────────────────────');
+    const actualResult = entity1.compareTo(entity2, true);
+    console.log('Actual compareTo result:');
+    console.log(JSON.stringify(actualResult, null, 2));
+
+    return {
+        tracedScore: overallSimilarity,
+        actualResult: actualResult,
+        components: {
+            name: { similarity: nameSimilarity, weight: weights.name },
+            contactInfo: { similarity: contactInfoSimilarity, weight: weights.contactInfo, method: contactInfoMethod },
+            otherInfo: { similarity: otherInfoSimilarity, weight: weights.otherInfo },
+            legacyInfo: { similarity: legacyInfoSimilarity, weight: weights.legacyInfo }
+        },
+        isSameLocation: isSameLocation
+    };
+}
+
+// Export for browser
+if (typeof window !== 'undefined') {
+    window.traceEntityComparison = traceEntityComparison;
+}
+*/
 

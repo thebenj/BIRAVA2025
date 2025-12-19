@@ -1155,20 +1155,6 @@ const VisionAppraisalNameParser = {
     parseRecordToEntity(record, index) {
         this.requireDependencies();
 
-        // DIAGNOSTIC: Target PIDs for tracing
-        const isTargetPID280 = record.pid === "280" || record.pid === 280;
-        const isTargetPID711 = record.pid === "711" || record.pid === 711;
-        const isTargetPID = isTargetPID280 || isTargetPID711;
-        const targetLabel = isTargetPID280 ? 'PID 280' : 'PID 711';
-
-        if (isTargetPID) {
-            console.log(`🎯 DIAGNOSTIC ${targetLabel}: Starting parseRecordToEntity`);
-            console.log('   record.pid:', record.pid);
-            console.log('   record.processedOwnerName:', record.processedOwnerName);
-            console.log('   record.ownerName:', record.ownerName);
-            console.log('   record.fireNumber:', record.fireNumber);
-        }
-
         try {
             // Step 1: Prepare data for logical tests (similar to detectCaseRetVal pattern)
             const ownerName = record.processedOwnerName || record.ownerName;
@@ -1187,20 +1173,6 @@ const VisionAppraisalNameParser = {
             const moreThanOneCommaWithRepeating = words && words.length >= 5 ? Case31Validator.moreThanOneCommaWithRepeatingWord(words) : false;
             const moreThanOneCommaNoRepeating = words && words.length >= 5 ? Case31Validator.moreThanOneCommaNoRepeatingWord(words) : false;
             const ampersandHasOnlyOneWordAfter = words && words.length >= 5 ? Case31Validator.ampersandHasOnlyOneWordAfter(words) : false;
-
-            // DIAGNOSTIC: Show all test data for target PIDs
-            if (isTargetPID) {
-                console.log(`🎯 DIAGNOSTIC ${targetLabel}: Test data computed`);
-                console.log('   ownerName used:', ownerName);
-                console.log('   words:', words);
-                console.log('   wordCount:', wordCount);
-                console.log('   hasBusinessTerms:', hasBusinessTerms);
-                console.log('   punctuationInfo:', JSON.stringify(punctuationInfo));
-                console.log('   firstWordEndsComma:', firstWordEndsComma);
-                console.log('   secondWordIsSingleLetter:', secondWordIsSingleLetter);
-                console.log('   lastWordIsSingleLetter:', lastWordIsSingleLetter);
-                console.log('   firstAndThirdWordsMatch:', firstAndThirdWordsMatch);
-            }
 
             const testData = {
                 words,
@@ -1224,28 +1196,13 @@ const VisionAppraisalNameParser = {
 
             for (const [caseName, caseConfig] of sortedCases) {
                 if (caseConfig.logicalTest(testData)) {
-                    // DIAGNOSTIC: Show which case matched for target PIDs
-                    if (isTargetPID) {
-                        console.log(`🎯 DIAGNOSTIC ${targetLabel}: MATCHED`, caseName);
-                        console.log('   entityType:', caseConfig.entityType);
-                    }
                     console.log(`📋 ConfigurableParser matched ${caseName}: "${ownerName}"`);
                     const result = caseConfig.processor.call(this, words, record, index);
-                    // DIAGNOSTIC: Show what was returned for target PIDs
-                    if (isTargetPID) {
-                        console.log(`🎯 DIAGNOSTIC ${targetLabel}: Processor returned`);
-                        console.log('   result type:', result?.constructor?.name);
-                        console.log('   result.individuals:', result?.individuals);
-                        console.log('   result.individuals?.length:', result?.individuals?.length);
-                    }
                     return result;
                 }
             }
 
             // Step 3: No case matched
-            if (isTargetPID) {
-                console.log(`🎯 DIAGNOSTIC ${targetLabel}: NO CASE MATCHED!`);
-            }
             console.log(`❌ ConfigurableParser: No case matched "${ownerName}"`);
             return null;
 

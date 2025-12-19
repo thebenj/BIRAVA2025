@@ -155,10 +155,22 @@ function compareIndividualToEntityDirect(individual, entity) {
     }
 
     // Compare contactInfo if both have it
+    // Check for same-location scenario (same base fire number, different suffixes)
     if (individual.contactInfo && entity.contactInfo) {
         try {
-            const contactResult = individual.contactInfo.compareTo(entity.contactInfo);
-            contactInfoScore = typeof contactResult === 'number' ? contactResult : (contactResult?.overallSimilarity || 0);
+            const isSameLocation = (typeof areSameLocationEntities === 'function')
+                ? areSameLocationEntities(individual, entity)
+                : false;
+
+            if (isSameLocation) {
+                // Same location: use secondary addresses only
+                contactInfoScore = (typeof compareSecondaryAddressesOnly === 'function')
+                    ? compareSecondaryAddressesOnly(individual.contactInfo, entity.contactInfo)
+                    : 0;
+            } else {
+                const contactResult = individual.contactInfo.compareTo(entity.contactInfo, true);
+                contactInfoScore = typeof contactResult === 'number' ? contactResult : (contactResult?.overallSimilarity || 0);
+            }
         } catch (e) {
             contactInfoScore = 0;
         }
@@ -249,6 +261,111 @@ function compareHouseholdToHousehold(household1, household2) {
 }
 
 /**
+ * Extract name object from an entity (Individual or AggregateHousehold)
+ * @param {Entity} entity
+ * @returns {Object|null} Name object or null
+ */
+function extractNameFromEntity(entity) {
+    const type = entity.constructor.name;
+    if (type === 'Individual') {
+        return entity.name;
+    } else if (type === 'AggregateHousehold') {
+        // Use household name or first member's name
+        return entity.householdName || entity.name || (entity.individuals?.[0]?.name);
+    }
+    return entity.name || null;
+}
+
+/**
+ * Extract contactInfo object from an entity (Individual or AggregateHousehold)
+ * @param {Entity} entity
+ * @returns {Object|null} ContactInfo object or null
+ */
+function extractContactInfoFromEntity(entity) {
+    const type = entity.constructor.name;
+    if (type === 'Individual') {
+        return entity.contactInfo;
+    } else if (type === 'AggregateHousehold') {
+        // Return household-level contactInfo or first member's contactInfo
+        return entity.contactInfo || entity.individuals?.[0]?.contactInfo;
+    }
+    return entity.contactInfo || null;
+}
+
+/**
+ * Compare two entities known to be at the same physical location.
+ * Uses secondary addresses only for contactInfo to avoid false positives
+ * from matching primary addresses (which are trivially the same for same-location entities).
+ * @param {Entity} entity1
+ * @param {Entity} entity2
+ * @returns {object} { score, matchedIndividual, details }
+ */
+function compareSameLocationEntities(entity1, entity2) {
+    // Get name comparison
+    let nameScore = 0;
+    const name1 = extractNameFromEntity(entity1);
+    const name2 = extractNameFromEntity(entity2);
+    let nameComparisonMethod = 'none';
+
+    if (name1 && name2) {
+        const name1Type = name1.constructor?.name;
+        const name2Type = name2.constructor?.name;
+
+        if (name1Type === name2Type) {
+            // Same type - use native compareTo
+            try {
+                const nameResult = name1.compareTo(name2);
+                nameScore = typeof nameResult === 'number' ? nameResult : (nameResult?.overallSimilarity || nameResult?.similarity || 0);
+                nameComparisonMethod = 'native';
+            } catch (e) {
+                // Fallback to cross-type comparison
+                nameScore = (typeof crossTypeNameComparison === 'function')
+                    ? crossTypeNameComparison(name1, name2)
+                    : 0;
+                nameComparisonMethod = 'cross-type-fallback';
+            }
+        } else {
+            // Different types - use cross-type string comparison
+            nameScore = (typeof crossTypeNameComparison === 'function')
+                ? crossTypeNameComparison(name1, name2)
+                : 0;
+            nameComparisonMethod = 'cross-type';
+        }
+    }
+
+    // Get contactInfo comparison using SECONDARY ADDRESSES ONLY
+    let contactInfoScore = 0;
+    const contactInfo1 = extractContactInfoFromEntity(entity1);
+    const contactInfo2 = extractContactInfoFromEntity(entity2);
+
+    if (contactInfo1 && contactInfo2) {
+        contactInfoScore = (typeof compareSecondaryAddressesOnly === 'function')
+            ? compareSecondaryAddressesOnly(contactInfo1, contactInfo2)
+            : 0;
+    }
+
+    // Apply standard weighting
+    const nameWeight = 0.5;
+    const contactInfoWeight = 0.5;
+    const overallScore = (nameScore * nameWeight) + (contactInfoScore * contactInfoWeight);
+
+    return {
+        score: overallScore,
+        matchedIndividual: null,
+        matchedIndividualIndex: null,
+        details: {
+            overallSimilarity: overallScore,
+            components: {
+                name: { similarity: nameScore, weight: nameWeight, method: nameComparisonMethod },
+                contactInfo: { similarity: contactInfoScore, weight: contactInfoWeight, method: 'secondary-only' }
+            },
+            comparisonType: 'same-location',
+            sameLocation: true
+        }
+    };
+}
+
+/**
  * Universal comparison function - handles all entity type combinations
  * @param {Entity} entity1 - Base entity
  * @param {Entity} entity2 - Target entity to compare against
@@ -257,6 +374,21 @@ function compareHouseholdToHousehold(household1, household2) {
 function universalCompareTo(entity1, entity2) {
     const type1 = entity1.constructor.name;
     const type2 = entity2.constructor.name;
+
+    // Check for same-location entities BEFORE routing to specialized comparison functions
+    // This catches cases where embedded individual comparisons would lose fire number context
+    const isSameLocation = (typeof areSameLocationEntities === 'function')
+        ? areSameLocationEntities(entity1, entity2)
+        : false;
+
+    // If same-location, use specialized comparison that excludes primary address
+    if (isSameLocation) {
+        const result = compareSameLocationEntities(entity1, entity2);
+        return {
+            ...result,
+            comparisonType: `${type1}-to-${type2} (same-location)`
+        };
+    }
 
     let result;
     let comparisonType;

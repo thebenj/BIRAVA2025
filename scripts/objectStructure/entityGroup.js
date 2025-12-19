@@ -152,6 +152,7 @@ class EntityGroup {
         // - Primary alias: highest total similarity score when compared across members
         // - Uses AggregateHousehold as container type (superset of all properties)
         // - Aliased properties use createConsensus() to populate homonyms/synonyms/candidates
+        // - Nested properties (within contactInfo, otherInfo, legacyInfo) get property-level consensus
 
         const consensus = new AggregateHousehold(null, null);
         consensus.constructedFrom = this.memberKeys.slice(); // Track source members
@@ -174,13 +175,16 @@ class EntityGroup {
             }
         }
 
-        // Use Aliased.createConsensus for Aliased properties to populate alternatives
+        // Use Aliased.createConsensus for top-level Aliased properties
         // This selects best primary and categorizes others into homonyms/synonyms/candidates
         consensus.locationIdentifier = this._createAliasedConsensus(locationIdentifiers, thresholds.contactInfo);
         consensus.name = this._createAliasedConsensus(names, thresholds.name);
-        consensus.contactInfo = this._selectBestContactInfo(contactInfos);
-        consensus.otherInfo = this._mergeOtherInfo(otherInfos);
-        consensus.legacyInfo = this._mergeLegacyInfo(legacyInfos);
+
+        // Use deep property-level consensus for nested objects
+        // Each method collects and merges the properties WITHIN the object, not just the whole object
+        consensus.contactInfo = this._buildContactInfoConsensus(contactInfos, thresholds.contactInfo);
+        consensus.otherInfo = this._buildOtherInfoConsensus(otherInfos);
+        consensus.legacyInfo = this._buildLegacyInfoConsensus(legacyInfos, thresholds.name);
 
         // For individuals: deduplicate by comparing names
         consensus.individuals = this._deduplicateIndividuals(allIndividuals);
@@ -295,52 +299,265 @@ class EntityGroup {
     }
 
     /**
-     * Select best ContactInfo and merge addresses
+     * Build consensus ContactInfo with property-level merging
+     * Merges email, phone, poBox, primaryAddress, and secondaryAddresses from all members
      * @param {Array<ContactInfo>} contactInfos - Array of ContactInfo objects
-     * @returns {ContactInfo|null} Merged ContactInfo
+     * @param {Object} thresholds - Alias categorization thresholds
+     * @returns {ContactInfo|null} Merged ContactInfo with consensus properties
      * @private
      */
-    _selectBestContactInfo(contactInfos) {
+    _buildContactInfoConsensus(contactInfos, thresholds) {
         if (!contactInfos || contactInfos.length === 0) return null;
         if (contactInfos.length === 1) return contactInfos[0];
 
-        // Find best primary ContactInfo
-        const best = this._selectBestPrimary(contactInfos);
-        if (!best) return null;
+        // Create new ContactInfo to hold consensus values
+        const consensus = new ContactInfo();
 
-        // Create a new ContactInfo to avoid modifying originals
-        // For now, just return the best one - full merging of secondary addresses
-        // would require deeper integration with ContactInfo structure
-        return best;
+        // 1. Collect and merge emails using Aliased.createConsensus()
+        const emails = contactInfos.map(ci => ci.email).filter(v => v != null);
+        if (emails.length > 0) {
+            consensus.email = this._createAliasedConsensus(emails, thresholds);
+        }
+
+        // 2. Collect and merge phones using Aliased.createConsensus()
+        const phones = contactInfos.map(ci => ci.phone).filter(v => v != null);
+        if (phones.length > 0) {
+            consensus.phone = this._createAliasedConsensus(phones, thresholds);
+        }
+
+        // 3. Collect and merge poBoxes using Aliased.createConsensus()
+        const poBoxes = contactInfos.map(ci => ci.poBox).filter(v => v != null);
+        if (poBoxes.length > 0) {
+            consensus.poBox = this._createAliasedConsensus(poBoxes, thresholds);
+        }
+
+        // 4. Collect and merge primaryAddresses using Aliased.createConsensus()
+        const primaryAddresses = contactInfos.map(ci => ci.primaryAddress).filter(v => v != null);
+        if (primaryAddresses.length > 0) {
+            consensus.primaryAddress = this._createAliasedConsensus(primaryAddresses, thresholds);
+        }
+
+        // 5. Collect ALL secondary addresses from all members, then deduplicate
+        const allSecondaries = [];
+        for (const ci of contactInfos) {
+            if (ci.secondaryAddress && Array.isArray(ci.secondaryAddress)) {
+                allSecondaries.push(...ci.secondaryAddress);
+            }
+        }
+        if (allSecondaries.length > 0) {
+            consensus.secondaryAddress = this._deduplicateAddresses(allSecondaries);
+        }
+
+        return consensus;
     }
 
     /**
-     * Merge multiple OtherInfo objects
-     * @param {Array<OtherInfo>} otherInfos - Array of OtherInfo objects
-     * @returns {OtherInfo|null} Merged OtherInfo
+     * Deduplicate addresses by comparing them
+     * @param {Array<Address>} addresses - Array of Address objects
+     * @returns {Array<Address>} Deduplicated array
      * @private
      */
-    _mergeOtherInfo(otherInfos) {
+    _deduplicateAddresses(addresses) {
+        if (!addresses || addresses.length === 0) return [];
+        if (addresses.length === 1) return addresses;
+
+        const unique = [];
+        const ADDRESS_SIMILARITY_THRESHOLD = 0.85; // Consider addresses similar if >85%
+
+        for (const address of addresses) {
+            if (!address) continue;
+
+            let isDuplicate = false;
+
+            for (const existing of unique) {
+                try {
+                    // Compare addresses if both have compareTo
+                    if (typeof address.compareTo === 'function') {
+                        const similarity = address.compareTo(existing);
+                        if (similarity >= ADDRESS_SIMILARITY_THRESHOLD) {
+                            isDuplicate = true;
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    // Skip comparison errors
+                }
+            }
+
+            if (!isDuplicate) {
+                unique.push(address);
+            }
+        }
+
+        return unique;
+    }
+
+    /**
+     * Build consensus OtherInfo with property-level merging
+     * Merges householdInformation and subdivision entries from all members
+     * @param {Array<OtherInfo>} otherInfos - Array of OtherInfo objects
+     * @returns {OtherInfo|null} Merged OtherInfo with consensus properties
+     * @private
+     */
+    _buildOtherInfoConsensus(otherInfos) {
         if (!otherInfos || otherInfos.length === 0) return null;
         if (otherInfos.length === 1) return otherInfos[0];
 
-        // For now, return the first non-null one
-        // Full merge would require combining subdivision entries, etc.
-        return otherInfos[0];
+        // Create new OtherInfo to hold consensus values
+        const consensus = new OtherInfo();
+
+        // 1. Merge subdivision entries from all members
+        // Collect all PIDs and their entities - later PIDs with same key don't overwrite
+        for (const oi of otherInfos) {
+            if (oi.subdivision) {
+                for (const [pid, entity] of Object.entries(oi.subdivision)) {
+                    if (!consensus.subdivision) {
+                        consensus.subdivision = {};
+                    }
+                    // Only add if not already present (first occurrence wins)
+                    if (!consensus.subdivision[pid]) {
+                        consensus.subdivision[pid] = entity;
+                    }
+                }
+            }
+        }
+
+        // 2. Merge householdInformation
+        // Strategy: Use the first one that indicates membership in a household
+        // or the first non-default one
+        for (const oi of otherInfos) {
+            if (oi.householdInformation) {
+                // Check if this is a meaningful householdInformation (not just default)
+                if (oi.householdInformation.isInHousehold === true) {
+                    consensus.householdInformation = oi.householdInformation;
+                    break;
+                }
+            }
+        }
+        // If no meaningful householdInformation found, use first available
+        if (!consensus.householdInformation || consensus.householdInformation.isInHousehold === false) {
+            for (const oi of otherInfos) {
+                if (oi.householdInformation) {
+                    consensus.householdInformation = oi.householdInformation;
+                    break;
+                }
+            }
+        }
+
+        return consensus;
     }
 
     /**
-     * Merge multiple LegacyInfo objects
+     * Build consensus LegacyInfo with field-level merging
+     * Each field gets Aliased.createConsensus() treatment where applicable
      * @param {Array<LegacyInfo>} legacyInfos - Array of LegacyInfo objects
-     * @returns {LegacyInfo|null} Merged LegacyInfo
+     * @param {Object} thresholds - Alias categorization thresholds
+     * @returns {LegacyInfo|null} Merged LegacyInfo with consensus properties
      * @private
      */
-    _mergeLegacyInfo(legacyInfos) {
+    _buildLegacyInfoConsensus(legacyInfos, thresholds) {
         if (!legacyInfos || legacyInfos.length === 0) return null;
         if (legacyInfos.length === 1) return legacyInfos[0];
 
-        // For now, return the first non-null one
-        return legacyInfos[0];
+        // Create new LegacyInfo to hold consensus values
+        const consensus = new LegacyInfo();
+
+        // 1. ownerName - use Aliased.createConsensus() on the identifiers
+        const ownerNames = legacyInfos
+            .map(li => li.ownerName)
+            .filter(v => v != null)
+            .map(ind => ind.identifier || ind); // Extract identifier if wrapped in IndicativeData
+        if (ownerNames.length > 0) {
+            const consensusOwnerName = this._createAliasedConsensus(ownerNames, thresholds);
+            if (consensusOwnerName) {
+                consensus.ownerName = new IndicativeData(consensusOwnerName);
+            }
+        }
+
+        // 2. ownerName2 - use Aliased.createConsensus()
+        const ownerNames2 = legacyInfos
+            .map(li => li.ownerName2)
+            .filter(v => v != null)
+            .map(ind => ind.identifier || ind);
+        if (ownerNames2.length > 0) {
+            const consensusOwnerName2 = this._createAliasedConsensus(ownerNames2, thresholds);
+            if (consensusOwnerName2) {
+                consensus.ownerName2 = new IndicativeData(consensusOwnerName2);
+            }
+        }
+
+        // 3. neighborhood - use Aliased.createConsensus()
+        const neighborhoods = legacyInfos
+            .map(li => li.neighborhood)
+            .filter(v => v != null)
+            .map(ind => ind.identifier || ind);
+        if (neighborhoods.length > 0) {
+            const consensusNeighborhood = this._createAliasedConsensus(neighborhoods, thresholds);
+            if (consensusNeighborhood) {
+                consensus.neighborhood = new IndicativeData(consensusNeighborhood);
+            }
+        }
+
+        // 4. userCode - use Aliased.createConsensus()
+        const userCodes = legacyInfos
+            .map(li => li.userCode)
+            .filter(v => v != null)
+            .map(ind => ind.identifier || ind);
+        if (userCodes.length > 0) {
+            const consensusUserCode = this._createAliasedConsensus(userCodes, thresholds);
+            if (consensusUserCode) {
+                consensus.userCode = new IndicativeData(consensusUserCode);
+            }
+        }
+
+        // 5. date - pick the most recent date
+        const dates = legacyInfos
+            .map(li => li.date)
+            .filter(v => v != null);
+        if (dates.length > 0) {
+            // Try to find most recent date by parsing
+            let mostRecent = dates[0];
+            for (const dateInd of dates) {
+                try {
+                    const dateVal = dateInd.identifier?.primaryAlias?.term || dateInd.term;
+                    const mostRecentVal = mostRecent.identifier?.primaryAlias?.term || mostRecent.term;
+                    if (dateVal && mostRecentVal) {
+                        const d1 = new Date(dateVal);
+                        const d2 = new Date(mostRecentVal);
+                        if (!isNaN(d1.getTime()) && !isNaN(d2.getTime()) && d1 > d2) {
+                            mostRecent = dateInd;
+                        }
+                    }
+                } catch (e) {
+                    // Skip date parsing errors
+                }
+            }
+            consensus.date = mostRecent;
+        }
+
+        // 6. sourceIndex - collect all unique source indices
+        // For now, keep the first one (could be enhanced to track all sources)
+        const sourceIndices = legacyInfos
+            .map(li => li.sourceIndex)
+            .filter(v => v != null);
+        if (sourceIndices.length > 0) {
+            consensus.sourceIndex = sourceIndices[0];
+        }
+
+        return consensus;
+    }
+
+    // Legacy method aliases for backwards compatibility
+    _selectBestContactInfo(contactInfos) {
+        return this._buildContactInfoConsensus(contactInfos, this._buildAliasThresholds().contactInfo);
+    }
+
+    _mergeOtherInfo(otherInfos) {
+        return this._buildOtherInfoConsensus(otherInfos);
+    }
+
+    _mergeLegacyInfo(legacyInfos) {
+        return this._buildLegacyInfoConsensus(legacyInfos, this._buildAliasThresholds().name);
     }
 
     /**

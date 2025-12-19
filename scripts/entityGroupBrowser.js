@@ -370,22 +370,64 @@ async function buildNewEntityGroupDatabase() {
     const originalText = buildBtn ? buildBtn.innerHTML : '';
 
     try {
+        // Check if override rules should be loaded
+        const loadOverrideRulesCheckbox = document.getElementById('loadOverrideRulesCheckbox');
+        const shouldLoadOverrideRules = loadOverrideRulesCheckbox && loadOverrideRulesCheckbox.checked;
+
+        if (shouldLoadOverrideRules) {
+            showEntityGroupStatus('Loading override rules from Google Sheets...', 'loading');
+            if (buildBtn) {
+                buildBtn.innerHTML = '⏳ Loading rules...';
+                buildBtn.disabled = true;
+            }
+
+            // Load override rules from Google Sheets
+            if (window.matchOverrideManager && typeof window.matchOverrideManager.loadFromGoogleSheets === 'function') {
+                try {
+                    const loadResult = await window.matchOverrideManager.loadFromGoogleSheets();
+                    console.log(`[EntityGroupBrowser] Loaded ${loadResult.forceMatchCount} force-match and ${loadResult.forceExcludeCount} force-exclude rules`);
+                    if (loadResult.errors.length > 0) {
+                        console.warn('[EntityGroupBrowser] Override rule loading warnings:', loadResult.errors);
+                    }
+                } catch (ruleError) {
+                    console.warn('[EntityGroupBrowser] Could not load override rules:', ruleError.message);
+                    // Continue with build even if rules fail to load
+                }
+            } else {
+                console.log('[EntityGroupBrowser] matchOverrideManager not available, skipping override rules');
+            }
+        } else {
+            // Clear any previously loaded rules if checkbox is unchecked
+            if (window.matchOverrideManager) {
+                window.matchOverrideManager.clear();
+                console.log('[EntityGroupBrowser] Override rules cleared (checkbox unchecked)');
+            }
+        }
+
         showEntityGroupStatus('Building EntityGroup database... This may take several minutes.', 'loading');
         if (buildBtn) {
             buildBtn.innerHTML = '⏳ Building...';
             buildBtn.disabled = true;
         }
 
-        // Build the database
+        // Build the database (auto-saves to new files to avoid token expiration issues)
         const result = await buildEntityGroupDatabase({
             verbose: true,
             buildConsensus: true,
-            saveToGoogleDrive: false  // Don't auto-save, let user review first
+            saveToGoogleDrive: true  // Auto-save to new files - tokens expire after 1 hour
         });
 
         entityGroupBrowser.loadedDatabase = result;
 
-        showEntityGroupStatus(`Built ${Object.keys(result.groups).length} EntityGroups successfully!`, 'success');
+        // Build status message with override summary
+        let statusMsg = `Built ${Object.keys(result.groups).length} EntityGroups successfully!`;
+        if (shouldLoadOverrideRules && window.matchOverrideManager) {
+            const summary = window.matchOverrideManager.getSummary();
+            if (summary.forceMatchCount > 0 || summary.forceExcludeCount > 0) {
+                statusMsg += ` (Override rules: ${summary.forceMatchCount} FM, ${summary.forceExcludeCount} FE)`;
+            }
+        }
+        showEntityGroupStatus(statusMsg, 'success');
 
         // Display all groups
         applyEntityGroupFilters();
@@ -1352,6 +1394,715 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// =============================================================================
+// COMPREHENSIVE CSV EXPORT (54-column format per spec)
+// =============================================================================
+
+/**
+ * CSV Column Headers - 54 columns per reference_csvExportSpecification.md
+ */
+const CSV_HEADERS = [
+    // Section 1: Identification & Mail Merge Core (10 columns)
+    'RowType', 'GroupIndex', 'Key', 'MailName', 'MailAddr1', 'MailAddr2',
+    'MailCity', 'MailState', 'MailZip', 'Email',
+    // Section 2: Additional Contact Info (6 columns)
+    'Phone', 'POBox', 'SecAddr1', 'SecAddr2', 'SecAddr3', 'SecAddrMore',
+    // Section 3: Entity Metadata (2 columns)
+    'EntityType', 'Source',
+    // Section 4: Name Alternatives (12 columns)
+    'NameHom1', 'NameHom2', 'NameHom3', 'NameHomMore',
+    'NameSyn1', 'NameSyn2', 'NameSyn3', 'NameSynMore',
+    'NameCand1', 'NameCand2', 'NameCand3', 'NameCandMore',
+    // Section 5: Address Alternatives (12 columns)
+    'AddrHom1', 'AddrHom2', 'AddrHom3', 'AddrHomMore',
+    'AddrSyn1', 'AddrSyn2', 'AddrSyn3', 'AddrSynMore',
+    'AddrCand1', 'AddrCand2', 'AddrCand3', 'AddrCandMore',
+    // Section 6: Email Alternatives (12 columns)
+    'EmailHom1', 'EmailHom2', 'EmailHom3', 'EmailHomMore',
+    'EmailSyn1', 'EmailSyn2', 'EmailSyn3', 'EmailSynMore',
+    'EmailCand1', 'EmailCand2', 'EmailCand3', 'EmailCandMore'
+];
+
+/**
+ * Clean VisionAppraisal tags from text
+ * @param {string} text - Text with potential VA tags
+ * @returns {string} Cleaned text
+ */
+function cleanVATags(text) {
+    if (!text || typeof text !== 'string') return '';
+    return text
+        .replace(/::#\^#::/g, ', ')
+        .replace(/:\^#\^:/g, ' ')
+        .replace(/\^#\^/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/,\s*,/g, ',')
+        .replace(/^\s*,\s*|\s*,\s*$/g, '')
+        .trim();
+}
+
+/**
+ * Escape a value for CSV (handle quotes and commas)
+ * @param {*} value - Value to escape
+ * @returns {string} CSV-safe string
+ */
+function csvEscape(value) {
+    if (value === null || value === undefined) return '';
+    const str = String(value);
+    // If contains comma, quote, or newline, wrap in quotes and escape internal quotes
+    if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+}
+
+/**
+ * Assemble mailing name from entity based on entity type
+ * Per spec:
+ * - Individual: firstName lastName (or completeName)
+ * - AggregateHousehold: Household name term
+ * - Business/LegalConstruct: NonHumanName term
+ * @param {Object} entity - Entity object
+ * @returns {string} Assembled mailing name
+ */
+function assembleMailName(entity) {
+    if (!entity || !entity.name) return '';
+
+    const entityType = entity.__type || entity.constructor?.name || '';
+
+    // Individual: use firstName + lastName or completeName
+    if (entityType === 'Individual') {
+        if (entity.name.firstName || entity.name.lastName) {
+            const parts = [];
+            if (entity.name.firstName) parts.push(cleanVATags(entity.name.firstName));
+            if (entity.name.lastName) parts.push(cleanVATags(entity.name.lastName));
+            return parts.join(' ');
+        }
+        if (entity.name.completeName) {
+            return cleanVATags(entity.name.completeName);
+        }
+    }
+
+    // AggregateHousehold, Business, LegalConstruct: use primaryAlias.term or term
+    if (entity.name.primaryAlias && entity.name.primaryAlias.term) {
+        return cleanVATags(entity.name.primaryAlias.term);
+    }
+    if (entity.name.term) {
+        return cleanVATags(entity.name.term);
+    }
+
+    return '';
+}
+
+/**
+ * Extract address components from an Address object
+ * @param {Object} address - Address object
+ * @returns {Object} {line1, line2, city, state, zip}
+ */
+function extractAddressComponents(address) {
+    const result = { line1: '', line2: '', city: '', state: '', zip: '' };
+    if (!address) return result;
+
+    // Line 1: street address from primaryAlias or components
+    if (address.primaryAlias && address.primaryAlias.term) {
+        result.line1 = cleanVATags(address.primaryAlias.term);
+    } else if (address.streetNumber || address.streetName) {
+        const parts = [];
+        if (address.streetNumber?.term) parts.push(address.streetNumber.term);
+        if (address.streetName?.term) parts.push(address.streetName.term);
+        if (address.streetType?.term) parts.push(address.streetType.term);
+        result.line1 = cleanVATags(parts.join(' '));
+    }
+
+    // Line 2: secondary unit
+    if (address.secUnitType || address.secUnitNum) {
+        const parts = [];
+        if (address.secUnitType) parts.push(address.secUnitType);
+        if (address.secUnitNum) parts.push(address.secUnitNum);
+        result.line2 = parts.join(' ');
+    }
+
+    // City, State, Zip
+    if (address.city?.term) result.city = cleanVATags(address.city.term);
+    if (address.state?.term) result.state = cleanVATags(address.state.term);
+    if (address.zipCode?.term) result.zip = cleanVATags(address.zipCode.term);
+
+    return result;
+}
+
+/**
+ * Format a full address as a single string
+ * @param {Object} address - Address object
+ * @returns {string} Full address string
+ */
+function formatFullAddress(address) {
+    if (!address) return '';
+    const comp = extractAddressComponents(address);
+    const parts = [];
+    if (comp.line1) parts.push(comp.line1);
+    if (comp.line2) parts.push(comp.line2);
+    const cityStateZip = [];
+    if (comp.city) cityStateZip.push(comp.city);
+    if (comp.state) cityStateZip.push(comp.state);
+    if (comp.zip) cityStateZip.push(comp.zip);
+    if (cityStateZip.length > 0) parts.push(cityStateZip.join(' '));
+    return parts.join(', ');
+}
+
+/**
+ * Extract alternatives from an Aliased object
+ * @param {Object} aliased - Aliased object with alternatives property
+ * @param {string} category - 'homonyms', 'synonyms', or 'candidates'
+ * @returns {Array<string>} Array of term strings
+ */
+function extractAlternatives(aliased, category) {
+    if (!aliased || !aliased.alternatives) return [];
+    const alts = aliased.alternatives;
+
+    let items = [];
+    if (category === 'homonyms' && alts.homonyms) {
+        items = alts.homonyms;
+    } else if (category === 'synonyms' && alts.synonyms) {
+        items = alts.synonyms;
+    } else if (category === 'candidates' && alts.candidates) {
+        items = alts.candidates;
+    }
+
+    // Extract term from each AttributedTerm
+    return items.map(item => {
+        if (item && item.term) return cleanVATags(item.term);
+        if (typeof item === 'string') return cleanVATags(item);
+        return '';
+    }).filter(t => t);
+}
+
+/**
+ * Build alternative columns (first 3 individual, rest pipe-delimited in 4th)
+ * @param {Array<string>} items - Array of alternative strings
+ * @returns {Array<string>} Array of 4 column values
+ */
+function buildAlternativeColumns(items) {
+    const result = ['', '', '', ''];
+    if (!items || items.length === 0) return result;
+
+    if (items.length >= 1) result[0] = items[0];
+    if (items.length >= 2) result[1] = items[1];
+    if (items.length >= 3) result[2] = items[2];
+    if (items.length > 3) result[3] = items.slice(3).join('|');
+
+    return result;
+}
+
+/**
+ * Get entity type string for CSV
+ * @param {Object} entity - Entity object
+ * @returns {string} Entity type name
+ */
+function getEntityTypeString(entity) {
+    if (!entity) return '';
+    return entity.__type || entity.constructor?.name || 'Unknown';
+}
+
+/**
+ * Get source string for an entity
+ * @param {Object} entity - Entity object
+ * @param {string} key - Entity database key (optional, for fallback)
+ * @returns {string} 'visionAppraisal', 'bloomerang', or 'both'
+ */
+function getEntitySource(entity, key) {
+    if (entity && entity.source) {
+        if (entity.source.toLowerCase().includes('vision')) return 'visionAppraisal';
+        if (entity.source.toLowerCase().includes('bloomerang')) return 'bloomerang';
+    }
+    // Fallback: infer from key
+    if (key) {
+        if (key.startsWith('visionAppraisal:')) return 'visionAppraisal';
+        if (key.startsWith('bloomerang:')) return 'bloomerang';
+    }
+    return 'unknown';
+}
+
+/**
+ * Get email from entity
+ * @param {Object} entity - Entity object
+ * @returns {string} Email address or empty string
+ */
+function getEntityEmail(entity) {
+    if (!entity || !entity.contactInfo || !entity.contactInfo.email) return '';
+    const email = entity.contactInfo.email;
+    if (email.primaryAlias && email.primaryAlias.term) return cleanVATags(email.primaryAlias.term);
+    if (email.term) return cleanVATags(email.term);
+    return '';
+}
+
+/**
+ * Get phone from entity
+ * @param {Object} entity - Entity object
+ * @returns {string} Phone number or empty string
+ */
+function getEntityPhone(entity) {
+    if (!entity || !entity.contactInfo || !entity.contactInfo.phone) return '';
+    const phone = entity.contactInfo.phone;
+    if (phone.primaryAlias && phone.primaryAlias.term) return cleanVATags(phone.primaryAlias.term);
+    if (phone.term) return cleanVATags(phone.term);
+    return '';
+}
+
+/**
+ * Get PO Box from entity
+ * @param {Object} entity - Entity object
+ * @returns {string} PO Box or empty string
+ */
+function getEntityPOBox(entity) {
+    if (!entity || !entity.contactInfo || !entity.contactInfo.poBox) return '';
+    const poBox = entity.contactInfo.poBox;
+    if (poBox.primaryAlias && poBox.primaryAlias.term) return cleanVATags(poBox.primaryAlias.term);
+    if (poBox.term) return cleanVATags(poBox.term);
+    return '';
+}
+
+/**
+ * Get secondary addresses from entity
+ * @param {Object} entity - Entity object
+ * @returns {Array<string>} Array of formatted secondary address strings
+ */
+function getSecondaryAddresses(entity) {
+    if (!entity || !entity.contactInfo || !entity.contactInfo.secondaryAddress) return [];
+    const secondaries = entity.contactInfo.secondaryAddress;
+    if (!Array.isArray(secondaries)) return [];
+    return secondaries.map(addr => formatFullAddress(addr)).filter(a => a);
+}
+
+/**
+ * Build secondary address columns (first 3 individual, rest pipe-delimited in 4th)
+ * @param {Array<string>} addresses - Array of formatted address strings
+ * @returns {Array<string>} Array of 4 column values
+ */
+function buildSecondaryAddressColumns(addresses) {
+    const result = ['', '', '', ''];
+    if (!addresses || addresses.length === 0) return result;
+
+    if (addresses.length >= 1) result[0] = addresses[0];
+    if (addresses.length >= 2) result[1] = addresses[1];
+    if (addresses.length >= 3) result[2] = addresses[2];
+    if (addresses.length > 3) result[3] = addresses.slice(3).join('|');
+
+    return result;
+}
+
+/**
+ * Generate a CSV row for an entity (consensus, founding, member, or nearmiss)
+ * @param {string} rowType - 'consensus', 'founding', 'member', or 'nearmiss'
+ * @param {Object} entity - Entity object
+ * @param {string} key - Entity database key (empty for consensus)
+ * @param {number|string} groupIndex - Group index (for consensus/founding only)
+ * @param {boolean} includeAlternatives - Whether to populate alternatives columns
+ * @returns {Array<string>} Array of 54 column values
+ */
+function generateCSVRow(rowType, entity, key, groupIndex, includeAlternatives) {
+    const row = new Array(54).fill('');
+
+    // Section 1: Identification & Mail Merge Core
+    row[0] = rowType;                                    // RowType
+    row[1] = (rowType === 'consensus' || rowType === 'founding') ? String(groupIndex) : ''; // GroupIndex
+    row[2] = (rowType === 'consensus') ? '' : key;       // Key
+    row[3] = assembleMailName(entity);                   // MailName
+
+    // Primary address components
+    const primaryAddr = entity?.contactInfo?.primaryAddress;
+    const addrComp = extractAddressComponents(primaryAddr);
+    row[4] = addrComp.line1;                             // MailAddr1
+    row[5] = addrComp.line2;                             // MailAddr2
+    row[6] = addrComp.city;                              // MailCity
+    row[7] = addrComp.state;                             // MailState
+    row[8] = addrComp.zip;                               // MailZip
+    row[9] = getEntityEmail(entity);                     // Email
+
+    // Section 2: Additional Contact Info
+    row[10] = getEntityPhone(entity);                    // Phone
+    row[11] = getEntityPOBox(entity);                    // POBox
+
+    // Secondary addresses
+    const secAddrs = getSecondaryAddresses(entity);
+    const secAddrCols = buildSecondaryAddressColumns(secAddrs);
+    row[12] = secAddrCols[0];                            // SecAddr1
+    row[13] = secAddrCols[1];                            // SecAddr2
+    row[14] = secAddrCols[2];                            // SecAddr3
+    row[15] = secAddrCols[3];                            // SecAddrMore
+
+    // Section 3: Entity Metadata
+    row[16] = getEntityTypeString(entity);               // EntityType
+    row[17] = (rowType === 'consensus') ? 'consensus' : getEntitySource(entity, key); // Source
+
+    // Sections 4-6: Alternatives (only for consensus row)
+    if (includeAlternatives && entity) {
+        // Name alternatives (columns 18-29)
+        const nameHom = extractAlternatives(entity.name, 'homonyms');
+        const nameSyn = extractAlternatives(entity.name, 'synonyms');
+        const nameCand = extractAlternatives(entity.name, 'candidates');
+
+        const nameHomCols = buildAlternativeColumns(nameHom);
+        row[18] = nameHomCols[0]; row[19] = nameHomCols[1]; row[20] = nameHomCols[2]; row[21] = nameHomCols[3];
+
+        const nameSynCols = buildAlternativeColumns(nameSyn);
+        row[22] = nameSynCols[0]; row[23] = nameSynCols[1]; row[24] = nameSynCols[2]; row[25] = nameSynCols[3];
+
+        const nameCandCols = buildAlternativeColumns(nameCand);
+        row[26] = nameCandCols[0]; row[27] = nameCandCols[1]; row[28] = nameCandCols[2]; row[29] = nameCandCols[3];
+
+        // Address alternatives (columns 30-41) - from primaryAddress
+        const addrHom = extractAlternatives(primaryAddr, 'homonyms');
+        const addrSyn = extractAlternatives(primaryAddr, 'synonyms');
+        const addrCand = extractAlternatives(primaryAddr, 'candidates');
+
+        const addrHomCols = buildAlternativeColumns(addrHom);
+        row[30] = addrHomCols[0]; row[31] = addrHomCols[1]; row[32] = addrHomCols[2]; row[33] = addrHomCols[3];
+
+        const addrSynCols = buildAlternativeColumns(addrSyn);
+        row[34] = addrSynCols[0]; row[35] = addrSynCols[1]; row[36] = addrSynCols[2]; row[37] = addrSynCols[3];
+
+        const addrCandCols = buildAlternativeColumns(addrCand);
+        row[38] = addrCandCols[0]; row[39] = addrCandCols[1]; row[40] = addrCandCols[2]; row[41] = addrCandCols[3];
+
+        // Email alternatives (columns 42-53) - from email
+        const emailObj = entity?.contactInfo?.email;
+        const emailHom = extractAlternatives(emailObj, 'homonyms');
+        const emailSyn = extractAlternatives(emailObj, 'synonyms');
+        const emailCand = extractAlternatives(emailObj, 'candidates');
+
+        const emailHomCols = buildAlternativeColumns(emailHom);
+        row[42] = emailHomCols[0]; row[43] = emailHomCols[1]; row[44] = emailHomCols[2]; row[45] = emailHomCols[3];
+
+        const emailSynCols = buildAlternativeColumns(emailSyn);
+        row[46] = emailSynCols[0]; row[47] = emailSynCols[1]; row[48] = emailSynCols[2]; row[49] = emailSynCols[3];
+
+        const emailCandCols = buildAlternativeColumns(emailCand);
+        row[50] = emailCandCols[0]; row[51] = emailCandCols[1]; row[52] = emailCandCols[2]; row[53] = emailCandCols[3];
+    }
+
+    return row;
+}
+
+/**
+ * Generate all CSV rows for a single EntityGroup
+ * Per spec: consensus, founding, member(s), nearmiss(es)
+ * @param {Object} group - EntityGroup object
+ * @param {boolean} includeNearMisses - Whether to include near miss rows
+ * @returns {Array<Array<string>>} Array of row arrays
+ */
+function generateEntityGroupRows(group, includeNearMisses) {
+    const rows = [];
+
+    // 1. Consensus row (if group has consensus entity, or use founding member data)
+    const consensusEntity = group.consensusEntity || getEntityByKey(group.foundingMemberKey);
+    if (consensusEntity) {
+        rows.push(generateCSVRow('consensus', consensusEntity, '', group.index, true));
+    }
+
+    // 2. Founding member row
+    const foundingEntity = getEntityByKey(group.foundingMemberKey);
+    if (foundingEntity) {
+        rows.push(generateCSVRow('founding', foundingEntity, group.foundingMemberKey, group.index, false));
+    }
+
+    // 3. Other member rows (excluding founding member)
+    if (group.memberKeys && group.memberKeys.length > 1) {
+        for (const memberKey of group.memberKeys) {
+            if (memberKey !== group.foundingMemberKey) {
+                const memberEntity = getEntityByKey(memberKey);
+                if (memberEntity) {
+                    rows.push(generateCSVRow('member', memberEntity, memberKey, '', false));
+                }
+            }
+        }
+    }
+
+    // 4. Near miss rows (if enabled)
+    if (includeNearMisses && group.nearMissKeys && group.nearMissKeys.length > 0) {
+        for (const nearMissKey of group.nearMissKeys) {
+            const nearMissEntity = getEntityByKey(nearMissKey);
+            if (nearMissEntity) {
+                rows.push(generateCSVRow('nearmiss', nearMissEntity, nearMissKey, '', false));
+            }
+        }
+    }
+
+    return rows;
+}
+
+/**
+ * Export EntityGroups to CSV files (prospects and donors)
+ * Main export function per reference_csvExportSpecification.md
+ *
+ * @param {Object} groupDatabase - EntityGroupDatabase (serialized format)
+ * @param {Object} options - Export options
+ * @param {boolean} options.includeNearMisses - Include near miss rows (default: true)
+ * @returns {Object} {prospectsCSV, donorsCSV, stats}
+ */
+function exportEntityGroupsToCSV(groupDatabase, options = {}) {
+    const includeNearMisses = options.includeNearMisses !== false; // default true
+
+    const groups = Object.values(groupDatabase.groups || {});
+
+    // Separate prospects (no Bloomerang members) from donors (has Bloomerang members)
+    const prospectGroups = groups.filter(g => !g.hasBloomerangMember);
+    const donorGroups = groups.filter(g => g.hasBloomerangMember);
+
+    // Build CSV header row
+    const headerRow = CSV_HEADERS.map(h => csvEscape(h)).join(',');
+
+    // Generate prospect rows
+    const prospectRows = [];
+    for (const group of prospectGroups) {
+        const groupRows = generateEntityGroupRows(group, includeNearMisses);
+        prospectRows.push(...groupRows);
+    }
+
+    // Generate donor rows
+    const donorRows = [];
+    for (const group of donorGroups) {
+        const groupRows = generateEntityGroupRows(group, includeNearMisses);
+        donorRows.push(...groupRows);
+    }
+
+    // Build CSV strings
+    const prospectDataRows = prospectRows.map(row => row.map(v => csvEscape(v)).join(','));
+    const donorDataRows = donorRows.map(row => row.map(v => csvEscape(v)).join(','));
+
+    const prospectsCSV = [headerRow, ...prospectDataRows].join('\n');
+    const donorsCSV = [headerRow, ...donorDataRows].join('\n');
+
+    return {
+        prospectsCSV,
+        donorsCSV,
+        stats: {
+            prospectGroups: prospectGroups.length,
+            prospectRows: prospectRows.length,
+            donorGroups: donorGroups.length,
+            donorRows: donorRows.length
+        }
+    };
+}
+
+/**
+ * Download CSV export files (triggered from UI)
+ * Downloads both prospects.csv and donors.csv
+ */
+function downloadCSVExport() {
+    const db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+    if (!db) {
+        showEntityGroupStatus('Please load an EntityGroup database first', 'error');
+        return;
+    }
+
+    // Check if unified database is loaded (needed for entity lookups)
+    if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+        showEntityGroupStatus('Please load the Unified Entity Database first (needed for entity details)', 'error');
+        return;
+    }
+
+    showEntityGroupStatus('Generating CSV export...', 'loading');
+
+    try {
+        // Get include near misses option from checkbox if present
+        const nearMissCheckbox = document.getElementById('csvIncludeNearMisses');
+        const includeNearMisses = nearMissCheckbox ? nearMissCheckbox.checked : true;
+
+        const result = exportEntityGroupsToCSV(db, { includeNearMisses });
+
+        const dateStr = new Date().toISOString().slice(0, 10);
+
+        // Download prospects CSV
+        const prospectsBlob = new Blob([result.prospectsCSV], { type: 'text/csv;charset=utf-8;' });
+        const prospectsUrl = URL.createObjectURL(prospectsBlob);
+        const prospectsLink = document.createElement('a');
+        prospectsLink.href = prospectsUrl;
+        prospectsLink.download = `prospects_${dateStr}.csv`;
+        document.body.appendChild(prospectsLink);
+        prospectsLink.click();
+        document.body.removeChild(prospectsLink);
+        URL.revokeObjectURL(prospectsUrl);
+
+        // Small delay before second download
+        setTimeout(() => {
+            // Download donors CSV
+            const donorsBlob = new Blob([result.donorsCSV], { type: 'text/csv;charset=utf-8;' });
+            const donorsUrl = URL.createObjectURL(donorsBlob);
+            const donorsLink = document.createElement('a');
+            donorsLink.href = donorsUrl;
+            donorsLink.download = `donors_${dateStr}.csv`;
+            document.body.appendChild(donorsLink);
+            donorsLink.click();
+            document.body.removeChild(donorsLink);
+            URL.revokeObjectURL(donorsUrl);
+
+            showEntityGroupStatus(
+                `Exported ${result.stats.prospectGroups} prospect groups (${result.stats.prospectRows} rows) ` +
+                `and ${result.stats.donorGroups} donor groups (${result.stats.donorRows} rows)`,
+                'success'
+            );
+        }, 500);
+
+    } catch (error) {
+        console.error('CSV export error:', error);
+        showEntityGroupStatus(`Export error: ${error.message}`, 'error');
+    }
+}
+
+// Export for global access
+window.exportEntityGroupsToCSV = exportEntityGroupsToCSV;
+window.downloadCSVExport = downloadCSVExport;
+
+// =============================================================================
+// ENTITY COMPARISON UTILITY
+// =============================================================================
+
+/**
+ * Compare two entities by their database keys and output full reconciliation to console
+ * @param {string} key1 - First entity database key (e.g., 'visionAppraisal:FireNumber:1418')
+ * @param {string} key2 - Second entity database key (e.g., 'visionAppraisal:FireNumber:423')
+ */
+function compareEntitiesByKey(key1, key2) {
+    const db = window.unifiedEntityDatabase;
+    if (!db || !db.entities) {
+        console.log('ERROR: unifiedEntityDatabase not loaded');
+        return { error: 'Database not loaded' };
+    }
+
+    const entity1 = db.entities[key1];
+    const entity2 = db.entities[key2];
+
+    if (!entity1) {
+        console.log(`ERROR: Entity not found: ${key1}`);
+        return { error: `Entity not found: ${key1}` };
+    }
+    if (!entity2) {
+        console.log(`ERROR: Entity not found: ${key2}`);
+        return { error: `Entity not found: ${key2}` };
+    }
+
+    // Extract names for display
+    const getName = (entity) => {
+        if (entity.name?.primaryAlias?.term) return entity.name.primaryAlias.term;
+        if (entity.name?.completeName) return entity.name.completeName;
+        if (entity.name?.firstName || entity.name?.lastName) {
+            return [entity.name.firstName, entity.name.lastName].filter(Boolean).join(' ');
+        }
+        return entity.name?.toString?.() || 'Unknown';
+    };
+
+    console.log('════════════════════════════════════════════════════════════════');
+    console.log('                    ENTITY COMPARISON REPORT                     ');
+    console.log('════════════════════════════════════════════════════════════════');
+
+    console.log('\n┌─── ENTITY 1 ───────────────────────────────────────────────────');
+    console.log(`│ Key:  ${key1}`);
+    console.log(`│ Type: ${entity1.constructor?.name || entity1.__type || 'Unknown'}`);
+    console.log(`│ Name: ${getName(entity1)}`);
+    console.log('└────────────────────────────────────────────────────────────────');
+
+    console.log('\n┌─── ENTITY 2 ───────────────────────────────────────────────────');
+    console.log(`│ Key:  ${key2}`);
+    console.log(`│ Type: ${entity2.constructor?.name || entity2.__type || 'Unknown'}`);
+    console.log(`│ Name: ${getName(entity2)}`);
+    console.log('└────────────────────────────────────────────────────────────────');
+
+    // Perform comparison
+    let result;
+    if (typeof universalCompareTo === 'function') {
+        result = universalCompareTo(entity1, entity2);
+    } else if (typeof entity1.compareTo === 'function') {
+        result = entity1.compareTo(entity2, true);
+    } else {
+        console.log('ERROR: No comparison function available');
+        return { error: 'No comparison function available' };
+    }
+
+    const score = result.score ?? result.overallSimilarity ?? result;
+    const scorePercent = (typeof score === 'number' ? score * 100 : 0).toFixed(2);
+
+    console.log('\n┌─── COMPARISON RESULT ──────────────────────────────────────────');
+    console.log(`│ Overall Score: ${scorePercent}%`);
+    if (result.comparisonType) {
+        console.log(`│ Comparison Type: ${result.comparisonType}`);
+    }
+    console.log('└────────────────────────────────────────────────────────────────');
+
+    // Output detailed breakdown
+    if (result.details) {
+        console.log('\n┌─── DETAILED BREAKDOWN ─────────────────────────────────────────');
+
+        // Top-level components
+        if (result.details.components) {
+            console.log('│');
+            console.log('│ Components:');
+            for (const [compName, compData] of Object.entries(result.details.components)) {
+                const sim = (compData.similarity ?? compData.score ?? 0) * 100;
+                const weight = (compData.actualWeight ?? compData.weight ?? 0) * 100;
+                const contrib = (compData.weightedValue ?? compData.contribution ?? 0) * 100;
+                console.log(`│   ${compName}:`);
+                console.log(`│     Similarity: ${sim.toFixed(2)}%  Weight: ${weight.toFixed(1)}%  Contribution: ${contrib.toFixed(2)}%`);
+            }
+        }
+
+        // Subordinate details (nested comparison breakdowns)
+        if (result.details.subordinateDetails) {
+            console.log('│');
+            console.log('│ Subordinate Details:');
+            for (const [subName, subData] of Object.entries(result.details.subordinateDetails)) {
+                console.log(`│   ${subName}:`);
+                if (subData.components) {
+                    for (const [subCompName, subCompData] of Object.entries(subData.components)) {
+                        const sim = (subCompData.similarity ?? subCompData.score ?? 0) * 100;
+                        const weight = (subCompData.actualWeight ?? subCompData.weight ?? 0) * 100;
+                        console.log(`│     ${subCompName}: ${sim.toFixed(2)}% (weight: ${weight.toFixed(1)}%)`);
+                    }
+                }
+                if (subData.addressMatch) {
+                    console.log(`│     Address Match: ${subData.addressMatch.matchType || 'N/A'}`);
+                    console.log(`│       Score: ${((subData.addressMatch.score ?? 0) * 100).toFixed(2)}%`);
+                }
+            }
+        }
+
+        console.log('└────────────────────────────────────────────────────────────────');
+    }
+
+    // Full JSON output for deep inspection
+    console.log('\n┌─── FULL RESULT OBJECT (expandable) ───────────────────────────');
+    console.log('Details:', result.details || result);
+    console.log('└────────────────────────────────────────────────────────────────');
+
+    return result;
+}
+
+/**
+ * Run comparison from UI inputs
+ */
+function runEntityComparison() {
+    const key1Input = document.getElementById('compareEntityKey1');
+    const key2Input = document.getElementById('compareEntityKey2');
+
+    if (!key1Input || !key2Input) {
+        console.log('ERROR: Input elements not found');
+        return;
+    }
+
+    const key1 = key1Input.value.trim();
+    const key2 = key2Input.value.trim();
+
+    if (!key1 || !key2) {
+        alert('Please enter both entity keys');
+        return;
+    }
+
+    console.clear();
+    compareEntitiesByKey(key1, key2);
+}
+
+// Export for global access
+window.compareEntitiesByKey = compareEntitiesByKey;
+window.runEntityComparison = runEntityComparison;
 
 // =============================================================================
 // INITIALIZATION ON DOM READY
