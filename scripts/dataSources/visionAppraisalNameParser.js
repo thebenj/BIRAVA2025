@@ -1008,6 +1008,14 @@ const VisionAppraisalNameParser = {
         individual.googleFileId = record.googleFileId || '';
         individual.source = 'VISION_APPRAISAL';
 
+        // Add property value fields to individual's otherInfo (Dec 2025)
+        if (record.assessmentValue || record.appraisalValue) {
+            const individualOtherInfo = new OtherInfo();
+            individualOtherInfo.setAssessmentValue(record.assessmentValue);
+            individualOtherInfo.setAppraisalValue(record.appraisalValue);
+            individual.addOtherInfo(individualOtherInfo);
+        }
+
         // COMMENTED OUT: Duplicate address processing - addresses are now processed in Individual constructor
         // Process addresses if address processing functions are available
         /*if (typeof processAddress !== 'undefined' && typeof createAddressFromParsedData !== 'undefined') {
@@ -1062,15 +1070,18 @@ const VisionAppraisalNameParser = {
             (householdName && householdName.term ? householdName.term : '');
 
         // Add individuals to household and populate their householdInformation
-        // Pattern mirrors Bloomerang: create OtherInfo, assign HouseholdInformation via factory, call addOtherInfo
+        // UPDATE existing OtherInfo rather than replacing (preserves assessmentValue/appraisalValue)
         individuals.forEach((individual, idx) => {
-            const otherInfo = new OtherInfo();
-            otherInfo.householdInformation = HouseholdInformation.fromVisionAppraisalData(
+            // Get existing OtherInfo or create new one if none exists
+            if (!individual.otherInfo) {
+                individual.otherInfo = new OtherInfo();
+            }
+            // Set householdInformation on existing OtherInfo (preserves other properties like assessmentValue/appraisalValue)
+            individual.otherInfo.householdInformation = HouseholdInformation.fromVisionAppraisalData(
                 householdIdentifierStr,
                 householdNameStr,
                 idx === 0  // first individual is head of household
             );
-            individual.addOtherInfo(otherInfo);
             household.individuals.push(individual);
         });
 
@@ -1080,6 +1091,15 @@ const VisionAppraisalNameParser = {
         household.fireNumber = record.fireNumber || null;
         household.googleFileId = record.googleFileId || '';
         household.source = 'VISION_APPRAISAL';
+
+        // Add property value fields to household's otherInfo (Dec 2025)
+        // These are property-level values, so they belong on the household entity
+        if (record.assessmentValue || record.appraisalValue) {
+            const householdOtherInfo = new OtherInfo();
+            householdOtherInfo.setAssessmentValue(record.assessmentValue);
+            householdOtherInfo.setAppraisalValue(record.appraisalValue);
+            household.addOtherInfo(householdOtherInfo);
+        }
 
         return household;
     },
@@ -1112,6 +1132,14 @@ const VisionAppraisalNameParser = {
         business.googleFileId = record.googleFileId || '';
         business.source = 'VISION_APPRAISAL';
 
+        // Add property value fields to business's otherInfo (Dec 2025)
+        if (record.assessmentValue || record.appraisalValue) {
+            const businessOtherInfo = new OtherInfo();
+            businessOtherInfo.setAssessmentValue(record.assessmentValue);
+            businessOtherInfo.setAppraisalValue(record.appraisalValue);
+            business.addOtherInfo(businessOtherInfo);
+        }
+
         return business;
     },
 
@@ -1136,6 +1164,14 @@ const VisionAppraisalNameParser = {
         legalConstruct.fireNumber = record.fireNumber || null;
         legalConstruct.googleFileId = record.googleFileId || '';
         legalConstruct.source = 'VISION_APPRAISAL';
+
+        // Add property value fields to legalConstruct's otherInfo (Dec 2025)
+        if (record.assessmentValue || record.appraisalValue) {
+            const legalConstructOtherInfo = new OtherInfo();
+            legalConstructOtherInfo.setAssessmentValue(record.assessmentValue);
+            legalConstructOtherInfo.setAppraisalValue(record.appraisalValue);
+            legalConstruct.addOtherInfo(legalConstructOtherInfo);
+        }
 
         return legalConstruct;
     },

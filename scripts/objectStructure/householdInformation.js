@@ -32,6 +32,19 @@ class HouseholdInformation {
         this.isHeadOfHousehold = isHeadOfHousehold;
         this.householdIdentifier = householdIdentifier;
 
+        // Cross-reference properties (populated during unified entity database and entity group construction)
+        // parentKey: The database key of the household entity this individual belongs to
+        // Populated during unified entity database construction when keys are generated
+        this.parentKey = null;
+
+        // siblingKeys: Array of database keys for other individuals in the same household
+        // Populated during unified entity database construction when keys are generated
+        this.siblingKeys = [];
+
+        // entityGroupIndex: The index of the EntityGroup this individual's household belongs to
+        // Populated during EntityGroupDatabase construction when group indices are assigned
+        this.entityGroupIndex = null;
+
         // Weighted comparison architecture properties
         this.comparisonWeights = null;
         this.comparisonCalculatorName = 'householdInformationWeightedComparison';
@@ -169,6 +182,16 @@ class HouseholdInformation {
         if (data.householdIdentifier !== undefined) {
             this.householdIdentifier = String(data.householdIdentifier || '').trim();
         }
+        // Cross-reference properties
+        if (data.parentKey !== undefined) {
+            this.parentKey = data.parentKey;
+        }
+        if (data.siblingKeys !== undefined) {
+            this.siblingKeys = Array.isArray(data.siblingKeys) ? data.siblingKeys : [];
+        }
+        if (data.entityGroupIndex !== undefined) {
+            this.entityGroupIndex = data.entityGroupIndex;
+        }
     }
 
     /**
@@ -189,6 +212,9 @@ class HouseholdInformation {
             householdName: this.householdName,
             isHeadOfHousehold: this.isHeadOfHousehold,
             householdIdentifier: this.householdIdentifier,
+            parentKey: this.parentKey,
+            siblingKeys: this.siblingKeys,
+            entityGroupIndex: this.entityGroupIndex,
             hasAssociation: this.hasHouseholdAssociation()
         };
     }
@@ -248,6 +274,17 @@ class HouseholdInformation {
             if (typeof resolveComparisonCalculator === 'function') {
                 instance.comparisonCalculator = resolveComparisonCalculator(data.comparisonCalculatorName);
             }
+        }
+
+        // Restore cross-reference properties if present
+        if (data.parentKey !== undefined) {
+            instance.parentKey = data.parentKey;
+        }
+        if (data.siblingKeys !== undefined) {
+            instance.siblingKeys = Array.isArray(data.siblingKeys) ? data.siblingKeys : [];
+        }
+        if (data.entityGroupIndex !== undefined) {
+            instance.entityGroupIndex = data.entityGroupIndex;
         }
 
         return instance;

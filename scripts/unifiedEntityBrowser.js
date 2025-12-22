@@ -1053,11 +1053,9 @@ function generateEntityExplorerStyles() {
         }
 
         .property-row {
-            padding: 8px 12px;
+            padding: 10px 12px;
             border-bottom: 1px solid #eee;
-            display: flex;
-            align-items: flex-start;
-            gap: 15px;
+            display: block;
         }
         .property-row:last-child { border-bottom: none; }
         .property-row:hover { background: #f8f9fa; }
@@ -1065,12 +1063,20 @@ function generateEntityExplorerStyles() {
         .property-name {
             font-weight: 600;
             color: #2c3e50;
-            min-width: 150px;
-            flex-shrink: 0;
+            display: block;
+            margin-bottom: 4px;
         }
         .property-value {
-            flex-grow: 1;
+            display: block;
+            padding-left: 12px;
             word-break: break-word;
+        }
+        .property-preview {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 4px;
+            padding-left: 12px;
+            font-style: italic;
         }
 
         /* Null values */
@@ -1280,9 +1286,10 @@ function generateEntityExplorerScripts(dataStoreJson) {
                 return html;
             }
 
-            // Objects
+            // Objects - filter out excluded properties
             if (type === 'object') {
-                const keys = Object.keys(obj);
+                const excludedProps = ['comparisonWeights', 'comparisonCalculatorName', 'comparisonCalculator'];
+                const keys = Object.keys(obj).filter(k => excludedProps.indexOf(k) === -1);
                 if (keys.length === 0) return '<span class="value-null">{empty object}</span>';
 
                 let html = '<div class="object-container">';
@@ -1329,9 +1336,11 @@ function generateEntityExplorerScripts(dataStoreJson) {
                     }).join(', ');
                     if (value.length > 2) preview += '...';
                 } else if (!isArray) {
-                    const keys = Object.keys(value).slice(0, 3);
+                    const excludedProps = ['comparisonWeights', 'comparisonCalculatorName', 'comparisonCalculator'];
+                    const allKeys = Object.keys(value).filter(k => excludedProps.indexOf(k) === -1);
+                    const keys = allKeys.slice(0, 3);
                     preview = keys.map(k => k + ': ' + getValuePreview(value[k])).join(', ');
-                    if (Object.keys(value).length > 3) preview += '...';
+                    if (allKeys.length > 3) preview += '...';
                 }
 
                 return \`
@@ -1373,6 +1382,13 @@ function generateEntityExplorerScripts(dataStoreJson) {
     `;
 }
 
+// Properties to exclude from Entity Explorer display
+const ENTITY_EXPLORER_EXCLUDED_PROPERTIES = new Set([
+    'comparisonWeights',
+    'comparisonCalculatorName',
+    'comparisonCalculator'
+]);
+
 /**
  * Render object properties for initial display
  * @param {Object} obj - Object to render
@@ -1384,7 +1400,8 @@ function renderObjectProperties(obj, prefix) {
         return '<div class="property-row"><span class="value-null">null</span></div>';
     }
 
-    const keys = Object.keys(obj);
+    // Filter out excluded properties
+    const keys = Object.keys(obj).filter(key => !ENTITY_EXPLORER_EXCLUDED_PROPERTIES.has(key));
     if (keys.length === 0) {
         return '<div class="property-row"><span class="value-null">{empty object}</span></div>';
     }
@@ -1483,26 +1500,86 @@ function renderArrayPreview(arr, propertyName, dataId) {
     }
     window._entityExplorerDataStore[storeId] = arr;
 
-    // Generate preview of first few items
+    // Generate preview of first few items with meaningful content
     let previewItems = [];
     const maxPreview = Math.min(3, arr.length);
     for (let i = 0; i < maxPreview; i++) {
         const item = arr[i];
-        previewItems.push(`<div class="preview-property">[${i}]: ${getValuePreviewStatic(item)}</div>`);
+        if (typeof item === 'string') {
+            previewItems.push(item.substring(0, 50));
+        } else if (typeof item === 'object' && item) {
+            const preview = extractMeaningfulPreview(item);
+            previewItems.push(preview || `[${i}]`);
+        } else {
+            previewItems.push(String(item));
+        }
     }
-    if (arr.length > maxPreview) {
-        previewItems.push(`<div class="preview-property">... and ${arr.length - maxPreview} more items</div>`);
-    }
+    const arrayPreview = previewItems.join(', ') + (arr.length > maxPreview ? ', ...' : '');
 
     return `
-        <div class="object-container array-container">
-            <div class="object-header">
-                <span class="object-type-label array-type-label">Array[${arr.length}]</span>
-                <button class="expand-btn" onclick="expandObject('${storeId}', '${escapeHtmlForBrowser(propertyName)}')">Expand</button>
-            </div>
-            <div class="object-preview">${previewItems.join('')}</div>
-        </div>
+        <button class="expand-btn array-expand-btn" onclick="expandObject('${storeId}', '${escapeHtmlForBrowser(propertyName)}')">Expand Array (${arr.length} items)</button>
+        ${arrayPreview ? `<div class="property-preview">${escapeHtmlForBrowser(arrayPreview)}</div>` : ''}
     `;
+}
+
+/**
+ * Extract a meaningful content preview from an object
+ * @param {Object} obj - Object to extract preview from
+ * @returns {string} Meaningful preview string or empty string
+ */
+function extractMeaningfulPreview(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+
+    // For Aliased objects, show the primaryAlias term
+    if (obj.type === 'Aliased' && obj.primaryAlias && obj.primaryAlias.term) {
+        return obj.primaryAlias.term;
+    }
+
+    // For objects with a term property
+    if (obj.term) {
+        return obj.term;
+    }
+
+    // For IndividualName, show the name
+    if (obj.type === 'IndividualName') {
+        const parts = [];
+        if (obj.firstName) parts.push(obj.firstName);
+        if (obj.lastName) parts.push(obj.lastName);
+        if (parts.length > 0) return parts.join(' ');
+        if (obj.completeName) return obj.completeName;
+    }
+
+    // For ContactInfo, show primary address or email
+    if (obj.type === 'ContactInfo') {
+        if (obj.primaryAddress && obj.primaryAddress.primaryAlias && obj.primaryAddress.primaryAlias.term) {
+            return obj.primaryAddress.primaryAlias.term;
+        }
+        if (obj.email && obj.email.primaryAlias && obj.email.primaryAlias.term) {
+            return obj.email.primaryAlias.term;
+        }
+    }
+
+    // For OtherInfo, show something useful
+    if (obj.type === 'OtherInfo' && obj.householdInformation) {
+        return 'Household information available';
+    }
+
+    // For SimpleIdentifiers
+    if (obj.type === 'SimpleIdentifiers' && obj.primaryAlias && obj.primaryAlias.term) {
+        return obj.primaryAlias.term;
+    }
+
+    // Generic: look for common meaningful properties
+    const meaningfulKeys = ['name', 'term', 'value', 'identifier', 'description', 'title'];
+    for (const key of meaningfulKeys) {
+        if (obj[key]) {
+            if (typeof obj[key] === 'string') return obj[key];
+            if (obj[key].term) return obj[key].term;
+            if (obj[key].primaryAlias && obj[key].primaryAlias.term) return obj[key].primaryAlias.term;
+        }
+    }
+
+    return '';
 }
 
 /**
@@ -1513,13 +1590,14 @@ function renderArrayPreview(arr, propertyName, dataId) {
  * @returns {string} HTML content
  */
 function renderObjectPreview(obj, propertyName, dataId) {
-    const keys = Object.keys(obj);
+    // Filter out excluded properties from count
+    const keys = Object.keys(obj).filter(key => !ENTITY_EXPLORER_EXCLUDED_PROPERTIES.has(key));
     if (keys.length === 0) {
         return '<span class="value-null">{empty object}</span>';
     }
 
     // Get the constructor name for display
-    const typeName = obj.constructor?.name || 'Object';
+    const typeName = obj.constructor?.name || obj.type || 'Object';
 
     // Generate unique ID and store data
     const storeId = generateDataStoreId();
@@ -1528,26 +1606,12 @@ function renderObjectPreview(obj, propertyName, dataId) {
     }
     window._entityExplorerDataStore[storeId] = obj;
 
-    // Generate preview of first few properties
-    let previewItems = [];
-    const maxPreview = Math.min(4, keys.length);
-    for (let i = 0; i < maxPreview; i++) {
-        const key = keys[i];
-        const value = obj[key];
-        previewItems.push(`<div class="preview-property"><strong>${escapeHtmlForBrowser(key)}:</strong> ${getValuePreviewStatic(value)}</div>`);
-    }
-    if (keys.length > maxPreview) {
-        previewItems.push(`<div class="preview-property">... and ${keys.length - maxPreview} more properties</div>`);
-    }
+    // Try to get a meaningful content preview
+    const meaningfulPreview = extractMeaningfulPreview(obj);
 
     return `
-        <div class="object-container">
-            <div class="object-header">
-                <span class="object-type-label">${escapeHtmlForBrowser(typeName)}</span>
-                <button class="expand-btn" onclick="expandObject('${storeId}', '${escapeHtmlForBrowser(propertyName)}')">Expand</button>
-            </div>
-            <div class="object-preview">${previewItems.join('')}</div>
-        </div>
+        <button class="expand-btn" onclick="expandObject('${storeId}', '${escapeHtmlForBrowser(propertyName)}')">Expand ${escapeHtmlForBrowser(typeName)} (${keys.length} properties)</button>
+        ${meaningfulPreview ? `<div class="property-preview">${escapeHtmlForBrowser(meaningfulPreview)}</div>` : ''}
     `;
 }
 

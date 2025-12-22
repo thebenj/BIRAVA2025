@@ -362,11 +362,9 @@ function getUniversalEntityStyles(sourceKey) {
         }
 
         .explorer-property {
-            display: flex;
-            align-items: flex-start;
-            padding: 8px 12px;
+            display: block;
+            padding: 10px 12px;
             border-bottom: 1px solid #e9ecef;
-            gap: 10px;
         }
 
         .explorer-property:last-child {
@@ -376,14 +374,23 @@ function getUniversalEntityStyles(sourceKey) {
         .explorer-property-name {
             font-weight: 600;
             color: #495057;
-            min-width: 150px;
-            flex-shrink: 0;
+            display: block;
+            margin-bottom: 4px;
         }
 
         .explorer-property-value {
             color: #212529;
             word-break: break-word;
-            flex: 1;
+            display: block;
+            padding-left: 12px;
+        }
+
+        .explorer-property-preview {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 4px;
+            padding-left: 12px;
+            font-style: italic;
         }
 
         .explorer-property-value.null-value {
@@ -1688,9 +1695,35 @@ function generateUniversalMetadataSection(entityWrapper) {
  * @param {Object} entityWrapper - Entity wrapper
  * @returns {string} HTML for raw data section
  */
+/**
+ * Filter out excluded properties from an object for display purposes only.
+ * Creates a copy - does NOT modify the original object.
+ * @param {*} obj - Object to filter
+ * @returns {*} Filtered copy of the object
+ */
+function filterExcludedPropertiesForDisplay(obj) {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj !== 'object') return obj;
+    if (Array.isArray(obj)) {
+        return obj.map(item => filterExcludedPropertiesForDisplay(item));
+    }
+
+    const filtered = {};
+    for (const key of Object.keys(obj)) {
+        if (key === 'comparisonWeights' || key === 'comparisonCalculatorName' || key === 'comparisonCalculator') {
+            continue; // Skip excluded properties
+        }
+        filtered[key] = filterExcludedPropertiesForDisplay(obj[key]);
+    }
+    return filtered;
+}
+
 function generateUniversalRawDataSection(entityWrapper) {
     // Generate the interactive explorer for top-level properties
     const explorerHTML = generateInteractiveExplorer(entityWrapper.entity, 'entity');
+
+    // Filter out excluded properties for raw JSON display (creates a copy, does not modify original)
+    const filteredEntity = filterExcludedPropertiesForDisplay(entityWrapper.entity);
 
     return `
         <div class="card">
@@ -1709,13 +1742,20 @@ function generateUniversalRawDataSection(entityWrapper) {
                 </button>
                 <div class="raw-data-content" id="rawDataContent">
                     <div class="raw-json">
-${JSON.stringify(entityWrapper.entity, null, 2)}
+${JSON.stringify(filteredEntity, null, 2)}
                     </div>
                 </div>
             </div>
         </div>
     `;
 }
+
+// Properties to exclude from the interactive explorer display
+const EXPLORER_EXCLUDED_PROPERTIES = new Set([
+    'comparisonWeights',
+    'comparisonCalculatorName',
+    'comparisonCalculator'
+]);
 
 /**
  * Generate interactive explorer HTML for an object's properties
@@ -1740,13 +1780,15 @@ function generateInteractiveExplorer(obj, pathPrefix) {
         }
         let html = '';
         obj.forEach((value, key) => {
-            const fullPath = `${pathPrefix}[${key}]`;
-            html += generatePropertyRow(String(key), value, fullPath);
+            if (!EXPLORER_EXCLUDED_PROPERTIES.has(String(key))) {
+                const fullPath = `${pathPrefix}[${key}]`;
+                html += generatePropertyRow(String(key), value, fullPath);
+            }
         });
         return html;
     }
 
-    const entries = Object.entries(obj);
+    const entries = Object.entries(obj).filter(([key]) => !EXPLORER_EXCLUDED_PROPERTIES.has(key));
     if (entries.length === 0) {
         return '<div class="explorer-property"><span class="explorer-property-value null-value">(empty object)</span></div>';
     }
@@ -1758,6 +1800,66 @@ function generateInteractiveExplorer(obj, pathPrefix) {
     });
 
     return html;
+}
+
+/**
+ * Extract a meaningful preview string from an object
+ * @param {Object} obj - Object to preview
+ * @returns {string} Preview string showing key content
+ */
+function extractObjectPreview(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+
+    // For Aliased objects, show the primaryAlias term
+    if (obj.type === 'Aliased' && obj.primaryAlias && obj.primaryAlias.term) {
+        return obj.primaryAlias.term;
+    }
+
+    // For objects with a term property
+    if (obj.term) {
+        return obj.term;
+    }
+
+    // For IndividualName, show the name
+    if (obj.type === 'IndividualName') {
+        const parts = [];
+        if (obj.firstName) parts.push(obj.firstName);
+        if (obj.lastName) parts.push(obj.lastName);
+        if (parts.length > 0) return parts.join(' ');
+        if (obj.completeName) return obj.completeName;
+    }
+
+    // For ContactInfo, show primary address or email
+    if (obj.type === 'ContactInfo') {
+        if (obj.primaryAddress && obj.primaryAddress.primaryAlias && obj.primaryAddress.primaryAlias.term) {
+            return obj.primaryAddress.primaryAlias.term;
+        }
+        if (obj.email && obj.email.primaryAlias && obj.email.primaryAlias.term) {
+            return obj.email.primaryAlias.term;
+        }
+    }
+
+    // For OtherInfo, try to show something useful
+    if (obj.type === 'OtherInfo' && obj.householdInformation) {
+        return 'Household information available';
+    }
+
+    // For SimpleIdentifiers
+    if (obj.type === 'SimpleIdentifiers' && obj.primaryAlias && obj.primaryAlias.term) {
+        return obj.primaryAlias.term;
+    }
+
+    // Generic: look for common meaningful properties
+    const meaningfulKeys = ['name', 'term', 'value', 'identifier', 'description', 'title'];
+    for (const key of meaningfulKeys) {
+        if (obj[key]) {
+            if (typeof obj[key] === 'string') return obj[key];
+            if (obj[key].term) return obj[key].term;
+            if (obj[key].primaryAlias && obj[key].primaryAlias.term) return obj[key].primaryAlias.term;
+        }
+    }
+
+    return '';
 }
 
 /**
@@ -1798,12 +1900,27 @@ function generatePropertyRow(key, value, path) {
         const dataId = generateDataId();
         // Use serializeWithTypes to preserve Maps and other special types within arrays
         const serialized = typeof serializeWithTypes === 'function' ? serializeWithTypes(value) : JSON.stringify(value);
+        // Generate preview of first few array items
+        let arrayPreview = '';
+        if (value.length > 0) {
+            const previews = value.slice(0, 3).map((item, idx) => {
+                if (typeof item === 'string') return item.substring(0, 50);
+                if (typeof item === 'object' && item) {
+                    const preview = extractObjectPreview(item);
+                    return preview || `[${idx}]`;
+                }
+                return String(item);
+            });
+            arrayPreview = previews.join(', ');
+            if (value.length > 3) arrayPreview += ', ...';
+        }
         return `
             <div class="explorer-property">
                 <span class="explorer-property-name">${escapedKey}</span>
                 <button class="expand-btn array-btn" onclick="expandObject('${dataId}', '${escapeHTML(path)}')">
                     Expand Array (${value.length} items)
                 </button>
+                ${arrayPreview ? `<div class="explorer-property-preview">${escapeHTML(arrayPreview)}</div>` : ''}
                 <script>window.entityDataStore = window.entityDataStore || {}; window.entityDataStore['${dataId}'] = ${serialized};</script>
             </div>
         `;
@@ -1818,27 +1935,27 @@ function generatePropertyRow(key, value, path) {
             <div class="explorer-property">
                 <span class="explorer-property-name">${escapedKey}</span>
                 <button class="expand-btn" onclick="expandObject('${dataId}', '${escapeHTML(path)}')">
-                    Expand
+                    Expand Map (${value.size} entries)
                 </button>
-                <span class="object-type-indicator">Map (${value.size} entries)</span>
                 <script>window.entityDataStore = window.entityDataStore || {}; window.entityDataStore['${dataId}'] = ${serialized};</script>
             </div>
         `;
     }
 
-    // Handle objects
+    // Handle objects - extract a meaningful preview
     const typeName = value.constructor?.name || value.type || 'Object';
     const dataId = generateDataId();
-    const propCount = value instanceof Map ? value.size : Object.keys(value).length;
+    const propCount = value instanceof Map ? value.size : Object.keys(value).filter(k => !EXPLORER_EXCLUDED_PROPERTIES.has(k)).length;
+    const preview = extractObjectPreview(value);
     // Use serializeWithTypes to preserve Maps and other special types within objects
     const serialized = typeof serializeWithTypes === 'function' ? serializeWithTypes(value) : JSON.stringify(value);
     return `
         <div class="explorer-property">
             <span class="explorer-property-name">${escapedKey}</span>
             <button class="expand-btn" onclick="expandObject('${dataId}', '${escapeHTML(path)}')">
-                Expand
+                Expand ${typeName} (${propCount} properties)
             </button>
-            <span class="object-type-indicator">${typeName} (${propCount} properties)</span>
+            ${preview ? `<div class="explorer-property-preview">${escapeHTML(preview)}</div>` : ''}
             <script>window.entityDataStore = window.entityDataStore || {}; window.entityDataStore['${dataId}'] = ${serialized};</script>
         </div>
     `;
@@ -2060,9 +2177,12 @@ function getUniversalEntityScripts() {
                 return html || '<div class="explorer-property"><span class="explorer-property-value null-value">(all Map entries are null)</span></div>';
             }
 
-            // Handle objects - filter out null/undefined properties
+            // Properties to exclude from display
+            const excludedProps = ['comparisonWeights', 'comparisonCalculatorName', 'comparisonCalculator'];
+
+            // Handle objects - filter out null/undefined properties and excluded properties
             const entries = Object.entries(obj).filter(function(entry) {
-                return entry[1] !== null && entry[1] !== undefined;
+                return entry[1] !== null && entry[1] !== undefined && excludedProps.indexOf(entry[0]) === -1;
             });
             if (entries.length === 0) {
                 return '<div class="explorer-property"><span class="explorer-property-value null-value">(all properties are null)</span></div>';

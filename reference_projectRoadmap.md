@@ -3,7 +3,7 @@
 ## Document Purpose
 This document provides a high-level outline of the project's future direction. It is NOT detailed enough to work from directly - each step requires specific discussion before implementation begins.
 
-**Last Updated:** December 16, 2025
+**Last Updated:** December 19, 2025
 
 ---
 
@@ -16,9 +16,9 @@ This document provides a high-level outline of the project's future direction. I
 | 3 | Unified Database Persistence | USER_VERIFIED_WORKING |
 | 4 | Grouped Datasets (EntityGroup Database) | USER_VERIFIED_WORKING (browser complete, persistence READY_FOR_VERIFICATION) |
 | 5 | Custom BIRA Mailing Reports | PLANNING |
-| 6 | PropertyValue SimpleIdentifier | PLANNING |
+| 6 | PropertyValue SimpleIdentifier | CODED - awaiting testing with new VA download |
 | 7 | Code Generalization for New Data Sources | PLANNING |
-| 8 | Clean Up Steps | PLANNING |
+| 8 | Clean Up Steps | PLANNING (added VA refresh impact analysis) |
 
 ---
 
@@ -330,11 +330,26 @@ When entityGroup database generated, spin off one CSV per construction step:
 
 ## 6. PropertyValue SimpleIdentifier
 
-### 6.1 Implementation
+### 6.1 Implementation - CODED (Dec 19, 2025)
 - Add PropertyValue simpleIdentifier property to OtherInfo object
 - Ensure VisionAppraisal download provides data
 
-### 6.2 Generalization
+**Status**: Code changes implemented, awaiting testing with new VisionAppraisal data download
+
+**Files Modified**:
+- `scripts/baseCode.js` - Added DOM extraction for `MainContent_lblGenAssessment` and `MainContent_lblGenAppraisal`
+- `scripts/dataSources/visionAppraisal.js` - Added `assessmentValue` and `appraisalValue` field parsing
+- `scripts/objectStructure/contactInfo.js` - Added properties and getters/setters to OtherInfo class
+- `scripts/dataSources/visionAppraisalNameParser.js` - Added OtherInfo population in entity creation functions
+
+**Backward Compatible**: Yes - old CSV files without new fields will result in null values (safe default)
+
+### 6.2 Testing Required
+- Re-download VisionAppraisal PID files using Button 4 to generate CSVs with new fields
+- Load VisionAppraisal entities and verify `entity.otherInfo.assessmentValue` and `appraisalValue` are populated
+- Save unified database and reload to verify serialization/deserialization works
+
+### 6.3 Generalization
 - Flow inclusion through code
 - Refine code to make such field additions a more generalized process
 
@@ -363,6 +378,38 @@ When entityGroup database generated, spin off one CSV per construction step:
 2. Write user guide
 3. Remove obsolete code
 4. Find better modularization and reduce bloat
+
+### 8.3 VisionAppraisal Data Refresh Impact Analysis
+**Priority**: Analyze before next full VisionAppraisal download
+
+When re-downloading VisionAppraisal PID files, the following impacts need to be understood:
+
+1. **New CSV Format**: Files will now have 13 fields (previously 11) - `assessmentValue` and `appraisalValue` appended
+2. **Entity Key Stability**: Determine if re-downloading data affects entity keys used in:
+   - Unified database references
+   - EntityGroup membership
+   - Match Override rules (FORCE_MATCH/FORCE_EXCLUDE sheets reference entity keys)
+3. **Incremental vs Full Refresh**: Define process for:
+   - Adding new PIDs (properties that didn't exist before)
+   - Updating existing PIDs (owner changes, value changes)
+   - Handling removed PIDs (properties no longer in VisionAppraisal)
+4. **Downstream Cascade**: Document what needs to be rebuilt after VisionAppraisal refresh:
+   - VisionAppraisal entities
+   - Unified database
+   - EntityGroup database
+   - Match override rule validation (check for orphaned keys)
+
+### 8.4 Property Data Additions Testing
+**Status**: PENDING - awaiting VisionAppraisal data refresh
+
+Test items for Step 6 PropertyValue implementation:
+1. Download fresh VisionAppraisal PID files using Button 4
+2. Verify CSV files contain assessment and appraisal values in fields[11] and fields[12]
+3. Load VisionAppraisal entities into memory
+4. Verify `entity.otherInfo.assessmentValue` and `entity.otherInfo.appraisalValue` are populated
+5. Save unified database to Google Drive
+6. Reload unified database and verify property values persist correctly
+7. Verify old entities (from before refresh) handle null values gracefully
 
 ---
 

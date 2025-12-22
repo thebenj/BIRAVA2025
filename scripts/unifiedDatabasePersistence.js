@@ -87,15 +87,18 @@ function generateUnifiedEntityKey(entity) {
         }
 
         // Append 'AH' for AggregateHousehold to distinguish from Individual
+        // BUT only if it doesn't already end in 'AH'
         const entityType = entity.constructor?.name;
         if (entityType === 'AggregateHousehold' && accountNumber !== 'unknown') {
-            accountNumber = accountNumber + 'AH';
+            if (!accountNumber.endsWith('AH')) {
+                accountNumber = accountNumber + 'AH';
+            }
         }
 
         // Determine household head status
         let headStatus = 'na';
         if (entityType === 'Individual') {
-            const householdInfo = entity.contactInfo?.householdInformation;
+            const householdInfo = entity.otherInfo?.householdInformation;
             if (householdInfo && householdInfo.isInHousehold) {
                 headStatus = householdInfo.isHeadOfHousehold ? 'head' : 'member';
             }
@@ -159,6 +162,18 @@ function buildUnifiedEntityDatabase() {
 
                 // Track entity type counts
                 database.metadata.entityTypes[entityType] = (database.metadata.entityTypes[entityType] || 0) + 1;
+
+                // For VisionAppraisal AggregateHouseholds, set parentKey on embedded individuals
+                // NOTE: VA individuals are NOT standalone keyed entities - they exist only
+                // inside their parent household's individuals[] array. siblingKeys makes no
+                // sense for them since they don't have keys. Only parentKey is useful.
+                if (entityType === 'AggregateHousehold' && entity.individuals && Array.isArray(entity.individuals)) {
+                    for (const individual of entity.individuals) {
+                        if (individual.otherInfo && individual.otherInfo.householdInformation) {
+                            individual.otherInfo.householdInformation.parentKey = key;
+                        }
+                    }
+                }
             }
         }
 
@@ -207,6 +222,109 @@ function buildUnifiedEntityDatabase() {
         };
         console.log(`  Added ${bloomerangTotal} Bloomerang entities`);
     }
+
+    // =========================================================================
+    // SECOND PASS: Set Bloomerang parentKey and siblingKeys using actual database keys
+    // =========================================================================
+    // Bloomerang Individuals and AggregateHouseholds are standalone keyed entities.
+    // Cross-reference keys (parentKey, siblingKeys) must use the actual database keys
+    // that were just generated, NOT internal keys from bloomerang.js.
+    //
+    // Strategy:
+    // 1. Build map: householdIdentifier string → householdDatabaseKey
+    // 2. Build map: householdIdentifier string → [individualDatabaseKeys]
+    // 3. For each Individual with isInHousehold, set parentKey and siblingKeys
+    //
+    // householdIdentifier is derived from householdInformation.householdIdentifier or
+    // from the individual's account number (which should match household account number).
+    console.log('Setting Bloomerang parentKey and siblingKeys...');
+
+    // Map householdIdentifier → database key for that household
+    const householdIdentifierToKey = new Map();
+    // Map householdIdentifier → array of individual database keys in that household
+    const householdIdentifierToIndividualKeys = new Map();
+    // Map individual database key → their householdIdentifier (for lookup during siblingKeys assignment)
+    const individualKeyToHouseholdId = new Map();
+
+    // First pass: identify all Bloomerang households and their keys
+    for (const [key, entity] of Object.entries(database.entities)) {
+        if (!key.startsWith('bloomerang:')) continue;
+
+        const entityType = entity.constructor?.name;
+        if (entityType === 'AggregateHousehold') {
+            // Extract household identifier (use account number as unique identifier)
+            let householdId = null;
+            if (entity.accountNumber?.primaryAlias?.term) {
+                householdId = String(entity.accountNumber.primaryAlias.term);
+            } else if (entity.accountNumber?.term) {
+                householdId = String(entity.accountNumber.term);
+            }
+
+            if (householdId) {
+                householdIdentifierToKey.set(householdId, key);
+            }
+        }
+    }
+
+    // Second pass: identify all Bloomerang individuals with household membership
+    for (const [key, entity] of Object.entries(database.entities)) {
+        if (!key.startsWith('bloomerang:')) continue;
+
+        const entityType = entity.constructor?.name;
+        if (entityType === 'Individual') {
+            const householdInfo = entity.otherInfo?.householdInformation;
+            if (householdInfo && householdInfo.isInHousehold) {
+                // Determine household identifier
+                // Option 1: Use householdInformation.householdIdentifier if set
+                // Option 2: Use individual's account number (matches household)
+                let householdId = null;
+
+                if (householdInfo.householdIdentifier) {
+                    householdId = String(householdInfo.householdIdentifier);
+                } else if (entity.accountNumber?.primaryAlias?.term) {
+                    householdId = String(entity.accountNumber.primaryAlias.term);
+                } else if (entity.accountNumber?.term) {
+                    householdId = String(entity.accountNumber.term);
+                }
+
+                if (householdId) {
+                    // Add to household's individual list
+                    if (!householdIdentifierToIndividualKeys.has(householdId)) {
+                        householdIdentifierToIndividualKeys.set(householdId, []);
+                    }
+                    householdIdentifierToIndividualKeys.get(householdId).push(key);
+                    individualKeyToHouseholdId.set(key, householdId);
+                }
+            }
+        }
+    }
+
+    // Third pass: set parentKey and siblingKeys on each individual
+    let parentKeysSet = 0;
+    let siblingKeysSet = 0;
+    for (const [individualKey, householdId] of individualKeyToHouseholdId) {
+        const entity = database.entities[individualKey];
+        const householdInfo = entity.otherInfo?.householdInformation;
+        if (!householdInfo) continue;
+
+        // Set parentKey to the household's database key
+        const householdKey = householdIdentifierToKey.get(householdId);
+        if (householdKey) {
+            householdInfo.parentKey = householdKey;
+            parentKeysSet++;
+        }
+
+        // Set siblingKeys to all OTHER individuals in the same household
+        const siblingsInHousehold = householdIdentifierToIndividualKeys.get(householdId) || [];
+        const siblingKeys = siblingsInHousehold.filter(k => k !== individualKey);
+        if (siblingKeys.length > 0) {
+            householdInfo.siblingKeys = siblingKeys;
+            siblingKeysSet++;
+        }
+    }
+
+    console.log(`  Bloomerang cross-references: ${parentKeysSet} parentKeys, ${siblingKeysSet} siblingKeys set`);
+    console.log(`  Households found: ${householdIdentifierToKey.size}, Individuals in households: ${individualKeyToHouseholdId.size}`);
 
     database.metadata.totalEntities = Object.keys(database.entities).length;
 

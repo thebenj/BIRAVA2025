@@ -242,7 +242,7 @@ function getEntityKeyInfo(entity) {
     let headStatus = 'na';
     const entityType = entity.constructor?.name;
     if (entityType === 'Individual') {
-        const householdInfo = entity.contactInfo?.householdInformation;
+        const householdInfo = entity.otherInfo?.householdInformation;
         if (householdInfo && householdInfo.isInHousehold) {
             headStatus = householdInfo.isHeadOfHousehold ? 'head' : 'member';
         }
@@ -257,8 +257,11 @@ function getEntityKeyInfo(entity) {
         }
         // Append "AH" to accountNumber for AggregateHousehold entities to prevent collision
         // with Individual entities that share the same account number
+        // BUT only if it doesn't already end in 'AH'
         if (entityType === 'AggregateHousehold') {
-            accountNumber = accountNumber + 'AH';
+            if (!accountNumber.endsWith('AH')) {
+                accountNumber = accountNumber + 'AH';
+            }
         }
         return {
             source: 'bloomerang',
@@ -325,7 +328,7 @@ function getLocationIdentifierTypeAndValue(entity) {
     let headStatus = 'na';
     const entityType = entity.constructor?.name;
     if (entityType === 'Individual') {
-        const householdInfo = entity.contactInfo?.householdInformation;
+        const householdInfo = entity.otherInfo?.householdInformation;
         if (householdInfo && householdInfo.isInHousehold) {
             headStatus = householdInfo.isHeadOfHousehold ? 'head' : 'member';
         }

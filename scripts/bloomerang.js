@@ -782,8 +782,12 @@ async function processRowToEntity(row, dataSource, households) {
             createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource));
     } else if (entityType === 'AggregateHousehold') {
         // Handle household processing (locationIdentifier may be null - handled inside function)
-        entity = await processHouseholdMember(fields, fieldMap, locationIdentifier, nameObjects,
+        // Returns { individual, householdAccountNumber } - extract the individual
+        const result = await processHouseholdMember(fields, fieldMap, locationIdentifier, nameObjects,
             households, rowIndex, accountNumber, dataSource);
+        entity = result.individual;
+        // Store householdAccountNumber temporarily for use below
+        entity._householdAccountNumber = result.householdAccountNumber;
     }
 
     // Step 5: Add ContactInfo and additional data to entity
@@ -802,10 +806,19 @@ async function processRowToEntity(row, dataSource, households) {
         // Note: Use entity.constructor.name instead of entityType because processHouseholdMember
         // returns Individual entities even when entityType === 'AggregateHousehold'
         if (entity.constructor.name === 'Individual' && entity.additionalData && entity.additionalData.householdData) {
+            // If this individual belongs to a household, populate the householdIdentifier
+            // with the household's account number (individual's account number + 'AH', unless already ends in 'AH')
+            if (entity._householdAccountNumber) {
+                entity.additionalData.householdData.householdIdentifier = entity._householdAccountNumber;
+            }
+
             const otherInfo = new OtherInfo();
             // Copy the HouseholdInformation from additionalData to otherInfo
             otherInfo.householdInformation = entity.additionalData.householdData;
             entity.addOtherInfo(otherInfo);
+
+            // Clean up temporary property
+            delete entity._householdAccountNumber;
         }
     }
 
@@ -1273,11 +1286,11 @@ function createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSourc
  * @param {Object} fieldMap - Field index mappings
  * @param {FireNumber|PID|ComplexIdentifiers|null} locationIdentifier - Location identifier for this individual (may be null)
  * @param {Object} nameObjects - Name objects (individualName and householdName)
- * @param {Map} households - Map of existing households by household name
+ * @param {Map} households - Map of existing households by household name, storing { household, accountNumber } entries
  * @param {number} rowIndex - Row number for debugging
  * @param {string} accountNumber - Account number for this individual
  * @param {string} dataSource - Data source identifier
- * @returns {Individual} Individual entity (never null)
+ * @returns {{individual: Individual, householdAccountNumber: string|null}} Individual entity and household account number (accountNumber + 'AH')
  */
 async function processHouseholdMember(fields, fieldMap, locationIdentifier, nameObjects, households, rowIndex, accountNumber, dataSource) {
     const householdName = (fields[fieldMap.householdName] || '').trim();
@@ -1292,7 +1305,7 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
         const individual = new Individual(locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber),
                              nameObjects.individualName, null, null,
                              createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource));
-        return individual;
+        return { individual, householdAccountNumber: null };
     }
 
     // Create individual entity
@@ -1302,7 +1315,9 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
 
     // Check if household already exists
     if (households.has(householdName)) {
-        const existingHousehold = households.get(householdName);
+        const householdEntry = households.get(householdName);
+        const existingHousehold = householdEntry.household;
+        const householdAccountNumber = householdEntry.accountNumber;
 
         if (locationIdentifier) {
             // Individual has location data
@@ -1325,28 +1340,30 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
             existingHousehold.individuals.push(individual);
         }
 
-        return individual;
+        return { individual, householdAccountNumber };
 
     } else {
         // First individual for this household - create household
+        // Invent household account number by appending 'AH' to the first individual's account number
+        // BUT only if account number doesn't already end in 'AH'
+        const accountStr = accountNumber.toString().trim();
+        const householdAccountNumber = accountStr.endsWith('AH') ? accountStr : accountStr + 'AH';
         const householdLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
 
-        // Create household entity
-        // console.log("🔍 CASE 13/15 DEBUG: Creating AggregateHousehold entity for row", rowIndex);
+        // Create household entity with invented account number
         const household = new AggregateHousehold(
             householdLocationIdentifier,
             nameObjects.householdName, null, null,
-            createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSource)
+            createAccountNumberSimpleIdentifiers(householdAccountNumber, rowIndex, dataSource)
         );
-        // console.log("🔍 CASE 13/15 DEBUG: AggregateHousehold created - otherInfo:", household.otherInfo, "legacyInfo:", household.legacyInfo);
 
         // Add individual to household
         household.individuals.push(individual);
 
-        // Store household in map
-        households.set(householdName, household);
+        // Store household in map with its account number for later individual processing
+        households.set(householdName, { household, accountNumber: householdAccountNumber });
 
-        return individual;
+        return { individual, householdAccountNumber };
     }
 }
 
@@ -1808,27 +1825,41 @@ function aggregateEntitiesIntoCollections(entities, households, additionalEntiti
 
     // === PROCESS HOUSEHOLD ENTITIES ===
     // AggregateHousehold entities contain arrays of Individual members for household-level communication
-    for (const [householdName, household] of households) {
+    // households Map now stores { household, accountNumber } entries
+    // NOTE: parentKey and siblingKeys are set LATER in buildUnifiedEntityDatabase() after database keys exist.
+    // This ensures cross-reference keys match actual database keys (not the internal keys used here).
+    for (const [householdName, householdEntry] of households) {
+        const household = householdEntry.household;
         // Generate unique key for household entity (enables household-based search and filtering)
-        const key = generateEntityKey(household);
-        collections.households.set(key, household);
+        const householdKey = generateEntityKey(household);
+        collections.households.set(householdKey, household);
     }
 
     // Process any additional entities
+    let diagHouseholdsFromAdditional = 0;
+    let diagIndividualsFromAdditional = 0;
+    console.log('[DIAGNOSTIC] additionalEntities length:', additionalEntities.length);
     for (const entity of additionalEntities) {
         const entityType = entity.constructor.name;
 
         if (entityType === 'Individual') {
             const key = generateEntityKey(entity);
             collections.individuals.set(key, entity);
+            diagIndividualsFromAdditional++;
         } else if (entityType === 'AggregateHousehold' || entityType === 'CompositeHousehold') {
             const key = generateEntityKey(entity);
             collections.households.set(key, entity);
+            diagHouseholdsFromAdditional++;
+            if (entity.individuals && entity.individuals.length > 0) {
+                console.log('[DIAGNOSTIC] Additional household has ' + entity.individuals.length + ' individuals');
+            }
         } else {
             const key = generateEntityKey(entity);
             collections.nonHumans.set(key, entity);
         }
     }
+    console.log('[DIAGNOSTIC] From additionalEntities: households=' + diagHouseholdsFromAdditional +
+                ', individuals=' + diagIndividualsFromAdditional);
 
     // Update metadata
     collections.metadata.totalProcessed = collections.individuals.size +

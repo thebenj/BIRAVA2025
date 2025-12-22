@@ -888,15 +888,18 @@ function getEntityKeyInfo(entity) {
 
         // For AggregateHousehold entities, append 'AH' to distinguish from Individual
         // This matches the entityIndex key format: bloomerang:729AH:... vs bloomerang:729:...
+        // BUT only if it doesn't already end in 'AH'
         const entityType = entity.constructor?.name;
         if (entityType === 'AggregateHousehold' && accountNumber) {
-            accountNumber = accountNumber + 'AH';
+            if (!accountNumber.endsWith('AH')) {
+                accountNumber = accountNumber + 'AH';
+            }
         }
 
         // Determine household head status for Bloomerang entities
         headStatus = 'na';
         if (entityType === 'Individual') {
-            const householdInfo = entity.contactInfo?.householdInformation;
+            const householdInfo = entity.otherInfo?.householdInformation;
             if (householdInfo && householdInfo.isInHousehold) {
                 headStatus = householdInfo.isHeadOfHousehold ? 'head' : 'member';
             }

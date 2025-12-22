@@ -148,6 +148,15 @@ class MatchOverrideManager {
         this.exclusionLookup = new Map();  // Key -> Map(partnerKey -> ruleMetadata)
         this.forceMatchSchedule = new Map();  // AnchorKey -> { dependents, anchorPhase, ruleIds }
         this.forceMatchByKey = new Map();  // Key -> [ForceMatchRule]
+
+        // MUTUAL set data structures
+        // Each mutual set is an array of keys that are all mutually related
+        this.mutualExclusionSets = [];  // Array of { ruleId, keys: string[] }
+        this.mutualInclusionSets = [];  // Array of { ruleId, keys: string[] }
+        // Quick lookup: key -> array of set indices containing this key
+        this.keyToMutualExclusionSetIndices = new Map();  // Key -> [setIndex, ...]
+        this.keyToMutualInclusionSetIndices = new Map();  // Key -> [setIndex, ...]
+
         this.warnings = [];
         this.applicationLog = [];
         this.stats = {
@@ -216,6 +225,84 @@ class MatchOverrideManager {
         this.exclusionLookup.get(rule.otherKey).set(rule.defectiveKey, metadata);
     }
 
+    /**
+     * Add a MUTUAL exclusion set.
+     * All keys in the set are mutually excluded from each other.
+     *
+     * @param {Object} data - { ruleId, keys: string[] } or { ruleId, keysDelimited: string }
+     * @returns {Object} { success, errors, keyCount }
+     */
+    addMutualExclusionSet(data) {
+        const errors = [];
+        let keys = data.keys;
+
+        // Parse delimited string if provided
+        if (!keys && data.keysDelimited) {
+            keys = data.keysDelimited.split('::^::').map(k => k.trim()).filter(k => k);
+        }
+
+        if (!keys || keys.length < 2) {
+            errors.push('MUTUAL exclusion set requires at least 2 keys');
+            return { success: false, errors, keyCount: 0 };
+        }
+
+        const ruleId = data.ruleId || `MUTUAL-FE-${this.mutualExclusionSets.length + 1}`;
+        const setIndex = this.mutualExclusionSets.length;
+
+        // Store the set
+        this.mutualExclusionSets.push({ ruleId, keys });
+
+        // Index each key to this set
+        for (const key of keys) {
+            if (!this.keyToMutualExclusionSetIndices.has(key)) {
+                this.keyToMutualExclusionSetIndices.set(key, []);
+            }
+            this.keyToMutualExclusionSetIndices.get(key).push(setIndex);
+        }
+
+        console.log(`[OVERRIDE] Added MUTUAL exclusion set ${ruleId} with ${keys.length} keys`);
+        return { success: true, errors: [], keyCount: keys.length };
+    }
+
+    /**
+     * Add a MUTUAL inclusion (force-match) set.
+     * All keys in the set should be forced into the same group.
+     *
+     * @param {Object} data - { ruleId, keys: string[] } or { ruleId, keysDelimited: string }
+     * @returns {Object} { success, errors, keyCount }
+     */
+    addMutualInclusionSet(data) {
+        const errors = [];
+        let keys = data.keys;
+
+        // Parse delimited string if provided
+        if (!keys && data.keysDelimited) {
+            keys = data.keysDelimited.split('::^::').map(k => k.trim()).filter(k => k);
+        }
+
+        if (!keys || keys.length < 2) {
+            errors.push('MUTUAL inclusion set requires at least 2 keys');
+            return { success: false, errors, keyCount: 0 };
+        }
+
+        const ruleId = data.ruleId || `MUTUAL-FM-${this.mutualInclusionSets.length + 1}`;
+        const setIndex = this.mutualInclusionSets.length;
+
+        // Store the set
+        this.mutualInclusionSets.push({ ruleId, keys });
+
+        // Index each key to this set
+        for (const key of keys) {
+            if (!this.keyToMutualInclusionSetIndices.has(key)) {
+                this.keyToMutualInclusionSetIndices.set(key, []);
+            }
+            this.keyToMutualInclusionSetIndices.get(key).push(setIndex);
+        }
+
+        console.log(`[OVERRIDE] Added MUTUAL inclusion set ${ruleId} with ${keys.length} keys`);
+        return { success: true, errors: [], keyCount: keys.length };
+    }
+
     loadRules(rules) {
         const errors = [];
         let loaded = 0;
@@ -252,6 +339,13 @@ class MatchOverrideManager {
         this.exclusionLookup.clear();
         this.forceMatchSchedule.clear();
         this.forceMatchByKey.clear();
+
+        // Clear MUTUAL set structures
+        this.mutualExclusionSets = [];
+        this.mutualInclusionSets = [];
+        this.keyToMutualExclusionSetIndices.clear();
+        this.keyToMutualInclusionSetIndices.clear();
+
         this.warnings = [];
         this.applicationLog = [];
         this.stats = {
@@ -269,14 +363,16 @@ class MatchOverrideManager {
     /**
      * Get all entity keys that should be force-matched to the given key.
      * Used in Steps 3 and 6 of the algorithm.
+     * Checks both pairwise rules and MUTUAL inclusion sets.
      *
      * @param {string} key - Entity key
      * @returns {string[]} - Array of entity keys that should be forced into same group
      */
     getForceMatchesFor(key) {
-        const rules = this.forceMatchByKey.get(key) || [];
         const result = [];
 
+        // First get pairwise force-match rules
+        const rules = this.forceMatchByKey.get(key) || [];
         for (const rule of rules) {
             if (rule.status !== 'ACTIVE') continue;
             const otherKey = rule.getPartnerKey(key);
@@ -285,29 +381,116 @@ class MatchOverrideManager {
             }
         }
 
+        // Then get MUTUAL inclusion set members
+        const setIndices = this.keyToMutualInclusionSetIndices.get(key);
+        if (setIndices && setIndices.length > 0) {
+            for (const idx of setIndices) {
+                const mutualSet = this.mutualInclusionSets[idx];
+                for (const memberKey of mutualSet.keys) {
+                    // Don't include self, and avoid duplicates
+                    if (memberKey !== key && !result.includes(memberKey)) {
+                        result.push(memberKey);
+                    }
+                }
+            }
+        }
+
         return result;
     }
 
     /**
      * Check if two keys have an exclusion between them.
+     * Checks both pairwise rules and MUTUAL exclusion sets.
      * @param {string} key1
      * @param {string} key2
      * @returns {boolean}
      */
     isExcludedPair(key1, key2) {
+        // First check pairwise exclusion rules
         const partners = this.exclusionLookup.get(key1);
-        return partners ? partners.has(key2) : false;
+        if (partners && partners.has(key2)) {
+            return true;
+        }
+
+        // Then check MUTUAL exclusion sets
+        const setIndices1 = this.keyToMutualExclusionSetIndices.get(key1);
+        if (!setIndices1 || setIndices1.length === 0) {
+            return false;  // key1 not in any mutual exclusion set
+        }
+
+        const setIndices2 = this.keyToMutualExclusionSetIndices.get(key2);
+        if (!setIndices2 || setIndices2.length === 0) {
+            return false;  // key2 not in any mutual exclusion set
+        }
+
+        // Check if they share any common set
+        for (const idx of setIndices1) {
+            if (setIndices2.includes(idx)) {
+                return true;  // Both in same mutual exclusion set
+            }
+        }
+
+        return false;
     }
 
     /**
      * Get the exclusion rule metadata between two keys.
+     * Checks both pairwise rules and MUTUAL exclusion sets.
      * @param {string} key1
      * @param {string} key2
      * @returns {Object|null} - Rule metadata or null
      */
     getExclusionRule(key1, key2) {
+        // First check pairwise exclusion rules
         const partners = this.exclusionLookup.get(key1);
-        return (partners && partners.has(key2)) ? partners.get(key2) : null;
+        if (partners && partners.has(key2)) {
+            return partners.get(key2);
+        }
+
+        // Then check MUTUAL exclusion sets
+        const setIndices1 = this.keyToMutualExclusionSetIndices.get(key1);
+        if (!setIndices1 || setIndices1.length === 0) {
+            return null;
+        }
+
+        const setIndices2 = this.keyToMutualExclusionSetIndices.get(key2);
+        if (!setIndices2 || setIndices2.length === 0) {
+            return null;
+        }
+
+        // Find the common set and return synthetic metadata
+        for (const idx of setIndices1) {
+            if (setIndices2.includes(idx)) {
+                const mutualSet = this.mutualExclusionSets[idx];
+                // Return synthetic rule metadata for MUTUAL exclusion
+                // For MUTUAL sets, both keys are symmetric - no defective/other distinction
+                // Default to DEFECTIVE_YIELDS behavior (first key in pair yields)
+                return {
+                    defectiveKey: key1,
+                    otherKey: key2,
+                    onConflict: 'DEFECTIVE_YIELDS',
+                    ruleId: mutualSet.ruleId,
+                    isMutual: true,
+                    mutualSetIndex: idx,
+                    rule: {
+                        ruleId: mutualSet.ruleId,
+                        ruleType: 'MUTUAL_EXCLUDE',
+                        onConflict: 'DEFECTIVE_YIELDS',
+                        determineLoser: (k1, k2, score1, score2) => {
+                            // For MUTUAL sets, use similarity scores if available
+                            if (score1 !== null && score2 !== null) {
+                                if (score1 < score2) return k1;
+                                if (score2 < score1) return k2;
+                            }
+                            // Default: first key loses (arbitrary but consistent)
+                            return k1;
+                        }
+                    }
+                };
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -469,6 +652,78 @@ class MatchOverrideManager {
         return keys.filter(k => !toRemove.has(k));
     }
 
+    /**
+     * Remove entities that have any exclusion with a specific key (e.g., the founder).
+     * The specified key always wins - entities excluded with it are removed.
+     * Used for Step 0 and Step 7.5 (founder exclusion checks).
+     *
+     * @param {Array<{key: string}>} entities - Entities to filter
+     * @param {string} founderKey - The founder key to check exclusions against
+     * @returns {Array<{key: string}>} - Filtered list
+     */
+    removeExcludedWithFounder(entities, founderKey) {
+        const toRemove = new Set();
+
+        for (const entity of entities) {
+            const ruleMeta = this.getExclusionRule(entity.key, founderKey);
+            if (ruleMeta) {
+                toRemove.add(entity.key);
+                this.stats.exclusionsApplied++;
+                // No log per spec - founder exclusions are silent
+            }
+        }
+
+        return entities.filter(e => !toRemove.has(e.key));
+    }
+
+    /**
+     * Remove keys that have any exclusion with a specific key (e.g., the founder).
+     * String array variant of removeExcludedWithFounder.
+     * Used for Step 7.5 (founder exclusion checks on forcedFromNaturals).
+     *
+     * @param {string[]} keys - Keys to filter
+     * @param {string} founderKey - The founder key to check exclusions against
+     * @returns {string[]} - Filtered keys
+     */
+    removeExcludedKeysWithFounder(keys, founderKey) {
+        const toRemove = new Set();
+
+        for (const key of keys) {
+            const ruleMeta = this.getExclusionRule(key, founderKey);
+            if (ruleMeta) {
+                toRemove.add(key);
+                this.stats.exclusionsApplied++;
+                // No log per spec - founder exclusions are silent
+            }
+        }
+
+        return keys.filter(k => !toRemove.has(k));
+    }
+
+    /**
+     * Filter out keys that have an exclusion with the founder, logging a warning
+     * for the contradiction (entity is both force-matched AND excluded with founder).
+     * Used for Step 3.5.
+     *
+     * @param {string[]} founderForcedKeys - Keys that founder wants to force-match
+     * @param {string} founderKey - The founder key
+     * @returns {string[]} - Filtered keys (contradictions removed)
+     */
+    removeContradictoryFounderForced(founderForcedKeys, founderKey) {
+        const toRemove = new Set();
+
+        for (const key of founderForcedKeys) {
+            const ruleMeta = this.getExclusionRule(key, founderKey);
+            if (ruleMeta) {
+                toRemove.add(key);
+                this.stats.exclusionsApplied++;
+                console.warn(`[OVERRIDE] Contradiction: ${founderKey} has both FORCE_MATCH and FORCE_EXCLUDE with ${key}. Exclusion wins (${ruleMeta.ruleId}).`);
+            }
+        }
+
+        return founderForcedKeys.filter(k => !toRemove.has(k));
+    }
+
     // -------------------------------------------------------------------------
     // Validation and Schedule Building
     // -------------------------------------------------------------------------
@@ -576,11 +831,23 @@ class MatchOverrideManager {
     }
 
     getSummary() {
+        // Count total keys across all mutual sets
+        const mutualExclusionKeyCount = this.mutualExclusionSets.reduce(
+            (sum, set) => sum + set.keys.length, 0
+        );
+        const mutualInclusionKeyCount = this.mutualInclusionSets.reduce(
+            (sum, set) => sum + set.keys.length, 0
+        );
+
         return {
             forceMatchCount: this.forceMatchRules.length,
             forceExcludeCount: this.forceExcludeRules.length,
             activeForceMatch: this.forceMatchRules.filter(r => r.status === 'ACTIVE').length,
             activeForceExclude: this.forceExcludeRules.filter(r => r.status === 'ACTIVE').length,
+            mutualExclusionSets: this.mutualExclusionSets.length,
+            mutualExclusionKeys: mutualExclusionKeyCount,
+            mutualInclusionSets: this.mutualInclusionSets.length,
+            mutualInclusionKeys: mutualInclusionKeyCount,
             stats: { ...this.stats }
         };
     }
@@ -590,6 +857,12 @@ class MatchOverrideManager {
         console.log('=== Override Summary ===');
         console.log(`  Force Match: ${summary.forceMatchCount} (${summary.activeForceMatch} active)`);
         console.log(`  Force Exclude: ${summary.forceExcludeCount} (${summary.activeForceExclude} active)`);
+        if (summary.mutualInclusionSets > 0) {
+            console.log(`  MUTUAL Inclusion Sets: ${summary.mutualInclusionSets} (${summary.mutualInclusionKeys} keys)`);
+        }
+        if (summary.mutualExclusionSets > 0) {
+            console.log(`  MUTUAL Exclusion Sets: ${summary.mutualExclusionSets} (${summary.mutualExclusionKeys} keys)`);
+        }
         console.log(`  Applied: FM=${summary.stats.forceMatchesApplied}, FE=${summary.stats.exclusionsApplied}`);
         console.log(`  Orphaned: ${summary.stats.orphanedRules}, Errors: ${summary.stats.errors}`);
     }
@@ -666,16 +939,18 @@ const OVERRIDE_SHEET_IDS = {
  *
  * FORCE_MATCH sheet columns (A-F):
  *   A: RuleID, B: EntityKey1, C: EntityKey2, D: AnchorOverride, E: Reason, F: Status
+ *   For MUTUAL rows: A: RuleID, B: "MUTUAL", C: keys delimited by "::^::", D-F: ignored
  *
  * FORCE_EXCLUDE sheet columns (A-F):
  *   A: RuleID, B: DefectiveKey, C: OtherKey, D: OnConflict, E: Reason, F: Status
+ *   For MUTUAL rows: A: RuleID, B: "MUTUAL", C: keys delimited by "::^::", D-F: ignored
  *
  * @param {Object} [options] - Options
  * @param {string} [options.forceMatchSheetId] - Override force match sheet ID
  * @param {string} [options.forceExcludeSheetId] - Override force exclude sheet ID
  * @param {string} [options.forceMatchTab] - Tab name for force match (default: 'Sheet1')
  * @param {string} [options.forceExcludeTab] - Tab name for force exclude (default: 'Sheet1')
- * @returns {Promise<{forceMatches: Array, forceExcludes: Array, errors: Array}>}
+ * @returns {Promise<{forceMatches: Array, forceExcludes: Array, mutualInclusions: Array, mutualExclusions: Array, errors: Array}>}
  */
 async function loadRulesFromGoogleSheets(options = {}) {
     const forceMatchSheetId = options.forceMatchSheetId || OVERRIDE_SHEET_IDS.FORCE_MATCH;
@@ -686,6 +961,8 @@ async function loadRulesFromGoogleSheets(options = {}) {
     const result = {
         forceMatches: [],
         forceExcludes: [],
+        mutualInclusions: [],
+        mutualExclusions: [],
         errors: []
     };
 
@@ -709,15 +986,34 @@ async function loadRulesFromGoogleSheets(options = {}) {
                 if (!row || row.length < 2) continue;  // Skip empty rows
 
                 const ruleId = (row[0] || '').toString().trim();
-                const entityKey1 = (row[1] || '').toString().trim();
-                const entityKey2 = (row[2] || '').toString().trim();
-                const anchorOverride = (row[3] || '').toString().trim() || null;
-                const reason = (row[4] || '').toString().trim();
+                const col1 = (row[1] || '').toString().trim();
+                const col2 = (row[2] || '').toString().trim();
                 const status = (row[5] || 'ACTIVE').toString().trim().toUpperCase();
 
                 // Skip disabled or empty rules
-                if (!ruleId || !entityKey1 || !entityKey2) continue;
+                if (!ruleId || !col1) continue;
                 if (status === 'DISABLED' || status === 'SKIP') continue;
+
+                // Check for MUTUAL row
+                if (col1.toUpperCase() === 'MUTUAL') {
+                    if (!col2) {
+                        result.errors.push(`${ruleId}: MUTUAL row missing key list in column C`);
+                        continue;
+                    }
+                    result.mutualInclusions.push({
+                        ruleId,
+                        keysDelimited: col2
+                    });
+                    continue;
+                }
+
+                // Regular pairwise rule
+                const entityKey1 = col1;
+                const entityKey2 = col2;
+                const anchorOverride = (row[3] || '').toString().trim() || null;
+                const reason = (row[4] || '').toString().trim();
+
+                if (!entityKey2) continue;  // Need both keys for pairwise
 
                 result.forceMatches.push({
                     ruleId,
@@ -730,6 +1026,9 @@ async function loadRulesFromGoogleSheets(options = {}) {
             }
         }
         console.log(`[OVERRIDE] Loaded ${result.forceMatches.length} FORCE_MATCH rules from sheet`);
+        if (result.mutualInclusions.length > 0) {
+            console.log(`[OVERRIDE] Loaded ${result.mutualInclusions.length} MUTUAL inclusion sets from sheet`);
+        }
     } catch (err) {
         const error = `Failed to load FORCE_MATCH sheet: ${err.message || err}`;
         console.error('[OVERRIDE] ' + error);
@@ -746,19 +1045,71 @@ async function loadRulesFromGoogleSheets(options = {}) {
                 if (!row || row.length < 2) continue;  // Skip empty rows
 
                 const ruleId = (row[0] || '').toString().trim();
-                const defectiveKey = (row[1] || '').toString().trim();
-                const otherKey = (row[2] || '').toString().trim();
-                const onConflict = (row[3] || 'DEFECTIVE_YIELDS').toString().trim().toUpperCase();
-                const reason = (row[4] || '').toString().trim();
+                const col1 = (row[1] || '').toString().trim();
+                const col2 = (row[2] || '').toString().trim();
                 const status = (row[5] || 'ACTIVE').toString().trim().toUpperCase();
 
                 // Skip disabled or empty rules
-                if (!ruleId || !defectiveKey || !otherKey) continue;
+                if (!ruleId || !col1) continue;
                 if (status === 'DISABLED' || status === 'SKIP') continue;
+
+                // Check for MUTUAL row
+                if (col1.toUpperCase() === 'MUTUAL') {
+                    if (!col2) {
+                        result.errors.push(`${ruleId}: MUTUAL row missing key list in column C`);
+                        continue;
+                    }
+                    result.mutualExclusions.push({
+                        ruleId,
+                        keysDelimited: col2
+                    });
+                    continue;
+                }
+
+                // Get common fields for pairwise rules
+                const onConflict = (row[3] || 'DEFECTIVE_YIELDS').toString().trim().toUpperCase();
+                const reason = (row[4] || '').toString().trim();
 
                 // Validate onConflict value
                 const validOnConflict = ['DEFECTIVE_YIELDS', 'OTHER_YIELDS', 'USE_SIMILARITY'];
                 const finalOnConflict = validOnConflict.includes(onConflict) ? onConflict : 'DEFECTIVE_YIELDS';
+
+                // Check for one-to-many expansion case:
+                // Column B is a real key (not MUTUAL), and column C contains the delimiter
+                if (col2 && col2.includes('::^::')) {
+                    const defectiveKey = col1;
+                    const otherKeys = col2.split('::^::').map(k => k.trim()).filter(k => k);
+
+                    if (otherKeys.length === 0) {
+                        result.errors.push(`${ruleId}: One-to-many row has empty key list after splitting`);
+                        continue;
+                    }
+
+                    // Expand into multiple pairwise rules
+                    for (let idx = 0; idx < otherKeys.length; idx++) {
+                        const otherKey = otherKeys[idx];
+                        // Generate sub-rule ID to distinguish expanded rules
+                        const expandedRuleId = otherKeys.length > 1 ? `${ruleId}[${idx + 1}]` : ruleId;
+
+                        result.forceExcludes.push({
+                            ruleId: expandedRuleId,
+                            defectiveKey,
+                            otherKey,
+                            onConflict: finalOnConflict,
+                            reason,
+                            status,
+                            expandedFrom: ruleId  // Track original rule for debugging
+                        });
+                    }
+                    console.log(`[OVERRIDE] Expanded ${ruleId} into ${otherKeys.length} pairwise exclusion rules`);
+                    continue;
+                }
+
+                // Regular pairwise rule
+                const defectiveKey = col1;
+                const otherKey = col2;
+
+                if (!otherKey) continue;  // Need both keys for pairwise
 
                 result.forceExcludes.push({
                     ruleId,
@@ -771,6 +1122,9 @@ async function loadRulesFromGoogleSheets(options = {}) {
             }
         }
         console.log(`[OVERRIDE] Loaded ${result.forceExcludes.length} FORCE_EXCLUDE rules from sheet`);
+        if (result.mutualExclusions.length > 0) {
+            console.log(`[OVERRIDE] Loaded ${result.mutualExclusions.length} MUTUAL exclusion sets from sheet`);
+        }
     } catch (err) {
         const error = `Failed to load FORCE_EXCLUDE sheet: ${err.message || err}`;
         console.error('[OVERRIDE] ' + error);
@@ -800,6 +1154,7 @@ async function fetchSheetData(spreadsheetId, sheetName) {
 /**
  * Convenience method on MatchOverrideManager to load rules from Google Sheets.
  * Clears existing rules and loads fresh from sheets.
+ * Handles both pairwise rules and MUTUAL sets.
  *
  * Usage:
  *   await window.matchOverrideManager.loadFromGoogleSheets();
@@ -814,13 +1169,40 @@ MatchOverrideManager.prototype.loadFromGoogleSheets = async function(options = {
         console.warn('[OVERRIDE] Errors loading from sheets:', sheetData.errors);
     }
 
+    // Load pairwise rules
     const result = this.loadRules(sheetData);
+
+    // Load MUTUAL inclusion sets
+    let mutualInclusionKeysTotal = 0;
+    for (const mutualData of sheetData.mutualInclusions) {
+        const addResult = this.addMutualInclusionSet(mutualData);
+        if (!addResult.success) {
+            result.errors.push(`${mutualData.ruleId}: ${addResult.errors.join(', ')}`);
+        } else {
+            mutualInclusionKeysTotal += addResult.keyCount;
+        }
+    }
+
+    // Load MUTUAL exclusion sets
+    let mutualExclusionKeysTotal = 0;
+    for (const mutualData of sheetData.mutualExclusions) {
+        const addResult = this.addMutualExclusionSet(mutualData);
+        if (!addResult.success) {
+            result.errors.push(`${mutualData.ruleId}: ${addResult.errors.join(', ')}`);
+        } else {
+            mutualExclusionKeysTotal += addResult.keyCount;
+        }
+    }
 
     return {
         loaded: result.loaded,
         errors: [...sheetData.errors, ...result.errors],
         forceMatchCount: sheetData.forceMatches.length,
-        forceExcludeCount: sheetData.forceExcludes.length
+        forceExcludeCount: sheetData.forceExcludes.length,
+        mutualInclusionSets: sheetData.mutualInclusions.length,
+        mutualInclusionKeys: mutualInclusionKeysTotal,
+        mutualExclusionSets: sheetData.mutualExclusions.length,
+        mutualExclusionKeys: mutualExclusionKeysTotal
     };
 };
 

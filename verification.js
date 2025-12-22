@@ -3,14 +3,18 @@
 // This file contains cleanup functions for data quality issues
 
 // Critical Google Drive data identifiers for cleanup
+// NOTE: PIDS_FOLDER.id now reads from parameters.pidFilesParents (defined in baseCode.js)
+// This ensures all code uses the same PID folder source
 const CLEANUP_DATA_SOURCES = {
     PROCESSED_DATA: {
         name: "VisionAppraisal_ProcessedData.json",
         id: "1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf"
     },
-    PIDS_FOLDER: {
-        name: "pids",
-        id: "1WS2Uwx3c96X_Kj-LvtQtpzUSAViHaBAG"
+    get PIDS_FOLDER() {
+        return {
+            name: "pids",
+            id: parameters.pidFilesParents  // Single source of truth from baseCode.js
+        };
     },
     DUPLICATES_FOLDER: {
         name: "duplicates",

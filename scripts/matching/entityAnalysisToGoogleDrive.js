@@ -254,7 +254,7 @@ function getEntityKeyInfoLocal(entity) {
         headStatus = 'na';
         const entityType = entity.constructor?.name;
         if (entityType === 'Individual') {
-            const householdInfo = entity.contactInfo?.householdInformation;
+            const householdInfo = entity.otherInfo?.householdInformation;
             if (householdInfo && householdInfo.isInHousehold) {
                 headStatus = householdInfo.isHeadOfHousehold ? 'head' : 'member';
             }

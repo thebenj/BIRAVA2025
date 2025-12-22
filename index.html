@@ -490,6 +490,8 @@
             <button id="secondButton" class="optBut" onclick="secondButterClick()">Second Button</button>
             <button id="thirdButton" class="optBut" onclick="thirdButterClick()">Third Button</button>
             <button id="fourthButton" class="optBut" onclick="fourthButterClick()">Fourth Button</button>
+            <button id="analyzePids" class="optBut" onclick="analyzePIDFolder()" style="background-color: #6c757d; color: white;">Analyze PID Duplicates</button>
+            <button id="cleanupPids" class="optBut" onclick="runPIDDeduplication()" style="background-color: #dc3545; color: white;">Run PID Deduplication</button>
             <button id="firstTwo" class="optBut" onclick="firstTwoClick()">First Two</button>
             <button id="firstThree" class="optBut" onclick="firstThreeClick()">First Three</button>
             <button id="AllButton" class="optBut" onclick="AllClick()">All Button</button>
@@ -543,6 +545,13 @@
                 <strong>Load & Record:</strong> Loads from source files (VA + Bloomerang) AND saves unified database.<br>
                 <strong>Load Unified Database:</strong> Loads previously saved unified database from Google Drive (no regeneration).
             </p>
+            <button class="optBut" onclick="splitDatabaseForAppsScript()" style="background-color: #27ae60; color: white;" id="splitDbBtn">
+                ✂️ Split Database for Apps Script
+            </button>
+            <p style="font-size: 12px; color: #666; margin: 10px 0;">
+                <strong>Split Database:</strong> Creates 3 files (VA Part 1, VA Part 2, Bloomerang) under 50MB each for Google Apps Script.
+                Requires unified database loaded first. File IDs will be displayed in console and saved to localStorage.
+            </p>
             <button class="optBut" onclick="runFullEntityAnalysisWithCSV()" style="background-color: #8e44ad; color: white;" id="analyzeAllEntitiesBtn">
                 📊 Analyze All Entities & Download CSV
             </button>
@@ -566,6 +575,14 @@
 
         <div class="button-section">
             <h3>VisionAppraisal Data Processing</h3>
+            <button class="optBut" onclick="generateFreshEveryThingWithPid()" id="refreshPidDataBtn" style="background-color: #17a2b8; color: white;">
+                📥 Refresh Local PID Data from Google Drive
+            </button>
+            <p style="font-size: 12px; color: #666; margin: 10px 0;">
+                <strong>Step 0:</strong> Downloads all PID files from Google Drive folder and consolidates them into the local
+                <code>everyThingWithPid.json</code> file. Run this after downloading new PIDs via Button 4 to update
+                local data with latest assessment/appraisal values.
+            </p>
             <button class="optBut" onclick="processAndSaveVisionAppraisal()" id="visionProcessBtn">
                 🔄 Process & Save VisionAppraisal Data
             </button>
@@ -798,12 +815,71 @@
                 <button id="entityGroupExportBtn" class="action-button">📄 Export Groups</button>
                 <button id="entityGroupStatsBtn" class="action-button">📊 Group Stats</button>
             </div>
-            <div class="action-buttons" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
-                <button id="csvExportBtn" class="action-button" onclick="downloadCSVExport()" style="background: #28a745; color: white;">📥 Export CSV (Prospects + Donors)</button>
-                <label style="display: inline-flex; align-items: center; margin-left: 15px; font-size: 13px;">
-                    <input type="checkbox" id="csvIncludeNearMisses" checked style="margin-right: 5px;">
-                    Include Near Misses
-                </label>
+            <!-- CSV Reports Panel -->
+            <div style="margin-top: 15px; padding: 12px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 6px;">
+                <div style="font-weight: 600; margin-bottom: 10px; color: #2e7d32;">📥 CSV Reports</div>
+
+                <!-- Prospects + Donors Export -->
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #c8e6c9;">
+                    <button onclick="downloadCSVExport()" style="padding: 8px 14px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; margin-right: 10px;">
+                        📥 Prospects + Donors
+                    </button>
+                    <label style="display: inline-flex; align-items: center; font-size: 12px;">
+                        <input type="checkbox" id="csvIncludeNearMisses" checked style="margin-right: 5px;">
+                        Include Near Misses
+                    </label>
+                    <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
+                        Full 54-column export split into prospects.csv (no Bloomerang) and donors.csv (has Bloomerang). Shows consensus, founder, and member rows per group.
+                    </div>
+                </div>
+
+                <!-- Multi-VA Property Report -->
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #c8e6c9;">
+                    <button onclick="exportMultiVAPropertyReport(parseInt(document.getElementById('multiVAMinCount').value) || 3)" style="padding: 8px 14px; background: #ff9800; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; margin-right: 10px;">
+                        🏠 Multi-VA Property Report
+                    </button>
+                    <label style="display: inline-flex; align-items: center; font-size: 12px;">
+                        Min VA members:
+                        <input type="number" id="multiVAMinCount" value="3" min="2" max="20" style="width: 50px; margin-left: 5px; padding: 2px 4px;">
+                    </label>
+                    <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
+                        Groups with multiple VisionAppraisal entities (potential same-location issues). 54-column format, sorted by VA member count descending.
+                    </div>
+                </div>
+
+                <!-- Simple Groups Export -->
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #c8e6c9;">
+                    <button onclick="exportEntityGroups()" style="padding: 8px 14px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                        📄 Simple Groups Export
+                    </button>
+                    <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
+                        Quick 8-column export of currently filtered groups: index, name, address, member count, donor status, near miss count, phase, member keys.
+                    </div>
+                </div>
+
+                <!-- Assessment Value Report -->
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #c8e6c9;">
+                    <button onclick="downloadAssessmentValueReport()" style="padding: 8px 14px; background: #00796b; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                        💰 Assessment Value Report
+                    </button>
+                    <button onclick="verifyAssessmentChecksum()" style="padding: 8px 14px; background: #ff5722; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; margin-left: 8px;">
+                        ✓ Verify Checksum
+                    </button>
+                    <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
+                        Assessment report: total value per group, sorted descending. Includes subdivisions.<br>
+                        Checksum: compares report total against raw VisionAppraisal data to verify no properties omitted.
+                    </div>
+                </div>
+
+                <!-- Lightweight JSON Export (for Google Apps Script) -->
+                <div>
+                    <button onclick="downloadLightweightExport(entityGroupBrowser.loadedDatabase)" style="padding: 8px 14px; background: #9c27b0; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                        📦 Lightweight JSON Export
+                    </button>
+                    <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
+                        Self-contained JSON with reduced entity data embedded per group. For Google Apps Script consumption. Requires unified entity database loaded.
+                    </div>
+                </div>
             </div>
 
             <!-- Entity Comparison Tool -->
@@ -1325,6 +1401,9 @@
     <!-- Unified Database Persistence -->
     <script src="./scripts/unifiedDatabasePersistence.js"></script>
 
+    <!-- Unified Database Source Splitter (for Google Apps Script compatibility) -->
+    <script src="./scripts/unifiedDatabaseSourceSplitter.js"></script>
+
     <!-- Match Override Manager (must load before entityGroupBuilder) -->
     <script src="./scripts/matching/matchOverrideManager.js"></script>
 
@@ -1333,6 +1412,12 @@
 
     <!-- EntityGroup Browser -->
     <script src="./scripts/entityGroupBrowser.js"></script>
+
+    <!-- Lightweight EntityGroup Exporter (for Google Apps Script) -->
+    <script src="./scripts/export/lightweightExporter.js"></script>
+
+    <!-- Verification/Refresh utilities for PID data -->
+    <script src="./verification.js"></script>
 
     <!-- Unified Database Button Handlers -->
     <script>
@@ -1456,6 +1541,56 @@
             } catch (error) {
                 console.error('Error loading unified database:', error);
                 alert('Error loading unified database: ' + error.message);
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // Split unified database into 3 files for Google Apps Script (50MB limit)
+        async function splitDatabaseForAppsScript() {
+            if (!window.unifiedEntityDatabase?.entities) {
+                alert('Please load the Unified Database first (use "Load Unified Database" button).');
+                return;
+            }
+
+            const entityCount = Object.keys(window.unifiedEntityDatabase.entities).length;
+            if (!confirm(`Split ${entityCount} entities into 3 files for Google Apps Script?\n\nThis will create:\n- VisionAppraisal Part 1 (FireNumber < 800)\n- VisionAppraisal Part 2 (FireNumber >= 800)\n- Bloomerang\n\nEach file will be under 50MB.`)) {
+                return;
+            }
+
+            const btn = document.getElementById('splitDbBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Splitting...';
+            btn.disabled = true;
+
+            try {
+                const result = await splitUnifiedDatabaseThreeWay();
+
+                const message = `Database split complete!\n\n` +
+                    `VisionAppraisal Part 1:\n` +
+                    `  File ID: ${result.visionAppraisal1.fileId}\n` +
+                    `  Entities: ${result.visionAppraisal1.entityCount}\n` +
+                    `  Size: ${result.visionAppraisal1.sizeMB} MB\n\n` +
+                    `VisionAppraisal Part 2:\n` +
+                    `  File ID: ${result.visionAppraisal2.fileId}\n` +
+                    `  Entities: ${result.visionAppraisal2.entityCount}\n` +
+                    `  Size: ${result.visionAppraisal2.sizeMB} MB\n\n` +
+                    `Bloomerang:\n` +
+                    `  File ID: ${result.bloomerang.fileId}\n` +
+                    `  Entities: ${result.bloomerang.entityCount}\n` +
+                    `  Size: ${result.bloomerang.sizeMB} MB\n\n` +
+                    `Total: ${result.totalEntities} entities, ${result.totalSizeMB.toFixed(2)} MB\n\n` +
+                    `File IDs saved to localStorage. Copy them to your Apps Script CONFIG.`;
+
+                alert(message);
+                console.log('Split database file IDs for Apps Script CONFIG:');
+                console.log(`  VISION_APPRAISAL_1_FILE_ID: '${result.visionAppraisal1.fileId}'`);
+                console.log(`  VISION_APPRAISAL_2_FILE_ID: '${result.visionAppraisal2.fileId}'`);
+                console.log(`  BLOOMERANG_FILE_ID: '${result.bloomerang.fileId}'`);
+            } catch (error) {
+                console.error('Error splitting database:', error);
+                alert('Error splitting database: ' + error.message);
             } finally {
                 btn.innerHTML = originalText;
                 btn.disabled = false;

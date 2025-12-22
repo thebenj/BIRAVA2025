@@ -79,8 +79,8 @@ A Google Sheets-based rule system that allows manual specification of:
 ### Anchor Determination
 1. **If AnchorOverride specified**: Use the specified entity as anchor
 2. **Otherwise, use phase order**:
-   - Phase 1: Bloomerang Households (earliest)
-   - Phase 2: VisionAppraisal Households
+   - Phase 1: VisionAppraisal Households (earliest)
+   - Phase 2: Bloomerang Households
    - Phase 3: VisionAppraisal Individuals
    - Phase 4: Bloomerang Individuals
    - Phase 5: Other Types (latest)
@@ -117,9 +117,15 @@ When both entities want to join the same group:
 
 **Key Insight**: Exclusion conflicts are resolved using an 8-step batch algorithm that respects a priority hierarchy: **founder force-matches beat natural matches beat non-founder force-matches**.
 
-### The 8-Step Group Building Algorithm
+### The Group Building Algorithm
 
 When founding member F starts a new group:
+
+#### Step 0: Remove Natural Matches Excluded With Founder (NEW)
+- After finding natural matches, check each for exclusion with founder F
+- **Founder always wins** - any entity excluded with F cannot join F's group
+- OnConflict value is ignored - founder exclusions are absolute
+- Removed entities stay in pool for future groups
 
 #### Step 1: Find Natural Matches
 `findMatchesForEntity(F)` returns natural matches from algorithmic comparison.
@@ -133,6 +139,12 @@ When founding member F starts a new group:
 #### Step 3: Generate Founder Forced Matches
 - Get F's force-match list from override rules
 - Don't add any that already exist in natural matches list
+
+#### Step 3.5: Check For Contradictory Founder Force-Match + Exclusion (NEW)
+- Check if any founder-forced entity ALSO has an exclusion with founder F
+- This is a user configuration error (contradictory rules)
+- **Exclusion wins** - entity is removed from founder-forced list
+- Log a WARNING about the contradiction
 
 #### Step 4: Resolve Exclusions Among Founder Forced Matches (Stupid Case)
 - User may have forced two entities that exclude each other
@@ -152,6 +164,12 @@ When founding member F starts a new group:
 - **Founder forced matches win every time**
 - Loser from forced-from-naturals is removed (stays in pool)
 
+#### Step 7.5: Check Forced-From-Naturals For Founder Exclusions (NEW)
+- Check if any forced-from-naturals entity has an exclusion with founder F
+- These entities came in via lineage (Step 6) and weren't checked against founder yet
+- **Founder always wins** - entity is removed
+- Removed entities stay in pool for future groups
+
 #### Step 8: Resolve Exclusions Among Forced-From-Naturals
 - Check remaining forced-from-naturals against each other
 - Apply OnConflict rules (same tier)
@@ -166,12 +184,15 @@ F + surviving natural matches + founder forced matches + surviving forced-from-n
 
 | Comparison | Winner |
 |------------|--------|
+| **Founder vs Any entity** | **Founder ALWAYS wins** (absolute) |
 | Founder-forced vs Founder-forced | OnConflict rules |
 | Founder-forced vs Natural match | Founder-forced wins |
 | Founder-forced vs Forced-from-natural | Founder-forced wins |
 | Natural match vs Natural match | OnConflict rules (unless one is also founder-forced) |
 | Natural match vs Forced-from-natural | OnConflict rules |
 | Forced-from-natural vs Forced-from-natural | OnConflict rules |
+
+**Key Insight**: The founder F owns the group and cannot be excluded. Any entity with an exclusion rule against F is blocked from joining F's group, regardless of OnConflict settings. This is checked at multiple points (Steps 0, 3.5, 7.5).
 
 ---
 
@@ -219,11 +240,11 @@ F + surviving natural matches + founder forced matches + surviving forced-from-n
 ┌─────────────────────────────────────────────────────────┐
 │  5-Phase EntityGroup Construction                       │
 │                                                         │
-│  Phase 1: Bloomerang Households                         │
+│  Phase 1: VisionAppraisal Households                    │
 │    └─ Apply scheduled force-matches for Phase 1 anchors │
 │    └─ Check exclusions in findMatchesForEntity()        │
 │                                                         │
-│  Phase 2: VisionAppraisal Households                    │
+│  Phase 2: Bloomerang Households                         │
 │    └─ Apply scheduled force-matches for Phase 2 anchors │
 │    └─ Check exclusions in findMatchesForEntity()        │
 │                                                         │
@@ -233,34 +254,39 @@ F + surviving natural matches + founder forced matches + surviving forced-from-n
 
 ### Key Interception Point
 
-**buildGroupForFounder() - 8-Step Algorithm Implementation**
+**buildGroupForFounder() - Algorithm Implementation**
 ```javascript
 // In entityGroupBuilder.js - called when F becomes a founding member
 function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb, overrideManager) {
 
     // Step 1: Find natural matches
     let { trueMatches: naturalMatches, nearMisses } = findMatchesForEntity(founderKey, founderEntity, groupDb, entityDb);
+    const founderForceList = overrideManager.getForceMatchesFor(founderKey);
+
+    // Step 0: Remove natural matches excluded with founder (founder always wins)
+    naturalMatches = overrideManager.removeExcludedWithFounder(naturalMatches, founderKey);
 
     // Step 2: Resolve exclusions among natural matches
     // Priority: if one is also founder-forced, it wins
-    const founderForceList = overrideManager.getForceMatchesFor(founderKey);
-    naturalMatches = resolveExclusionsWithPriority(
+    naturalMatches = overrideManager.resolveExclusionsWithPriority(
         naturalMatches,
-        founderForceList,  // priority list
-        overrideManager
+        founderForceList  // priority list
     );
 
     // Step 3: Generate founder forced matches (excluding those already in naturalMatches)
-    const founderForced = founderForceList.filter(key =>
+    let founderForced = founderForceList.filter(key =>
         !naturalMatches.some(m => m.key === key) &&
         !groupDb.assignedEntityKeys.has(key)
     );
 
+    // Step 3.5: Check for contradictions - entity both forced AND excluded with founder
+    founderForced = overrideManager.removeContradictoryFounderForced(founderForced, founderKey);
+
     // Step 4: Resolve exclusions among founder forced matches (stupid case)
-    const survivingFounderForced = resolveExclusionsOnConflict(founderForced, overrideManager);
+    founderForced = overrideManager.resolveExclusionsOnConflict(founderForced);
 
     // Step 5: Check founder forced vs natural matches (founder forced wins)
-    naturalMatches = removeExcludedBy(naturalMatches, survivingFounderForced, overrideManager);
+    naturalMatches = overrideManager.removeExcludedByPriority(naturalMatches, founderForced);
 
     // Step 6: Generate forced matches from surviving natural matches
     let forcedFromNaturals = [];
@@ -268,7 +294,7 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb, over
         const forced = overrideManager.getForceMatchesFor(match.key);
         for (const key of forced) {
             if (!naturalMatches.some(m => m.key === key) &&
-                !survivingFounderForced.includes(key) &&
+                !founderForced.includes(key) &&
                 !forcedFromNaturals.includes(key) &&
                 !groupDb.assignedEntityKeys.has(key)) {
                 forcedFromNaturals.push(key);
@@ -277,16 +303,19 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb, over
     }
 
     // Step 7: Check forced-from-naturals vs founder forced (founder wins)
-    forcedFromNaturals = removeExcludedBy(forcedFromNaturals, survivingFounderForced, overrideManager);
+    forcedFromNaturals = overrideManager.removeExcludedKeysByPriority(forcedFromNaturals, founderForced);
+
+    // Step 7.5: Check forced-from-naturals for exclusions with founder
+    forcedFromNaturals = overrideManager.removeExcludedKeysWithFounder(forcedFromNaturals, founderKey);
 
     // Step 8: Resolve exclusions among forced-from-naturals
-    forcedFromNaturals = resolveExclusionsOnConflict(forcedFromNaturals, overrideManager);
+    forcedFromNaturals = overrideManager.resolveExclusionsOnConflict(forcedFromNaturals);
 
     // Final group assembly
     return {
         founder: founderKey,
         naturalMatches: naturalMatches,
-        founderForced: survivingFounderForced,
+        founderForced: founderForced,
         forcedFromNaturals: forcedFromNaturals,
         nearMisses: nearMisses
     };
@@ -427,6 +456,12 @@ After construction, generate summary:
 
 ---
 
-**Document Version**: 2.0
-**Status**: DESIGN_AGREED - 8-step algorithm finalized
-**Updated**: December 18, 2025 (Session 6)
+**Document Version**: 3.1
+**Status**: DESIGN_AGREED - Algorithm updated with founder exclusion checks
+**Updated**: December 22, 2025 (Session 14)
+
+### Version History
+- **v3.1** (Dec 22, 2025): Updated phase order - VisionAppraisal Households now Phase 1, Bloomerang Households now Phase 2.
+- **v3.0** (Dec 19, 2025): Added Steps 0, 3.5, 7.5 for founder exclusion checks. Bug fix: founder was not in naturalMatches array, so exclusions with founder were not being enforced.
+- **v2.0** (Dec 18, 2025): 8-step algorithm finalized with priority hierarchy.
+- **v1.0** (Dec 18, 2025): Initial design specification.

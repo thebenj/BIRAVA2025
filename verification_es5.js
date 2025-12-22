@@ -2,20 +2,23 @@
 // Works in all browsers without modern JavaScript support
 
 // Constants using var
+// NOTE: getPidsFolderId() reads from parameters.pidFilesParents (defined in baseCode.js)
+// This ensures all code uses the same PID folder source
 var CLEANUP_DATA_SOURCES = {
     PROCESSED_DATA: {
         name: "VisionAppraisal_ProcessedData.json",
         id: "1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf"
-    },
-    PIDS_FOLDER: {
-        name: "pids",
-        id: "1WS2Uwx3c96X_Kj-LvtQtpzUSAViHaBAG"
     },
     DUPLICATES_FOLDER: {
         name: "duplicates",
         id: "1UOIQ1_2TcAldgA-d8GqBel3csnzyqFwy"
     }
 };
+
+// ES5 compatible function to get PID folder (getter not supported in ES5 object literals)
+function getPidsFolderId() {
+    return parameters.pidFilesParents;  // Single source of truth from baseCode.js
+}
 
 // Simple test function
 function testFunctionES5() {
@@ -33,7 +36,7 @@ function processPIDFolderToCsvES5() {
     gapi.client.drive.files.list({
         pageSize: 1000,
         fields: 'files(id, name)',
-        q: "'" + CLEANUP_DATA_SOURCES.PIDS_FOLDER.id + "' in parents"
+        q: "'" + getPidsFolderId() + "' in parents"
     }).then(function(response) {
         var files = response.result.files || [];
         console.log('Found ' + files.length + ' PID files');

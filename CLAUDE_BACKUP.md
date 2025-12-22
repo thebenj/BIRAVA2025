@@ -5,8 +5,8 @@
 read_order: [ROOT_CAUSE_DEBUGGING_RULE, COMPLETION_VERIFICATION_RULE, CURRENT_WORK_CONTEXT, TERMINOLOGY, MANDATORY_COMPARETO_ARCHITECTURE]
 focus_section: ROOT_CAUSE_DEBUGGING_RULE_then_COMPLETION_VERIFICATION_RULE_then_CURRENT_WORK_CONTEXT
 processing_directive: ignore_visual_formatting_process_semantic_content_only
-last_updated: 2025-12-19
-version: 70.0_MATCH_OVERRIDE_SYSTEM_ALL_PHASES_COMPLETE
+last_updated: 2025-12-20
+version: 76.0_LIGHTWEIGHT_EXPORTER_COMPLETE
 ```
 
 ---
@@ -98,13 +98,166 @@ CLAUDE_MD_UPDATE_PROTECTION:
 
 ## CURRENT_WORK_CONTEXT
 ```yaml
-# December 19, 2025 - Session 8
+# December 20, 2025 - Session 11
 
-immediate_status: MATCH_OVERRIDE_SYSTEM_ALL_PHASES_COMPLETE
-current_focus: All 5 phases (A-E) of Match Override System implemented and user-verified
-next_action: System ready for production use - manage rules via Google Sheets
+immediate_status: LIGHTWEIGHT_EXPORTER_READY_FOR_USER_VERIFICATION
+current_focus: Lightweight EntityGroupDatabase exporter for Google Apps Script
+next_action: User verify lightweight export output is acceptable
 
-# Session 8 - Phases B, C, D, E Completed
+# Session 11 - Lightweight EntityGroupDatabase Exporter
+session11_work:
+  lightweight_exporter:
+    status: READY_FOR_USER_VERIFICATION
+    purpose: |
+      Export EntityGroupDatabase to a smaller JSON format suitable for Google Apps Script.
+      Strips unnecessary data (alternatives, sourceMaps, comparisonWeights, etc.)
+      while preserving essential data for lookups.
+
+    file_created: scripts/export/lightweightExporter.js
+    html_updated: index.html (added script tag after entityGroupBrowser.js)
+
+    size_reduction_achieved:
+      full_database: 16.55 MB
+      lightweight_export: 5.62 MB
+      reduction_percent: 66.0%
+
+    transformations:
+      AttributedTerm: Reduced to just the term value (string/number)
+      Aliased_and_subclasses: Reduced to primaryAlias.term value
+      IndividualName: Preserved as structured object with name components
+      HouseholdName: Preserved as structured object
+      Address: Preserved as structured object with address components
+      alternatives_homonyms_synonyms_candidates: Stripped entirely
+      sourceMap: Stripped entirely
+      comparisonWeights: Stripped entirely
+      comparisonCalculatorName: Stripped entirely
+
+    functions_exposed:
+      - exportLightweightEntityGroupDatabase(db): Returns lightweight plain object
+      - exportLightweightJSON(db): Returns JSON string
+      - downloadLightweightExport(db, filename): Downloads as file
+      - compareSizes(db): Compares full vs lightweight sizes
+
+    usage:
+      console: |
+        downloadLightweightExport(entityGroupBrowser.loadedDatabase, 'myExport.json');
+        compareSizes(entityGroupBrowser.loadedDatabase);
+
+    key_fixes_during_development:
+      fix_1_type_detection: |
+        Initial version failed to strip Aliased objects because loaded JSON data has
+        obj.type property (e.g., "type":"Aliased") rather than constructor.name.
+        Fixed by adding structural detection shortcuts that check for characteristic
+        properties (primaryAlias.term, term, identifier, alternatives) rather than
+        relying solely on type name matching.
+      fix_2_assessment_appraisal: |
+        Added assessmentValue and appraisalValue to transformOtherInfo() to capture
+        the assessment/appraisal data added in Session 10.
+      fix_3_aliased_addresses: |
+        primaryAddress in consensus entities is Aliased-wrapped. Changed
+        transformContactInfo to use transformToLightweight for addresses.
+        Updated term extraction shortcuts to recursively transform object terms
+        (like Address objects) instead of returning them raw.
+
+# Session 10 - Issues Resolved (previous session)
+session10_work:
+  csv_currency_parsing_fix:
+    status: USER_VERIFIED_WORKING
+    problem: |
+      Assessment/appraisal values like "$454,500" were being truncated to 3-digit numbers
+      because visionAppraisal.js used naive record.split(',') which broke on commas in currency values.
+    root_cause: |
+      User correctly identified the issue by browsing entities in Unified Entity Browser.
+    fix_implemented:
+      file: scripts/dataSources/visionAppraisal.js
+      changes:
+        - Added parseCSVWithCurrencyValues() method (lines 142-224)
+        - Method separates quoted CSV content from trailing googleFileId
+        - Scans backwards to find $-prefixed currency values
+        - Recombines comma-split currency parts into complete values
+        - Returns properly structured fields array with assessment[11] and appraisal[12]
+    verification: User confirmed assessment/appraisal values now display correctly in Unified Entity Browser
+
+  otherinfo_display_issue:
+    status: USER_VERIFIED_WORKING
+    problem: |
+      When viewing VisionAppraisal member details from EntityGroup browser, otherInfo was null.
+      User reported entities in Unified Entity Browser had otherInfo, but EntityGroup member
+      view showed null.
+    diagnosis_process: |
+      1. Added diagnostic logging to viewMemberEntityDetails() and Entity.deserialize()
+      2. Discovered unifiedEntityDatabase.entities had otherInfo: null after loading
+      3. User confirmed the saved JSON file DID contain otherInfo with assessmentValue
+      4. Traced to wrong file ID in input field
+    root_cause: |
+      The "Load Unified Database" button was loading an OLD file ID (1Z2V4Pi8KoxUR9B47KffEQI6gCs7rOS2Y)
+      instead of the current file with otherInfo data (19cgccMYNBboL07CmMP-5hNNGwEUBXgCI).
+      The input field had stale file ID, possibly from localStorage persistence.
+    resolution: User changed input field to correct file ID, otherInfo now displays correctly
+    lesson_learned: |
+      When data appears missing after deserialization, verify the correct file is being loaded.
+      Multiple unified database files may exist - check timestamps and file IDs.
+
+# Session 10 - Production Process Documentation (earlier in session)
+session10_earlier:
+  production_process_documented:
+    status: CODED_NOT_TESTED
+    file_created: reference_productionProcess.md
+    content: Complete 8-step process (Steps 0-7) for rebuilding entity database
+
+  pid_folder_consolidation:
+    status: CODED_NOT_TESTED
+    problem: verification.js had hardcoded wrong folder ID
+    fix: Changed to getter referencing parameters.pidFilesParents as single source of truth
+    files_modified:
+      - verification.js: PIDS_FOLDER now uses getter
+      - cleanup.js: PIDS_FOLDER now uses getter
+      - verification_es5.js: Added getPidsFolderId() function
+
+  duplicate_analysis_buttons:
+    status: CODED_NOT_TESTED
+    added_to: index.html
+    buttons:
+      - "Analyze PID Duplicates" (analyzePIDFolder)
+      - "Run PID Deduplication" (runPIDDeduplication)
+
+  diagnostic_logging_removed:
+    status: CODED_NOT_TESTED
+    file: scripts/dataSources/visionAppraisalNameParser.js
+    removed: "[OTHERINFO] Preserved assessment/appraisal values" console.log
+
+  data_pipeline_verification:
+    stage_2_everyThingWithPid: WORKING (has "$454,500,$454,500" values)
+    stage_3_va_entities: WORKING (otherInfo has assessment/appraisal)
+    stage_4_unified_database: WORKING
+    stage_5_consensus: IN_PROGRESS_DIAGNOSIS
+
+# Session 9 - Founder Exclusion Bug Fix (December 19)
+session9_work:
+  founder_exclusion_bug_fix:
+    status: CODED_NOT_TESTED
+    problem: |
+      Exclusion rules involving the founder (F) were not being enforced because F is not
+      included in the naturalMatches array. When Step 2 checked exclusions among natural
+      matches, the founder wasn't there to trigger the exclusion check.
+    solution: |
+      Added three new steps to the algorithm that explicitly check exclusions against the founder:
+      - Step 0: Remove natural matches that have exclusion with founder (founder always wins)
+      - Step 3.5: Check founder-forced for contradictions (both force-match AND exclude with F)
+      - Step 7.5: Check forcedFromNaturals for exclusions with founder
+    files_modified:
+      - scripts/matching/matchOverrideManager.js: Added 3 new helper methods
+      - scripts/matching/entityGroupBuilder.js: Added Steps 0, 3.5, 7.5 to buildGroupForFounder()
+      - reference_matchOverrideSystem.md: Updated algorithm docs to v3.0
+    new_helper_methods:
+      - removeExcludedWithFounder(entities, founderKey): Step 0 - filter entity objects
+      - removeExcludedKeysWithFounder(keys, founderKey): Step 7.5 - filter key strings
+      - removeContradictoryFounderForced(keys, founderKey): Step 3.5 - filter with warning
+    key_insight: |
+      Founder exclusions are ABSOLUTE - OnConflict value is ignored. The founder owns
+      the group and any entity excluded with the founder cannot join that group.
+
+# Session 8 - Phases B, C, D, E Completed (previous session)
 session8_work:
   match_override_system_completion:
     status: ALL_PHASES_USER_VERIFIED_WORKING
@@ -189,21 +342,26 @@ session6_work:
     spec_file: reference_matchOverrideSystem.md (v2.0)
     key_insight: Sequence matters - 8 steps with priority hierarchy
 
-  eight_step_algorithm:
+  group_building_algorithm:
+    step_0: Remove natural matches excluded with founder (founder always wins) [NEW]
     step_1: Find natural matches from algorithmic comparison
     step_2: Resolve exclusions among natural matches (founder-forced in list wins, else OnConflict)
     step_3: Generate founder forced matches (not already in naturals)
+    step_3_5: Check for contradictions - entity both forced AND excluded with founder (warn) [NEW]
     step_4: Resolve exclusions among founder forced (stupid case - OnConflict)
     step_5: Check founder forced vs natural matches (founder forced wins)
     step_6: Generate forced matches from surviving natural matches
     step_7: Check forced-from-naturals vs founder forced (founder wins)
+    step_7_5: Check forcedFromNaturals for exclusions with founder [NEW]
     step_8: Resolve exclusions among forced-from-naturals (OnConflict)
 
   priority_hierarchy:
-    tier_1: Founder-forced (F→X) - highest priority
+    tier_0: Founder (F) - ABSOLUTE (cannot be excluded, owns the group)
+    tier_1: Founder-forced (F→X) - highest priority among non-founders
     tier_2: Natural match - middle priority
     tier_3: Forced-from-natural (A→X where A is natural match) - lowest priority
     same_tier_resolution: OnConflict rules (DEFECTIVE_YIELDS, OTHER_YIELDS, USE_SIMILARITY)
+    founder_exclusion_rule: Any entity excluded with founder F is blocked from joining F's group (OnConflict ignored)
 
   key_behaviors:
     - Losers stay in pool for future groups (not permanently excluded)
@@ -329,6 +487,8 @@ KEYED_DATABASE:
   key_format_visionappraisal: "visionAppraisal:FireNumber:1510"
   key_format_bloomerang: "bloomerang:12345:SimpleIdentifiers:...:head"
   load_buttons: ["📂 Load Unified Database", "Load All Entities Into Memory"]
+  split_button: "✂️ Split Database for Apps Script" (creates 3 files under 50MB for Google Apps Script)
+  split_details: See reference_googleAppsScriptLookup.md
 
 ENTITYGROUP_DATABASE:
   description: Collection of EntityGroups representing matched real-world persons/households
@@ -465,6 +625,21 @@ COMPARISON_ARCHITECTURE:
 KEYED_DATABASE:
   reference_keyedDatabaseMigration.md: Migration plan details
   reference_keyPreservationPlan.md: Key preservation architecture
+
+GOOGLE_APPS_SCRIPT_TOOLS:
+  reference_googleAppsScriptLookup.md: EntityGroup lookup from Google Sheets
+  googleAppsScripts/: Folder containing Apps Script code (not part of browser app)
+  READ_WHEN: Need to look up entities from Google Sheets without browser app
+
+LIGHTWEIGHT_EXPORTER:
+  scripts/export/lightweightExporter.js: Exports EntityGroupDatabase to smaller JSON format
+  purpose: Create Google Apps Script-readable JSON without class overhead
+  size_reduction: ~66% smaller than full serialization
+  READ_WHEN: Need to export EntityGroupDatabase for external consumption
+
+UI_AND_DISPLAY:
+  reference_displayImprovements.md: Entity detail popups, CSV export panel, excluded properties
+  READ_WHEN: Revisiting HTML display design or adding new display features
 ```
 
 ---
@@ -472,15 +647,47 @@ KEYED_DATABASE:
 ## BLOCKING_STATUS_TRACKER
 ```yaml
 current_work:
+  lightweight_exporter:
+    status: READY_FOR_USER_VERIFICATION
+    description: |
+      New file scripts/export/lightweightExporter.js created to export EntityGroupDatabase
+      to a smaller JSON format (66% reduction) suitable for Google Apps Script.
+      Strips alternatives, sourceMaps, comparisonWeights while preserving essential data.
+    files_created:
+      - scripts/export/lightweightExporter.js
+    files_modified:
+      - index.html (added script tag)
+
+  csv_currency_parsing:
+    status: USER_VERIFIED_WORKING
+    description: Fixed visionAppraisal.js to handle comma-containing currency values like "$454,500"
+
+  otherinfo_display:
+    status: USER_VERIFIED_WORKING
+    description: |
+      Issue was wrong file ID in input field. User was loading old unified database file
+      that lacked otherInfo. Correct file ID resolved the issue.
+
+  founder_exclusion_bug_fix:
+    status: CODED_NOT_TESTED
+    description: |
+      Bug fix: Exclusions with founder were not enforced because founder is not in naturalMatches.
+      Added Steps 0, 3.5, 7.5 to check exclusions against founder at all entry points.
+    files_modified:
+      - matchOverrideManager.js (3 new methods)
+      - entityGroupBuilder.js (3 new steps in buildGroupForFounder)
+      - reference_matchOverrideSystem.md (v3.0)
+
   match_override_system:
-    status: ALL_PHASES_COMPLETE
+    status: ALL_PHASES_COMPLETE_WITH_BUG_FIX
     phases_completed:
       phase_a: USER_VERIFIED_WORKING (data structures, 8-step helpers)
       phase_b: USER_VERIFIED_WORKING (exclusion integration)
       phase_c: USER_VERIFIED_WORKING (force-match integration)
       phase_d: USER_VERIFIED_WORKING (Google Sheets loading)
       phase_e: CODED_READY_FOR_TESTING (UI checkbox integration)
-    spec_file: reference_matchOverrideSystem.md
+    bug_fix: CODED_NOT_TESTED (founder exclusion - Steps 0, 3.5, 7.5)
+    spec_file: reference_matchOverrideSystem.md (v3.0)
     implementation_plan: reference_matchOverrideImplementationPlan.md
 
   same_location_fix:
@@ -492,6 +699,9 @@ current_work:
     location: scripts/entityGroupBrowser.js (lines 1356-1912)
 
 completed_work:
+  csv_currency_parsing_fix: USER_VERIFIED_WORKING (Dec 20 session 10)
+  otherinfo_display_fix: USER_VERIFIED_WORKING (Dec 20 session 10 - wrong file ID issue)
+  founder_exclusion_bug_fix: CODED_NOT_TESTED (Dec 19 session 9)
   match_override_system_complete: USER_VERIFIED_WORKING (Dec 19 session 8 - all 5 phases)
   match_override_phase_a: USER_VERIFIED_WORKING (Dec 18 session 6)
   match_override_phase_b: USER_VERIFIED_WORKING (Dec 19 session 8)
@@ -544,11 +754,73 @@ MANDATORY_BACKUP:
 
 ## SESSION_METADATA
 ```yaml
-last_updated: December_19_2025
-document_version: 70.0_MATCH_OVERRIDE_SYSTEM_ALL_PHASES_COMPLETE
-previous_version: 69.0_PHASE_B_READY_FOR_TESTING
+last_updated: December_20_2025
+document_version: 76.0_LIGHTWEIGHT_EXPORTER_COMPLETE
+previous_version: 75.0_OTHERINFO_DIAGNOSIS_COMPLETE
 
 session_summary:
+  dec20_session11:
+    status: READY_FOR_USER_VERIFICATION
+    focus: Lightweight EntityGroupDatabase exporter for Google Apps Script
+    deliverables:
+      - scripts/export/lightweightExporter.js: Complete lightweight exporter implementation
+      - index.html: Added script tag to load lightweightExporter.js
+    size_reduction: 16.55 MB → 5.62 MB (66% reduction)
+    key_functions:
+      - exportLightweightEntityGroupDatabase(db)
+      - downloadLightweightExport(db, filename)
+      - compareSizes(db)
+    bugs_fixed:
+      - Type detection for loaded JSON (structural shortcuts for primaryAlias.term, term, identifier)
+      - Added assessmentValue/appraisalValue to transformOtherInfo
+      - Fixed Aliased-wrapped Address handling (primaryAddress was returning empty object)
+      - Term extraction now recursively transforms object terms (like Address)
+    also_in_session:
+      - Changed PID folder ID in baseCode.js to new folder: 1qgnE1FW3F6UG7YS4vfGBm9KzX8TDuBCl
+      - Discussed OAuth token refresh strategy for long-running VisionAppraisal downloads
+
+  dec20_session10:
+    status: IN_PROGRESS
+    focus: Assessment/appraisal value flow to consensus entities + production process docs
+    earlier_work:
+      - Created reference_productionProcess.md (8-step production rebuild process)
+      - Fixed PID folder ID to use single source of truth (parameters.pidFilesParents)
+      - Added PID duplicate analysis buttons to index.html
+      - Removed diagnostic logging from visionAppraisalNameParser.js
+      - Verified data pipeline stages 2-4 working correctly
+    current_issue:
+      problem: User reported consensus entities have null assessment values
+      initial_wrong_assumption: AI assumed "old database" - user corrected this
+      code_review: |
+        - entityGroup.js lines 122-125: Singleton groups have consensusEntity=null BY DESIGN
+        - entityGroup.js lines 447-461: Assessment copying code EXISTS and appears correct
+      diagnosis_needed: |
+        Need to verify if MULTI-MEMBER groups with VA members also show null values.
+        If so, need to trace why member entities' otherInfo isn't being read.
+    key_learning: |
+      Groups without VisionAppraisal members will NEVER have assessment data (expected).
+      Singleton groups will NEVER have a consensusEntity (by design).
+
+  dec19_session9:
+    status: CODED_NOT_TESTED
+    focus: Founder exclusion bug fix
+    problem: |
+      Exclusions with founder F were not being enforced because F is not in naturalMatches.
+      Step 2 only checked exclusions among natural matches, missing founder-entity exclusions.
+    solution: |
+      Added 3 new steps to check exclusions against founder at all entry points:
+      - Step 0: naturalMatches vs founder
+      - Step 3.5: founderForced vs founder (contradiction check with warning)
+      - Step 7.5: forcedFromNaturals vs founder
+    files_modified:
+      - scripts/matching/matchOverrideManager.js (3 new helper methods)
+      - scripts/matching/entityGroupBuilder.js (Steps 0, 3.5, 7.5)
+      - reference_matchOverrideSystem.md (v3.0)
+    new_methods_in_matchOverrideManager:
+      - removeExcludedWithFounder(entities, founderKey)
+      - removeExcludedKeysWithFounder(keys, founderKey)
+      - removeContradictoryFounderForced(keys, founderKey)
+
   dec19_session8:
     status: MATCH_OVERRIDE_SYSTEM_ALL_PHASES_COMPLETE
     focus: Complete Match Override System - Phases B, C, D, E

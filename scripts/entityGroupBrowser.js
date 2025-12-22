@@ -1954,6 +1954,533 @@ window.exportEntityGroupsToCSV = exportEntityGroupsToCSV;
 window.downloadCSVExport = downloadCSVExport;
 
 // =============================================================================
+// ASSESSMENT VALUE REPORT
+// =============================================================================
+
+/**
+ * Extract all names from an entity, including individual names from households.
+ * @param {Object} entity - Entity object
+ * @returns {string[]} - Array of formatted name strings
+ */
+function extractAllNamesFromEntity(entity) {
+    const names = [];
+    if (!entity) return names;
+
+    // Extract entity's own name
+    let entityName = entity.name?.primaryAlias?.term || entity.name?.term || '';
+    if (typeof entityName === 'object' && entityName !== null) {
+        entityName = formatNameObject(entityName);
+    }
+    if (entityName && !names.includes(entityName)) {
+        names.push(entityName);
+    }
+
+    // If it's a household (AggregateHousehold), also extract individual names
+    // Check by type property (from loaded JSON) or constructor name
+    const entityType = entity.type || entity.constructor?.name;
+    if (entityType === 'AggregateHousehold' && entity.individuals && Array.isArray(entity.individuals)) {
+        for (const individual of entity.individuals) {
+            let indivName = individual.name?.primaryAlias?.term || individual.name?.term || '';
+            if (typeof indivName === 'object' && indivName !== null) {
+                indivName = formatNameObject(indivName);
+            }
+            if (indivName && !names.includes(indivName)) {
+                names.push(indivName);
+            }
+        }
+    }
+
+    return names;
+}
+
+/**
+ * Deduplicate names by similarity - removes names that are too similar to earlier names.
+ * Uses levenshteinSimilarity with the trueMatch.nameAlone threshold (0.875).
+ * Keeps the first occurrence, removes subsequent similar names.
+ * @param {string[]} names - Array of name strings
+ * @returns {string[]} - Deduplicated array of names
+ */
+function deduplicateNamesBySimilarity(names) {
+    if (!names || names.length <= 1) return names;
+
+    // Get threshold from MATCH_CRITERIA - trueMatch.nameAlone = 0.875
+    const threshold = window.MATCH_CRITERIA?.trueMatch?.nameAlone || 0.875;
+
+    const deduplicated = [];
+    for (const name of names) {
+        // Check if this name is too similar to any already-kept name
+        let isDuplicate = false;
+        for (const keptName of deduplicated) {
+            const similarity = window.levenshteinSimilarity(name, keptName);
+            if (similarity >= threshold) {
+                isDuplicate = true;
+                break;
+            }
+        }
+        if (!isDuplicate) {
+            deduplicated.push(name);
+        }
+    }
+    return deduplicated;
+}
+
+/**
+ * Generate a CSV report of total assessed values per entity group.
+ * Calculates total assessment value across all member entities (avoiding duplicates).
+ * Includes:
+ * - Consensus name and address
+ * - Total assessed value
+ * - Number of properties combined
+ * - All names from member entities (including individuals within households)
+ * Sorted by total value descending.
+ *
+ * @param {Object} groupDatabase - EntityGroupDatabase to export
+ * @returns {Object} { csv: string, stats: { groupCount, groupsWithValues, totalValue, maxNamesPerGroup } }
+ */
+function generateAssessmentValueReport(groupDatabase) {
+    const entityDb = window.unifiedEntityDatabase;
+    if (!entityDb || !entityDb.entities) {
+        throw new Error('Unified Entity Database not loaded');
+    }
+
+    const reportRows = [];
+    let maxNamesPerGroup = 0;
+
+    // EntityGroupDatabase.groups is always an Object keyed by index, never an Array
+    for (const group of Object.values(groupDatabase.groups)) {
+        // Track keys we've already processed to avoid duplicates
+        const processedKeys = new Set();
+        let totalAssessment = 0;
+        let propertiesWithValue = 0;
+        const allNames = [];
+
+        // Process all member keys (includes founding member)
+        for (const memberKey of group.memberKeys) {
+            if (processedKeys.has(memberKey)) continue;
+            processedKeys.add(memberKey);
+
+            const entity = entityDb.entities[memberKey];
+            if (!entity) continue;
+
+            // Extract assessment value from entity's otherInfo
+            const assessmentValue = entity.otherInfo?.assessmentValue;
+            if (assessmentValue) {
+                const numericValue = parseAssessmentValue(assessmentValue);
+                if (!isNaN(numericValue) && numericValue > 0) {
+                    totalAssessment += numericValue;
+                    propertiesWithValue++;
+                }
+            }
+
+            // Also extract assessment values from SUBDIVISION entities
+            // Subdivisions are PIDs that were merged into this entity (same owner, same fire number)
+            const subdivision = entity.otherInfo?.subdivision;
+            if (subdivision && typeof subdivision === 'object') {
+                for (const [pid, subdivEntity] of Object.entries(subdivision)) {
+                    // subdivEntity can be a full entity object or a serialized string
+                    let subdivOtherInfo = null;
+                    if (typeof subdivEntity === 'string') {
+                        try {
+                            const parsed = JSON.parse(subdivEntity);
+                            subdivOtherInfo = parsed.otherInfo;
+                        } catch (e) {
+                            // Ignore parse errors
+                        }
+                    } else if (subdivEntity && typeof subdivEntity === 'object') {
+                        subdivOtherInfo = subdivEntity.otherInfo;
+                    }
+
+                    if (subdivOtherInfo?.assessmentValue) {
+                        const subdivValue = parseAssessmentValue(subdivOtherInfo.assessmentValue);
+                        if (!isNaN(subdivValue) && subdivValue > 0) {
+                            totalAssessment += subdivValue;
+                            propertiesWithValue++;
+                        }
+                    }
+                }
+            }
+
+            // Extract all names from this entity (including individuals in households)
+            const entityNames = extractAllNamesFromEntity(entity);
+            for (const name of entityNames) {
+                if (name && !allNames.includes(name)) {
+                    allNames.push(name);
+                }
+            }
+        }
+
+        // Deduplicate names by similarity (removes names >= 0.875 similar to earlier names)
+        const deduplicatedNames = deduplicateNamesBySimilarity(allNames);
+
+        // Track maximum names for CSV column count
+        if (deduplicatedNames.length > maxNamesPerGroup) {
+            maxNamesPerGroup = deduplicatedNames.length;
+        }
+
+        // Extract consensus name and address
+        let consensusName = '';
+        let consensusAddress = '';
+
+        if (group.consensusEntity) {
+            const ce = group.consensusEntity;
+            consensusName = ce.name?.primaryAlias?.term || ce.name?.term || '';
+            if (typeof consensusName === 'object' && consensusName !== null) {
+                consensusName = formatNameObject(consensusName);
+            }
+            consensusAddress = ce.contactInfo?.primaryAddress?.primaryAlias?.term ||
+                               ce.contactInfo?.primaryAddress?.term ||
+                               ce.locationIdentifier?.primaryAlias?.term || '';
+            if (typeof consensusAddress === 'object' && consensusAddress !== null) {
+                consensusAddress = formatAddressObject(consensusAddress);
+            }
+        } else if (group.memberKeys.length > 0) {
+            // Singleton - use founding member
+            const founder = entityDb.entities[group.foundingMemberKey];
+            if (founder) {
+                consensusName = founder.name?.primaryAlias?.term || founder.name?.term || '';
+                if (typeof consensusName === 'object' && consensusName !== null) {
+                    consensusName = formatNameObject(consensusName);
+                }
+                consensusAddress = founder.contactInfo?.primaryAddress?.primaryAlias?.term ||
+                                   founder.contactInfo?.primaryAddress?.term ||
+                                   founder.locationIdentifier?.primaryAlias?.term || '';
+                if (typeof consensusAddress === 'object' && consensusAddress !== null) {
+                    consensusAddress = formatAddressObject(consensusAddress);
+                }
+            }
+        }
+
+        reportRows.push({
+            groupIndex: group.index,
+            consensusName: consensusName,
+            consensusAddress: consensusAddress,
+            totalAssessment: totalAssessment,
+            propertiesWithValue: propertiesWithValue,
+            memberCount: group.memberKeys.length,
+            allNames: deduplicatedNames
+        });
+    }
+
+    // Sort by total assessment value descending
+    reportRows.sort((a, b) => b.totalAssessment - a.totalAssessment);
+
+    // Generate CSV header with dynamic name columns
+    const nameColumnHeaders = [];
+    for (let i = 1; i <= maxNamesPerGroup; i++) {
+        nameColumnHeaders.push(`Name ${i}`);
+    }
+    const csvHeader = [
+        'Group Index',
+        'Consensus Name',
+        'Consensus Address',
+        'Total Assessed Value',
+        'Properties Combined',
+        'Member Count',
+        ...nameColumnHeaders
+    ].join(',');
+    const csvLines = [csvHeader];
+
+    let groupsWithValues = 0;
+    let grandTotal = 0;
+
+    for (const row of reportRows) {
+        if (row.totalAssessment > 0) {
+            groupsWithValues++;
+            grandTotal += row.totalAssessment;
+        }
+
+        // Build name columns (pad with empty strings if fewer names than max)
+        const nameColumns = [];
+        for (let i = 0; i < maxNamesPerGroup; i++) {
+            nameColumns.push(escapeCSVField(row.allNames[i] || ''));
+        }
+
+        csvLines.push([
+            row.groupIndex,
+            escapeCSVField(row.consensusName),
+            escapeCSVField(row.consensusAddress),
+            row.totalAssessment,
+            row.propertiesWithValue,
+            row.memberCount,
+            ...nameColumns
+        ].join(','));
+    }
+
+    return {
+        csv: csvLines.join('\n'),
+        stats: {
+            groupCount: reportRows.length,
+            groupsWithValues: groupsWithValues,
+            totalValue: grandTotal,
+            maxNamesPerGroup: maxNamesPerGroup
+        }
+    };
+}
+
+/**
+ * Parse an assessment value string to a number.
+ * Handles formats like "$454,500" or "454500"
+ */
+function parseAssessmentValue(value) {
+    if (typeof value === 'number') return value;
+    if (typeof value !== 'string') return NaN;
+    // Remove $ and commas, then parse
+    const cleaned = value.replace(/[$,]/g, '');
+    return parseFloat(cleaned);
+}
+
+/**
+ * Format a structured name object to a string
+ */
+function formatNameObject(nameObj) {
+    if (!nameObj) return '';
+    if (typeof nameObj === 'string') return nameObj;
+    // Handle IndividualName structure
+    const parts = [];
+    if (nameObj.firstName) parts.push(nameObj.firstName);
+    if (nameObj.otherNames) parts.push(nameObj.otherNames);
+    if (nameObj.lastName) parts.push(nameObj.lastName);
+    if (parts.length > 0) return parts.join(' ');
+    // Fallback: try term or primaryAlias
+    if (nameObj.term) return typeof nameObj.term === 'string' ? nameObj.term : formatNameObject(nameObj.term);
+    if (nameObj.primaryAlias?.term) return formatNameObject(nameObj.primaryAlias.term);
+    return '';
+}
+
+/**
+ * Format a structured address object to a string
+ */
+function formatAddressObject(addrObj) {
+    if (!addrObj) return '';
+    if (typeof addrObj === 'string') return addrObj;
+    // Handle Address structure
+    const parts = [];
+    if (addrObj.streetAddress) parts.push(addrObj.streetAddress);
+    if (addrObj.city) parts.push(addrObj.city);
+    if (addrObj.state) parts.push(addrObj.state);
+    if (addrObj.zip) parts.push(addrObj.zip);
+    if (parts.length > 0) return parts.join(', ');
+    // Fallback: try term or primaryAlias
+    if (addrObj.term) return typeof addrObj.term === 'string' ? addrObj.term : formatAddressObject(addrObj.term);
+    if (addrObj.primaryAlias?.term) return formatAddressObject(addrObj.primaryAlias.term);
+    return '';
+}
+
+/**
+ * Escape a field for CSV format
+ */
+function escapeCSVField(value) {
+    if (value == null) return '';
+    const str = String(value);
+    // If contains comma, newline, or quote, wrap in quotes and escape internal quotes
+    if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+    }
+    return str;
+}
+
+/**
+ * Download the assessment value report as CSV
+ */
+function downloadAssessmentValueReport() {
+    const db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+    if (!db) {
+        showEntityGroupStatus('Please load an EntityGroup database first', 'error');
+        return;
+    }
+
+    if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+        showEntityGroupStatus('Please load the Unified Entity Database first (needed for entity details)', 'error');
+        return;
+    }
+
+    showEntityGroupStatus('Generating Assessment Value Report...', 'loading');
+
+    try {
+        const result = generateAssessmentValueReport(db);
+        const dateStr = new Date().toISOString().slice(0, 10);
+
+        // Download CSV
+        const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `assessment_values_${dateStr}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showEntityGroupStatus(
+            `Assessment Report: ${result.stats.groupCount} groups, ` +
+            `${result.stats.groupsWithValues} with values, ` +
+            `Total: $${result.stats.totalValue.toLocaleString()}, ` +
+            `Max names: ${result.stats.maxNamesPerGroup}`,
+            'success'
+        );
+
+    } catch (error) {
+        console.error('Assessment value report error:', error);
+        showEntityGroupStatus(`Report error: ${error.message}`, 'error');
+    }
+}
+
+// Export for global access
+window.generateAssessmentValueReport = generateAssessmentValueReport;
+window.downloadAssessmentValueReport = downloadAssessmentValueReport;
+
+// =============================================================================
+// ASSESSMENT VALUE CHECKSUM VERIFICATION
+// =============================================================================
+
+/**
+ * Calculate assessment value totals from raw VisionAppraisal data (pre-entity stage).
+ * This provides a checksum to verify the assessment value report is not omitting properties.
+ *
+ * Must be run AFTER VisionAppraisal data is loaded (after clicking "Load VA Data").
+ *
+ * @returns {Object} { totalValue, propertyCount, breakdown: { withValue, withZeroValue, withoutValue } }
+ */
+async function calculateRawAssessmentChecksum() {
+    console.log('=== CALCULATING RAW ASSESSMENT CHECKSUM ===');
+
+    // Try to load VisionAppraisal data fresh
+    if (!window.VisionAppraisal) {
+        throw new Error('VisionAppraisal data source not loaded. Load the app first.');
+    }
+
+    const rawData = await window.VisionAppraisal.loadData();
+    console.log(`Loaded ${rawData.length} raw VisionAppraisal records`);
+
+    let totalValue = 0;
+    let withValue = 0;
+    let withZeroValue = 0;
+    let withoutValue = 0;
+
+    for (const record of rawData) {
+        const assessmentStr = record.assessmentValue;
+        if (!assessmentStr || assessmentStr.trim() === '') {
+            withoutValue++;
+            continue;
+        }
+
+        const numericValue = parseAssessmentValue(assessmentStr);
+        if (isNaN(numericValue)) {
+            withoutValue++;
+            continue;
+        }
+
+        if (numericValue === 0) {
+            withZeroValue++;
+        } else {
+            withValue++;
+            totalValue += numericValue;
+        }
+    }
+
+    const result = {
+        totalValue,
+        propertyCount: rawData.length,
+        breakdown: {
+            withValue,
+            withZeroValue,
+            withoutValue
+        }
+    };
+
+    console.log('=== RAW CHECKSUM RESULT ===');
+    console.log(`Total Properties: ${result.propertyCount}`);
+    console.log(`  With assessment value > 0: ${withValue}`);
+    console.log(`  With assessment value = 0: ${withZeroValue}`);
+    console.log(`  Without assessment value: ${withoutValue}`);
+    console.log(`TOTAL ASSESSED VALUE: $${totalValue.toLocaleString()}`);
+
+    return result;
+}
+
+/**
+ * Run a full checksum verification comparing raw data to report output.
+ * Loads raw data, generates report, and compares totals.
+ */
+async function verifyAssessmentChecksum() {
+    const db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+    if (!db) {
+        showEntityGroupStatus('Please load an EntityGroup database first', 'error');
+        return null;
+    }
+
+    if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+        showEntityGroupStatus('Please load the Unified Entity Database first', 'error');
+        return null;
+    }
+
+    showEntityGroupStatus('Calculating assessment checksums...', 'loading');
+
+    try {
+        // Get raw checksum
+        const rawChecksum = await calculateRawAssessmentChecksum();
+
+        // Get report checksum
+        const reportResult = generateAssessmentValueReport(db);
+
+        // Compare
+        const reportTotal = reportResult.stats.totalValue;
+        const rawTotal = rawChecksum.totalValue;
+        const difference = rawTotal - reportTotal;
+        const percentCaptured = rawTotal > 0 ? ((reportTotal / rawTotal) * 100).toFixed(2) : 0;
+
+        const verification = {
+            raw: {
+                totalValue: rawTotal,
+                propertyCount: rawChecksum.propertyCount,
+                propertiesWithValue: rawChecksum.breakdown.withValue
+            },
+            report: {
+                totalValue: reportTotal,
+                groupCount: reportResult.stats.groupCount,
+                groupsWithValues: reportResult.stats.groupsWithValues,
+                propertiesCounted: reportResult.stats.groupsWithValues // approximate
+            },
+            comparison: {
+                difference: difference,
+                percentCaptured: parseFloat(percentCaptured),
+                match: Math.abs(difference) < 1 // within $1 tolerance
+            }
+        };
+
+        console.log('\n=== CHECKSUM VERIFICATION ===');
+        console.log(`RAW VisionAppraisal Total:  $${rawTotal.toLocaleString()} (${rawChecksum.breakdown.withValue} properties)`);
+        console.log(`Report Total:               $${reportTotal.toLocaleString()} (${reportResult.stats.groupsWithValues} groups with values)`);
+        console.log(`Difference:                 $${difference.toLocaleString()}`);
+        console.log(`Percent Captured:           ${percentCaptured}%`);
+        console.log(`Match:                      ${verification.comparison.match ? '✓ YES' : '✗ NO'}`);
+
+        if (verification.comparison.match) {
+            showEntityGroupStatus(
+                `✓ Checksum VERIFIED: Raw $${rawTotal.toLocaleString()} = Report $${reportTotal.toLocaleString()} (${rawChecksum.breakdown.withValue} properties)`,
+                'success'
+            );
+        } else {
+            showEntityGroupStatus(
+                `⚠ Checksum MISMATCH: Raw $${rawTotal.toLocaleString()} vs Report $${reportTotal.toLocaleString()} (Δ $${difference.toLocaleString()}, ${percentCaptured}%)`,
+                'error'
+            );
+        }
+
+        return verification;
+
+    } catch (error) {
+        console.error('Checksum verification error:', error);
+        showEntityGroupStatus(`Checksum error: ${error.message}`, 'error');
+        return null;
+    }
+}
+
+// Export checksum functions
+window.calculateRawAssessmentChecksum = calculateRawAssessmentChecksum;
+window.verifyAssessmentChecksum = verifyAssessmentChecksum;
+
+// =============================================================================
 // ENTITY COMPARISON UTILITY
 // =============================================================================
 
@@ -2103,6 +2630,106 @@ function runEntityComparison() {
 // Export for global access
 window.compareEntitiesByKey = compareEntitiesByKey;
 window.runEntityComparison = runEntityComparison;
+
+// =============================================================================
+// MULTI-VA PROPERTY REPORT
+// =============================================================================
+
+/**
+ * Generate a CSV report of groups with more than 2 VisionAppraisal members
+ * Uses the same format as the Prospects + Donors export (54 columns)
+ * Groups are sorted by number of VA members (descending)
+ * Near misses are NOT counted toward VA count, but are NOT included in output
+ *
+ * Usage from console:
+ *   exportMultiVAPropertyReport()
+ *   exportMultiVAPropertyReport(3)  // minimum 3 VA members (default is 3, i.e., "more than 2")
+ *
+ * @param {number} minVAMembers - Minimum number of VA members to include (default 3)
+ */
+function exportMultiVAPropertyReport(minVAMembers = 3) {
+    // Use window.entityGroupDatabase if available, otherwise fall back to browser's loadedDatabase
+    const groupDatabase = window.entityGroupDatabase || entityGroupBrowser.loadedDatabase;
+
+    if (!groupDatabase || !groupDatabase.groups) {
+        console.error('No EntityGroup database loaded. Build or load one first.');
+        return;
+    }
+
+    // Check if unified database is loaded (needed for entity lookups)
+    if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+        console.error('Please load the Unified Entity Database first (needed for entity details).');
+        return;
+    }
+
+    console.log(`Generating Multi-VA Property Report (minimum ${minVAMembers} VA members)...`);
+
+    // Analyze each group for VA member count
+    const groupsWithVACount = [];
+
+    // groups is an object keyed by index, not an array
+    const allGroups = Object.values(groupDatabase.groups);
+    for (const group of allGroups) {
+        // Count VisionAppraisal members (NOT near misses)
+        const memberKeys = group.memberKeys || [];
+        const vaMembers = memberKeys.filter(key => key.startsWith('visionAppraisal:'));
+        const vaCount = vaMembers.length;
+
+        if (vaCount >= minVAMembers) {
+            groupsWithVACount.push({
+                group: group,
+                vaCount: vaCount
+            });
+        }
+    }
+
+    // Sort by VA count descending
+    groupsWithVACount.sort((a, b) => b.vaCount - a.vaCount);
+
+    console.log(`Found ${groupsWithVACount.length} groups with ${minVAMembers}+ VA members`);
+
+    if (groupsWithVACount.length === 0) {
+        console.log('No groups match the criteria.');
+        return;
+    }
+
+    // Build CSV using the same format as Prospects + Donors export
+    const headerRow = CSV_HEADERS.map(h => csvEscape(h)).join(',');
+
+    // Generate rows for each qualifying group (no near misses)
+    const allRows = [];
+    for (const item of groupsWithVACount) {
+        const groupRows = generateEntityGroupRows(item.group, false); // false = no near misses
+        allRows.push(...groupRows);
+    }
+
+    const dataRows = allRows.map(row => row.map(v => csvEscape(v)).join(','));
+    const csv = [headerRow, ...dataRows].join('\n');
+
+    // Download
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `multi_va_property_report_${minVAMembers}plus_${dateStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    console.log(`Exported ${groupsWithVACount.length} groups (${allRows.length} rows) to CSV`);
+
+    // Also return the data for inspection
+    return {
+        totalGroups: groupsWithVACount.length,
+        totalRows: allRows.length,
+        groups: groupsWithVACount
+    };
+}
+
+// Export for global access
+window.exportMultiVAPropertyReport = exportMultiVAPropertyReport;
 
 // =============================================================================
 // INITIALIZATION ON DOM READY

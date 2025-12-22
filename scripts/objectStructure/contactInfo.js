@@ -429,6 +429,44 @@ class OtherInfo extends Info {
         // Structure: { pid: serializedEntityJSON, pid2: serializedEntityJSON, ... }
         // Used by fire number collision handler to consolidate multiple PIDs under one entity
         this.subdivision = null;
+
+        // Property value fields (added Dec 2025)
+        // These store VisionAppraisal assessment and appraisal values
+        // Will be null for old data or non-VisionAppraisal entities
+        this.assessmentValue = null;
+        this.appraisalValue = null;
+    }
+
+    /**
+     * Set assessment value
+     * @param {string} value - The assessment value string
+     */
+    setAssessmentValue(value) {
+        this.assessmentValue = value || null;
+    }
+
+    /**
+     * Set appraisal value
+     * @param {string} value - The appraisal value string
+     */
+    setAppraisalValue(value) {
+        this.appraisalValue = value || null;
+    }
+
+    /**
+     * Get assessment value
+     * @returns {string|null} The assessment value or null
+     */
+    getAssessmentValue() {
+        return this.assessmentValue;
+    }
+
+    /**
+     * Get appraisal value
+     * @returns {string|null} The appraisal value or null
+     */
+    getAppraisalValue() {
+        return this.appraisalValue;
     }
 
     /**

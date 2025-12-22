@@ -7,6 +7,8 @@ const VisionAppraisal = {
     fields: [
         'ownerName', 'ownerName2', 'ownerAddress', 'propertyLocation',
         'userCode', 'neighborhood', 'date', 'mblu', 'pid', 'googleFileId',
+        // Property value fields (added Dec 2025)
+        'assessmentValue', 'appraisalValue',
         // Expanded fields
         'map', 'block', 'lot', 'unit', 'unitCut',
         'street', 'city', 'state', 'zip',
@@ -47,14 +49,16 @@ const VisionAppraisal = {
     // Parse raw records into structured format
     parseRecords(dataArray) {
         return dataArray.map((record, index) => {
-            // Split CSV string into fields (like original working code)
-            const fields = record.split(',');
+            // Parse CSV string handling currency values with embedded commas
+            // Format: "csvData",googleFileId where csvData ends with $XXX,XXX,$YYY,YYY
+            const fields = this.parseCSVWithCurrencyValues(record);
 
             // Debug first few records
             if (index < 3) {
                 console.log(`Raw record ${index}:`, record);
                 console.log(`  Parsed fields length: ${fields.length}`);
-                console.log(`  Corrected PID field[9]: "${fields[9]}", GoogleFileId field[10]: "${fields[10]}"`);
+                console.log(`  PID field[9]: "${fields[9]}", GoogleFileId field[10]: "${fields[10]}"`);
+                console.log(`  Assessment field[11]: "${fields[11]}", Appraisal field[12]: "${fields[12]}"`);
             }
 
             // Extract raw fields with correct mapping
@@ -68,6 +72,8 @@ const VisionAppraisal = {
             const mblu = fields[8] || '';               // Field[8]: MBLU (to be expanded)
             const pid = (fields[9] || '').trim().replace(/^["']|["']$/g, '');  // Field[9]: ACTUAL PID (clean quotes)
             const googleFileId = fields[10] || '';      // Field[10]: Google File ID (was incorrectly called PID)
+            const assessmentValue = (fields[11] || '').trim();  // Field[11]: Assessment value (added Dec 2025)
+            const appraisalValue = (fields[12] || '').trim();   // Field[12]: Appraisal value (added Dec 2025)
 
             // Use parser functions to expand and clean data (access from window object)
             const mbluParsed = window.VisionAppraisalParser ? window.VisionAppraisalParser.parseMBLU(mblu) : {
@@ -100,6 +106,10 @@ const VisionAppraisal = {
                 pid: pid,                     // CORRECTED: Now using field[9] with quote cleaning
                 googleFileId: googleFileId.trim(),
 
+                // Property value fields (added Dec 2025)
+                assessmentValue: assessmentValue,
+                appraisalValue: appraisalValue,
+
                 // Expanded MBLU fields
                 map: mbluParsed.map,
                 block: mbluParsed.block,
@@ -128,6 +138,91 @@ const VisionAppraisal = {
                 source: 'VisionAppraisal'
             };
         });
+    },
+
+    // Parse CSV record handling currency values with embedded commas
+    // Input format: "field1,field2,...,$XXX,XXX,$YYY,YYY",googleFileId
+    parseCSVWithCurrencyValues(record) {
+        // The record format is: "csvContent",googleFileId
+        // First, separate the quoted CSV content from the trailing googleFileId
+
+        // Find the last quote which ends the CSV content
+        const lastQuoteIndex = record.lastIndexOf('"');
+        if (lastQuoteIndex === -1) {
+            // No quotes, fall back to simple split
+            return record.split(',');
+        }
+
+        // Extract the CSV content (inside quotes) and the googleFileId (after the quote)
+        const csvContent = record.substring(1, lastQuoteIndex); // Remove leading and trailing quotes
+        const afterQuote = record.substring(lastQuoteIndex + 1); // Everything after the closing quote
+        const googleFileId = afterQuote.startsWith(',') ? afterQuote.substring(1) : afterQuote;
+
+        // Now parse the CSV content, handling currency values at the end
+        // The last two "fields" are assessment and appraisal values which may contain commas
+        // Format: field0,field1,...,field9,$XXX,XXX,$YYY,YYY
+        // We need fields 0-10 (11 fields) plus assessment and appraisal
+
+        // Strategy: Split by comma, then recombine the currency fields
+        const rawFields = csvContent.split(',');
+
+        // Fields 0-10 are: ownerName, ownerName2, ownerAddress, propertyLocation, (empty),
+        //                  userCode, neighborhood, date, mblu, pid, googleFileIdInCSV
+        // But wait - looking at the data, the googleFileId is OUTSIDE the quotes
+        // So inside the quotes we have: ownerName, ownerName2, ownerAddress, propertyLocation, (empty),
+        //                               userCode, neighborhood, date, mblu, pid, assessment, appraisal
+
+        // The currency values are at positions 11 and 12+ (may span multiple comma-split parts)
+        // Let's find where the currency values start by looking for $ signs near the end
+
+        // Find the assessment value start (first $ near end)
+        let assessmentStartIndex = -1;
+        let appraisalStartIndex = -1;
+
+        // Work backwards to find the two currency values
+        // They're at the end and start with $
+        for (let i = rawFields.length - 1; i >= 0; i--) {
+            const field = rawFields[i].trim();
+            if (field.startsWith('$')) {
+                if (appraisalStartIndex === -1) {
+                    appraisalStartIndex = i;
+                } else if (assessmentStartIndex === -1) {
+                    assessmentStartIndex = i;
+                    break;
+                }
+            }
+        }
+
+        // If we found currency values, recombine them
+        let assessmentValue = '';
+        let appraisalValue = '';
+        let regularFieldCount = rawFields.length;
+
+        if (assessmentStartIndex !== -1 && appraisalStartIndex !== -1) {
+            // Combine fields from assessmentStartIndex to appraisalStartIndex-1 for assessment
+            assessmentValue = rawFields.slice(assessmentStartIndex, appraisalStartIndex).join(',');
+            // Combine fields from appraisalStartIndex to end for appraisal
+            appraisalValue = rawFields.slice(appraisalStartIndex).join(',');
+            regularFieldCount = assessmentStartIndex;
+        }
+
+        // Build the final fields array
+        // Fields 0-10: regular CSV fields (take only up to regularFieldCount)
+        const fields = rawFields.slice(0, Math.min(regularFieldCount, 11));
+
+        // Pad to ensure we have at least 11 fields (indices 0-10)
+        while (fields.length < 11) {
+            fields.push('');
+        }
+
+        // Field 10 is googleFileId from OUTSIDE the quotes (not from inside)
+        fields[10] = googleFileId;
+
+        // Fields 11 and 12 are the currency values
+        fields[11] = assessmentValue;
+        fields[12] = appraisalValue;
+
+        return fields;
     },
 
     // Extract Fire Number from property location string

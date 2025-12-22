@@ -444,6 +444,22 @@ class EntityGroup {
             }
         }
 
+        // 3. Merge assessmentValue - use first non-null value found
+        for (const oi of otherInfos) {
+            if (oi.assessmentValue) {
+                consensus.assessmentValue = oi.assessmentValue;
+                break;
+            }
+        }
+
+        // 4. Merge appraisalValue - use first non-null value found
+        for (const oi of otherInfos) {
+            if (oi.appraisalValue) {
+                consensus.appraisalValue = oi.appraisalValue;
+                break;
+            }
+        }
+
         return consensus;
     }
 

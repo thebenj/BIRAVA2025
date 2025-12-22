@@ -97,11 +97,11 @@ async function buildEntityGroupDatabase(options = {}) {
     }
 
     // Execute each phase
-    log('\n--- Phase 1: Bloomerang Households ---');
-    executePhase1_BloomerangHouseholds(groupDb, entityDb, log);
-
-    log('\n--- Phase 2: VisionAppraisal Households ---');
+    log('\n--- Phase 1: VisionAppraisal Households ---');
     executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log);
+
+    log('\n--- Phase 2: Bloomerang Households ---');
+    executePhase1_BloomerangHouseholds(groupDb, entityDb, log);
 
     log('\n--- Phase 3: Remaining VisionAppraisal Individuals ---');
     executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log);
@@ -163,6 +163,7 @@ function executePhase1_BloomerangHouseholds(groupDb, entityDb, log) {
     let membersAdded = 0;
     let nearMissesAdded = 0;
     let forcedAdded = 0;
+    let householdPulledAdded = 0;
 
     // Get all Bloomerang AggregateHouseholds
     const bloomerangHouseholds = getEntitiesBySourceAndType(entityDb, 'bloomerang', 'AggregateHousehold');
@@ -181,7 +182,7 @@ function executePhase1_BloomerangHouseholds(groupDb, entityDb, log) {
         group.updateBloomerangFlag(true);  // Bloomerang entity
         groupsCreated++;
 
-        // Use 8-step algorithm to build group membership
+        // Use 9-step algorithm to build group membership
         const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
         // Add natural matches as members
@@ -222,6 +223,18 @@ function executePhase1_BloomerangHouseholds(groupDb, entityDb, log) {
             }
         }
 
+        // Add household-pulled members (Step 9)
+        for (const pulledKey of groupMembers.householdPulled) {
+            const pulledEntity = entityDb[pulledKey];
+            if (groupDb.addMemberToGroup(group.index, pulledKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(pulledKey));
+                householdPulledAdded++;
+                if (pulledEntity) {
+                    markHouseholdIndividualsAsAssigned(pulledKey, pulledEntity, groupDb, entityDb);
+                }
+            }
+        }
+
         // Add near misses (not marked as assigned)
         for (const nearMiss of groupMembers.nearMisses) {
             groupDb.addNearMissToGroup(group.index, nearMiss.key);
@@ -229,7 +242,7 @@ function executePhase1_BloomerangHouseholds(groupDb, entityDb, log) {
         }
     }
 
-    log(`Phase 1 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
+    log(`Phase 1 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${householdPulledAdded} household-pulled, ${nearMissesAdded} near misses`);
 }
 
 /**
@@ -242,6 +255,7 @@ function executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log) {
     let membersAdded = 0;
     let nearMissesAdded = 0;
     let forcedAdded = 0;
+    let householdPulledAdded = 0;
 
     // Get all VisionAppraisal AggregateHouseholds
     const vaHouseholds = getEntitiesBySourceAndType(entityDb, 'visionAppraisal', 'AggregateHousehold');
@@ -260,7 +274,7 @@ function executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log) {
         group.updateBloomerangFlag(false);  // VisionAppraisal entity
         groupsCreated++;
 
-        // Use 8-step algorithm to build group membership
+        // Use 9-step algorithm to build group membership
         const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
         // Add natural matches as members
@@ -299,6 +313,18 @@ function executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log) {
             }
         }
 
+        // Add household-pulled members (Step 9)
+        for (const pulledKey of groupMembers.householdPulled) {
+            const pulledEntity = entityDb[pulledKey];
+            if (groupDb.addMemberToGroup(group.index, pulledKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(pulledKey));
+                householdPulledAdded++;
+                if (pulledEntity) {
+                    markHouseholdIndividualsAsAssigned(pulledKey, pulledEntity, groupDb, entityDb);
+                }
+            }
+        }
+
         // Add near misses
         for (const nearMiss of groupMembers.nearMisses) {
             groupDb.addNearMissToGroup(group.index, nearMiss.key);
@@ -306,7 +332,7 @@ function executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log) {
         }
     }
 
-    log(`Phase 2 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
+    log(`Phase 2 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${householdPulledAdded} household-pulled, ${nearMissesAdded} near misses`);
 }
 
 /**
@@ -318,6 +344,7 @@ function executePhase3_BloomerangIndividuals(groupDb, entityDb, log) {
     let membersAdded = 0;
     let nearMissesAdded = 0;
     let forcedAdded = 0;
+    let householdPulledAdded = 0;
 
     // Get all Bloomerang Individuals
     const bloomerangIndividuals = getEntitiesBySourceAndType(entityDb, 'bloomerang', 'Individual');
@@ -336,7 +363,7 @@ function executePhase3_BloomerangIndividuals(groupDb, entityDb, log) {
         group.updateBloomerangFlag(true);
         groupsCreated++;
 
-        // Use 8-step algorithm to build group membership
+        // Use 9-step algorithm to build group membership
         const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
         // Add natural matches
@@ -363,6 +390,14 @@ function executePhase3_BloomerangIndividuals(groupDb, entityDb, log) {
             }
         }
 
+        // Add household-pulled members (Step 9)
+        for (const pulledKey of groupMembers.householdPulled) {
+            if (groupDb.addMemberToGroup(group.index, pulledKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(pulledKey));
+                householdPulledAdded++;
+            }
+        }
+
         // Add near misses
         for (const nearMiss of groupMembers.nearMisses) {
             groupDb.addNearMissToGroup(group.index, nearMiss.key);
@@ -370,7 +405,7 @@ function executePhase3_BloomerangIndividuals(groupDb, entityDb, log) {
         }
     }
 
-    log(`Phase 3 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
+    log(`Phase 3 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${householdPulledAdded} household-pulled, ${nearMissesAdded} near misses`);
 }
 
 /**
@@ -382,6 +417,7 @@ function executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log) {
     let membersAdded = 0;
     let nearMissesAdded = 0;
     let forcedAdded = 0;
+    let householdPulledAdded = 0;
 
     // Get all VisionAppraisal Individuals
     const vaIndividuals = getEntitiesBySourceAndType(entityDb, 'visionAppraisal', 'Individual');
@@ -400,7 +436,7 @@ function executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log) {
         group.updateBloomerangFlag(false);
         groupsCreated++;
 
-        // Use 8-step algorithm to build group membership
+        // Use 9-step algorithm to build group membership
         const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
         // Add natural matches
@@ -427,6 +463,14 @@ function executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log) {
             }
         }
 
+        // Add household-pulled members (Step 9)
+        for (const pulledKey of groupMembers.householdPulled) {
+            if (groupDb.addMemberToGroup(group.index, pulledKey)) {
+                group.updateBloomerangFlag(isBloomerangKey(pulledKey));
+                householdPulledAdded++;
+            }
+        }
+
         // Add near misses
         for (const nearMiss of groupMembers.nearMisses) {
             groupDb.addNearMissToGroup(group.index, nearMiss.key);
@@ -434,7 +478,7 @@ function executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log) {
         }
     }
 
-    log(`Phase 4 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
+    log(`Phase 4 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${householdPulledAdded} household-pulled, ${nearMissesAdded} near misses`);
 }
 
 /**
@@ -447,6 +491,7 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
     let membersAdded = 0;
     let nearMissesAdded = 0;
     let forcedAdded = 0;
+    let householdPulledAdded = 0;
 
     const otherTypes = ['Business', 'LegalConstruct', 'CompositeHousehold', 'NonHuman'];
 
@@ -463,7 +508,7 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
             group.updateBloomerangFlag(true);
             groupsCreated++;
 
-            // Use 8-step algorithm to build group membership
+            // Use 9-step algorithm to build group membership
             const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
             for (const match of groupMembers.naturalMatches) {
@@ -484,6 +529,13 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
                 if (groupDb.addMemberToGroup(group.index, forcedKey)) {
                     group.updateBloomerangFlag(isBloomerangKey(forcedKey));
                     forcedAdded++;
+                }
+            }
+
+            for (const pulledKey of groupMembers.householdPulled) {
+                if (groupDb.addMemberToGroup(group.index, pulledKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(pulledKey));
+                    householdPulledAdded++;
                 }
             }
 
@@ -507,7 +559,7 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
             group.updateBloomerangFlag(false);
             groupsCreated++;
 
-            // Use 8-step algorithm to build group membership
+            // Use 9-step algorithm to build group membership
             const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
 
             for (const match of groupMembers.naturalMatches) {
@@ -531,6 +583,13 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
                 }
             }
 
+            for (const pulledKey of groupMembers.householdPulled) {
+                if (groupDb.addMemberToGroup(group.index, pulledKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(pulledKey));
+                    householdPulledAdded++;
+                }
+            }
+
             for (const nearMiss of groupMembers.nearMisses) {
                 groupDb.addNearMissToGroup(group.index, nearMiss.key);
                 nearMissesAdded++;
@@ -538,7 +597,7 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
         }
     }
 
-    log(`Phase 5 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${nearMissesAdded} near misses`);
+    log(`Phase 5 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${householdPulledAdded} household-pulled, ${nearMissesAdded} near misses`);
 }
 
 // =============================================================================
@@ -730,15 +789,126 @@ function findMatchesForEntity(baseKey, baseEntity, groupDb, entityDb) {
 }
 
 /**
- * Build group membership for a founding entity using the 8-step algorithm.
+ * Step 9: Collect household-related keys from all group members.
+ * When any member is added to a group, pull in their parent household and siblings.
+ *
+ * For each member (founder + naturalMatches + founderForced + forcedFromNaturals):
+ * - If member has parentKey → add parent to pull list
+ * - If member has siblingKeys → add siblings to pull list
+ * - If member is AggregateHousehold → add sibling keys from embedded individuals
+ *
+ * Only pulls entities that:
+ * - Exist in entityDb
+ * - Are not already assigned to a group
+ * - Are not already in the current member set
+ *
+ * @param {string} founderKey - Database key of the founding entity
+ * @param {Entity} founderEntity - The founding entity
+ * @param {Array} naturalMatches - Array of {key, score, entity, scores}
+ * @param {Array} founderForced - Array of keys
+ * @param {Array} forcedFromNaturals - Array of keys
+ * @param {EntityGroupDatabase} groupDb - The group database
+ * @param {Object} entityDb - The entity database
+ * @returns {Array} Array of keys to pull into the group
+ */
+function collectHouseholdRelatedKeys(founderKey, founderEntity, naturalMatches, founderForced, forcedFromNaturals, groupDb, entityDb) {
+    const householdPulled = [];
+
+    // Build set of all keys already in the group (to avoid duplicates)
+    const alreadyInGroup = new Set([founderKey]);
+    for (const match of naturalMatches) {
+        alreadyInGroup.add(match.key);
+    }
+    for (const key of founderForced) {
+        alreadyInGroup.add(key);
+    }
+    for (const key of forcedFromNaturals) {
+        alreadyInGroup.add(key);
+    }
+
+    /**
+     * Helper to add a key to householdPulled if it's valid and available
+     */
+    function tryAddKey(key) {
+        if (!key) return;
+        if (alreadyInGroup.has(key)) return;
+        if (householdPulled.includes(key)) return;
+        if (!entityDb[key]) return;  // Key doesn't exist in database
+        if (groupDb.isEntityAssigned(key)) return;  // Already in another group
+
+        householdPulled.push(key);
+        alreadyInGroup.add(key);  // Prevent duplicates within this step
+    }
+
+    /**
+     * Helper to extract household keys from an entity
+     */
+    function extractHouseholdKeys(entity) {
+        if (!entity) return;
+
+        // Check for householdInformation on the entity itself (Individual entities)
+        const householdInfo = entity.otherInfo?.householdInformation;
+        if (householdInfo) {
+            // Add parent household
+            if (householdInfo.parentKey) {
+                tryAddKey(householdInfo.parentKey);
+            }
+            // Add siblings (only Bloomerang individuals have siblingKeys)
+            if (householdInfo.siblingKeys && Array.isArray(householdInfo.siblingKeys)) {
+                for (const siblingKey of householdInfo.siblingKeys) {
+                    tryAddKey(siblingKey);
+                }
+            }
+        }
+
+        // If entity is an AggregateHousehold, check embedded individuals for sibling keys
+        if (entity.constructor?.name === 'AggregateHousehold' && entity.individuals && Array.isArray(entity.individuals)) {
+            for (const individual of entity.individuals) {
+                const indivHouseholdInfo = individual.otherInfo?.householdInformation;
+                if (indivHouseholdInfo && indivHouseholdInfo.siblingKeys && Array.isArray(indivHouseholdInfo.siblingKeys)) {
+                    for (const siblingKey of indivHouseholdInfo.siblingKeys) {
+                        tryAddKey(siblingKey);
+                    }
+                }
+            }
+        }
+    }
+
+    // Process founder
+    extractHouseholdKeys(founderEntity);
+
+    // Process natural matches
+    for (const match of naturalMatches) {
+        const entity = match.entity || entityDb[match.key];
+        extractHouseholdKeys(entity);
+    }
+
+    // Process founder forced
+    for (const key of founderForced) {
+        const entity = entityDb[key];
+        extractHouseholdKeys(entity);
+    }
+
+    // Process forced from naturals
+    for (const key of forcedFromNaturals) {
+        const entity = entityDb[key];
+        extractHouseholdKeys(entity);
+    }
+
+    return householdPulled;
+}
+
+/**
+ * Build group membership for a founding entity using the 9-step algorithm.
  * This implements the full match override system with priority hierarchy:
  * Founder-forced > Natural matches > Forced-from-naturals
+ * Plus Step 9: Household member pulling
  *
  * @param {string} founderKey - Database key of the founding entity
  * @param {Entity} founderEntity - The founding entity
  * @param {EntityGroupDatabase} groupDb - The group database
  * @param {Object} entityDb - The entity database
- * @returns {Object} { naturalMatches, founderForced, forcedFromNaturals, nearMisses }
+ * @returns {Object} { naturalMatches, founderForced, forcedFromNaturals, householdPulled, nearMisses }
  */
 function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
     const overrideManager = window.matchOverrideManager;
@@ -751,12 +921,24 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
         founderKey, founderEntity, groupDb, entityDb
     );
 
-    // If no override rules loaded, return simple result (backward compatible)
+    // If no override rules loaded, still run Step 9 for household pulling
     if (!hasOverrides) {
+        // Step 9: Collect household-related keys even without override rules
+        const householdPulled = collectHouseholdRelatedKeys(
+            founderKey,
+            founderEntity,
+            rawNaturalMatches,
+            [],  // no founderForced
+            [],  // no forcedFromNaturals
+            groupDb,
+            entityDb
+        );
+
         return {
             naturalMatches: rawNaturalMatches,
             founderForced: [],
             forcedFromNaturals: [],
+            householdPulled: householdPulled,
             nearMisses: nearMisses
         };
     }
@@ -770,9 +952,15 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
         scores: m.scores
     }));
 
+    // Get founder's force-match list (needed for multiple steps)
+    const founderForceList = overrideManager.getForceMatchesFor(founderKey);
+
+    // Step 0: Remove natural matches that have exclusion with founder
+    // Founder owns the group - any exclusion with founder means entity cannot join
+    naturalMatches = overrideManager.removeExcludedWithFounder(naturalMatches, founderKey);
+
     // Step 2: Resolve exclusions among natural matches
     // Priority: if one is also in founder's force-match list, it wins
-    const founderForceList = overrideManager.getForceMatchesFor(founderKey);
     naturalMatches = overrideManager.resolveExclusionsWithPriority(
         naturalMatches,
         founderForceList
@@ -785,6 +973,10 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
         !groupDb.isEntityAssigned(key) &&
         entityDb[key]  // Key exists in database
     );
+
+    // Step 3.5: Check for contradictions - entity both force-matched AND excluded with founder
+    // This is a user configuration error. Exclusion wins, log warning.
+    founderForced = overrideManager.removeContradictoryFounderForced(founderForced, founderKey);
 
     // Step 4: Resolve exclusions among founder forced matches (stupid case - user error)
     // Both are same tier, so use OnConflict rules
@@ -815,13 +1007,30 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
     // Step 7: Check forced-from-naturals vs founder forced (founder wins)
     forcedFromNaturals = overrideManager.removeExcludedKeysByPriority(forcedFromNaturals, founderForced);
 
+    // Step 7.5: Check forced-from-naturals for exclusions with founder
+    // These entities came in via lineage (Step 6) and weren't checked against founder yet
+    forcedFromNaturals = overrideManager.removeExcludedKeysWithFounder(forcedFromNaturals, founderKey);
+
     // Step 8: Resolve exclusions among forced-from-naturals
     forcedFromNaturals = overrideManager.resolveExclusionsOnConflict(forcedFromNaturals);
+
+    // Step 9: Collect household-related keys from all members
+    // When any member is added to the group, pull in their parent household and siblings
+    const householdPulled = collectHouseholdRelatedKeys(
+        founderKey,
+        founderEntity,
+        naturalMatches,
+        founderForced,
+        forcedFromNaturals,
+        groupDb,
+        entityDb
+    );
 
     return {
         naturalMatches: naturalMatches,  // Array of {key, score, entity, scores}
         founderForced: founderForced,    // Array of keys
         forcedFromNaturals: forcedFromNaturals,  // Array of keys
+        householdPulled: householdPulled,  // Array of keys (Step 9)
         nearMisses: nearMisses
     };
 }

@@ -451,7 +451,8 @@ const reqURL = "/Streets.aspx";
 const parameters = {
     "streetFile": "1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9",
     "parcelDataFile": "1LbdOEWWiW-RO42V2qDy7r5I4e9y58TLW",
-    "pidFilesParents": "1WS2Uwx3c96X_Kj-LvtQtpzUSAViHaBAG",
+    "pidFilesParents": "1qgnE1FW3F6UG7YS4vfGBm9KzX8TDuBCl",
+//    "pidFilesParents": "1WS2Uwx3c96X_Kj-LvtQtpzUSAViHaBAG",
 //    "pidFilesParents": "15vpT-gCfNzCGDXCBlf82elrZ3Ndt9tpU",
     "errorFile": "1szPM2Kw4ceGCaRlm_SB6_rhNfsety1vJ",
     "legacy": "1f-Ex3PpuddkHKzuJ_yjWJ-8pItnV-ouf",
@@ -732,8 +733,14 @@ async function fourthButterClick(pParcelData) {
                 const pid = ((docCR.getElementById("MainContent_lblPid"))
                     ? docCR.getElementById("MainContent_lblPid").innerHTML
                     : "");
+                const assessmentValue = ((docCR.getElementById("MainContent_lblGenAssessment"))
+                    ? docCR.getElementById("MainContent_lblGenAssessment").innerText.trim()
+                    : "");
+                const appraisalValue = ((docCR.getElementById("MainContent_lblGenAppraisal"))
+                    ? docCR.getElementById("MainContent_lblGenAppraisal").innerText.trim()
+                    : "");
 
-                const disOwn = ownName + "," + cownName + "," + addr + "," + location + ',' + zone + ',' + use + ',' + nei + ',' + lastSD + ',' + platNumb + ',' + pid;
+                const disOwn = ownName + "," + cownName + "," + addr + "," + location + ',' + zone + ',' + use + ',' + nei + ',' + lastSD + ',' + platNumb + ',' + pid + ',' + assessmentValue + ',' + appraisalValue;
 
                 // Save individual files to Google Drive
                 const disOne = await saveAsJSON(disOwn, pid, parameters.pidFilesParents, true);
