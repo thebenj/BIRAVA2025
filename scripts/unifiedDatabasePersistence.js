@@ -87,10 +87,15 @@ function generateUnifiedEntityKey(entity) {
         }
 
         // Append 'AH' for AggregateHousehold to distinguish from Individual
-        // BUT only if it doesn't already end in 'AH'
+        // Handle existing suffixes: 'AH' stays, 'H' normalizes to 'AH', otherwise append 'AH'
         const entityType = entity.constructor?.name;
         if (entityType === 'AggregateHousehold' && accountNumber !== 'unknown') {
-            if (!accountNumber.endsWith('AH')) {
+            if (accountNumber.endsWith('AH')) {
+                // Already has 'AH' suffix - use as-is
+            } else if (accountNumber.endsWith('H')) {
+                // Normalize old 'H' suffix to 'AH'
+                accountNumber = accountNumber.slice(0, -1) + 'AH';
+            } else {
                 accountNumber = accountNumber + 'AH';
             }
         }

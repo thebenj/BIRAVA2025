@@ -1345,9 +1345,17 @@ async function processHouseholdMember(fields, fieldMap, locationIdentifier, name
     } else {
         // First individual for this household - create household
         // Invent household account number by appending 'AH' to the first individual's account number
-        // BUT only if account number doesn't already end in 'AH'
-        const accountStr = accountNumber.toString().trim();
-        const householdAccountNumber = accountStr.endsWith('AH') ? accountStr : accountStr + 'AH';
+        // Handle existing suffixes: 'AH' stays, 'H' normalizes to 'AH', otherwise append 'AH'
+        let accountStr = accountNumber.toString().trim();
+        let householdAccountNumber;
+        if (accountStr.endsWith('AH')) {
+            householdAccountNumber = accountStr;
+        } else if (accountStr.endsWith('H')) {
+            // Normalize old 'H' suffix to 'AH' (remove H, add AH)
+            householdAccountNumber = accountStr.slice(0, -1) + 'AH';
+        } else {
+            householdAccountNumber = accountStr + 'AH';
+        }
         const householdLocationIdentifier = locationIdentifier || createPlaceholderLocationIdentifier(dataSource, rowIndex, accountNumber);
 
         // Create household entity with invented account number

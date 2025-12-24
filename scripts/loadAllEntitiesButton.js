@@ -257,9 +257,14 @@ function getEntityKeyInfo(entity) {
         }
         // Append "AH" to accountNumber for AggregateHousehold entities to prevent collision
         // with Individual entities that share the same account number
-        // BUT only if it doesn't already end in 'AH'
+        // Handle existing suffixes: 'AH' stays, 'H' normalizes to 'AH', otherwise append 'AH'
         if (entityType === 'AggregateHousehold') {
-            if (!accountNumber.endsWith('AH')) {
+            if (accountNumber.endsWith('AH')) {
+                // Already has 'AH' suffix - use as-is
+            } else if (accountNumber.endsWith('H')) {
+                // Normalize old 'H' suffix to 'AH'
+                accountNumber = accountNumber.slice(0, -1) + 'AH';
+            } else {
                 accountNumber = accountNumber + 'AH';
             }
         }

@@ -96,21 +96,24 @@ async function buildEntityGroupDatabase(options = {}) {
         groupDb.sampleMode = { enabled: false };
     }
 
-    // Execute each phase
+    // Execute each phase - VisionAppraisal first (all types), then Bloomerang (all types)
     log('\n--- Phase 1: VisionAppraisal Households ---');
     executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log);
 
-    log('\n--- Phase 2: Bloomerang Households ---');
-    executePhase1_BloomerangHouseholds(groupDb, entityDb, log);
-
-    log('\n--- Phase 3: Remaining VisionAppraisal Individuals ---');
+    log('\n--- Phase 2: VisionAppraisal Individuals ---');
     executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log);
 
-    log('\n--- Phase 4: Remaining Bloomerang Individuals ---');
+    log('\n--- Phase 3: VisionAppraisal Other Types ---');
+    executePhase5_VisionAppraisalOtherTypes(groupDb, entityDb, log);
+
+    log('\n--- Phase 4: Bloomerang Households ---');
+    executePhase1_BloomerangHouseholds(groupDb, entityDb, log);
+
+    log('\n--- Phase 5: Bloomerang Individuals ---');
     executePhase3_BloomerangIndividuals(groupDb, entityDb, log);
 
-    log('\n--- Phase 5: Remaining Entity Types ---');
-    executePhase5_RemainingEntities(groupDb, entityDb, log);
+    log('\n--- Phase 6: Bloomerang Other Types ---');
+    executePhase6_BloomerangOtherTypes(groupDb, entityDb, log);
 
     // Mark construction complete
     groupDb.constructionComplete = true;
@@ -482,10 +485,9 @@ function executePhase4_VisionAppraisalIndividuals(groupDb, entityDb, log) {
 }
 
 /**
- * Phase 5: Process Remaining Entity Types (Business, LegalConstruct, etc.)
- * Bloomerang first, then VisionAppraisal
+ * Phase 5: Process VisionAppraisal Other Types (Business, LegalConstruct, etc.)
  */
-function executePhase5_RemainingEntities(groupDb, entityDb, log) {
+function executePhase5_VisionAppraisalOtherTypes(groupDb, entityDb, log) {
     const phase = 5;
     let groupsCreated = 0;
     let membersAdded = 0;
@@ -495,60 +497,9 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
 
     const otherTypes = ['Business', 'LegalConstruct', 'CompositeHousehold', 'NonHuman'];
 
-    // Process Bloomerang other types first
-    for (const entityType of otherTypes) {
-        const bloomerangEntities = getEntitiesBySourceAndType(entityDb, 'bloomerang', entityType);
-
-        for (const [key, entity] of bloomerangEntities) {
-            if (groupDb.isEntityAssigned(key)) continue;
-
-            const group = groupDb.createGroup(key, phase);
-            if (!group) continue;
-
-            group.updateBloomerangFlag(true);
-            groupsCreated++;
-
-            // Use 9-step algorithm to build group membership
-            const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
-
-            for (const match of groupMembers.naturalMatches) {
-                if (groupDb.addMemberToGroup(group.index, match.key)) {
-                    group.updateBloomerangFlag(isBloomerangKey(match.key));
-                    membersAdded++;
-                }
-            }
-
-            for (const forcedKey of groupMembers.founderForced) {
-                if (groupDb.addMemberToGroup(group.index, forcedKey)) {
-                    group.updateBloomerangFlag(isBloomerangKey(forcedKey));
-                    forcedAdded++;
-                }
-            }
-
-            for (const forcedKey of groupMembers.forcedFromNaturals) {
-                if (groupDb.addMemberToGroup(group.index, forcedKey)) {
-                    group.updateBloomerangFlag(isBloomerangKey(forcedKey));
-                    forcedAdded++;
-                }
-            }
-
-            for (const pulledKey of groupMembers.householdPulled) {
-                if (groupDb.addMemberToGroup(group.index, pulledKey)) {
-                    group.updateBloomerangFlag(isBloomerangKey(pulledKey));
-                    householdPulledAdded++;
-                }
-            }
-
-            for (const nearMiss of groupMembers.nearMisses) {
-                groupDb.addNearMissToGroup(group.index, nearMiss.key);
-                nearMissesAdded++;
-            }
-        }
-    }
-
-    // Then process VisionAppraisal other types
     for (const entityType of otherTypes) {
         const vaEntities = getEntitiesBySourceAndType(entityDb, 'visionAppraisal', entityType);
+        log(`Found ${vaEntities.length} VisionAppraisal ${entityType} entities`);
 
         for (const [key, entity] of vaEntities) {
             if (groupDb.isEntityAssigned(key)) continue;
@@ -598,6 +549,73 @@ function executePhase5_RemainingEntities(groupDb, entityDb, log) {
     }
 
     log(`Phase 5 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${householdPulledAdded} household-pulled, ${nearMissesAdded} near misses`);
+}
+
+/**
+ * Phase 6: Process Bloomerang Other Types (Business, LegalConstruct, etc.)
+ */
+function executePhase6_BloomerangOtherTypes(groupDb, entityDb, log) {
+    const phase = 6;
+    let groupsCreated = 0;
+    let membersAdded = 0;
+    let nearMissesAdded = 0;
+    let forcedAdded = 0;
+    let householdPulledAdded = 0;
+
+    const otherTypes = ['Business', 'LegalConstruct', 'CompositeHousehold', 'NonHuman'];
+
+    for (const entityType of otherTypes) {
+        const bloomerangEntities = getEntitiesBySourceAndType(entityDb, 'bloomerang', entityType);
+        log(`Found ${bloomerangEntities.length} Bloomerang ${entityType} entities`);
+
+        for (const [key, entity] of bloomerangEntities) {
+            if (groupDb.isEntityAssigned(key)) continue;
+
+            const group = groupDb.createGroup(key, phase);
+            if (!group) continue;
+
+            group.updateBloomerangFlag(true);
+            groupsCreated++;
+
+            // Use 9-step algorithm to build group membership
+            const groupMembers = buildGroupForFounder(key, entity, groupDb, entityDb);
+
+            for (const match of groupMembers.naturalMatches) {
+                if (groupDb.addMemberToGroup(group.index, match.key)) {
+                    group.updateBloomerangFlag(isBloomerangKey(match.key));
+                    membersAdded++;
+                }
+            }
+
+            for (const forcedKey of groupMembers.founderForced) {
+                if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                    forcedAdded++;
+                }
+            }
+
+            for (const forcedKey of groupMembers.forcedFromNaturals) {
+                if (groupDb.addMemberToGroup(group.index, forcedKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(forcedKey));
+                    forcedAdded++;
+                }
+            }
+
+            for (const pulledKey of groupMembers.householdPulled) {
+                if (groupDb.addMemberToGroup(group.index, pulledKey)) {
+                    group.updateBloomerangFlag(isBloomerangKey(pulledKey));
+                    householdPulledAdded++;
+                }
+            }
+
+            for (const nearMiss of groupMembers.nearMisses) {
+                groupDb.addNearMissToGroup(group.index, nearMiss.key);
+                nearMissesAdded++;
+            }
+        }
+    }
+
+    log(`Phase 6 complete: ${groupsCreated} groups, ${membersAdded} natural matches, ${forcedAdded} forced, ${householdPulledAdded} household-pulled, ${nearMissesAdded} near misses`);
 }
 
 // =============================================================================
