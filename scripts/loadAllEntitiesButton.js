@@ -450,33 +450,6 @@ function getVisionAppraisalEntity(locationType, locationValue) {
     return null;
 }
 
-/**
- * Look up an entity by source, locationIdentifier type, value, and head status
- * @deprecated Use getEntityByKeyInfo() or source-specific functions instead
- */
-function getEntityBySourceTypeAndValue(source, locationType, locationValue, headStatus) {
-    console.warn('⚠️ DEPRECATED: getEntityBySourceTypeAndValue() - use getEntityByKeyInfo() instead');
-    // This old signature doesn't work with the new key format
-    // Attempt backwards compatibility for VisionAppraisal
-    const normalizedSource = source.toLowerCase().includes('vision') ? 'visionAppraisal' : 'bloomerang';
-    if (normalizedSource === 'visionAppraisal') {
-        return getVisionAppraisalEntity(locationType, locationValue);
-    }
-    // For Bloomerang, we can't look up without accountNumber
-    console.error('❌ Cannot look up Bloomerang entity without accountNumber. Use getBloomerangEntityByAccountNumber() instead.');
-    return null;
-}
-
-/**
- * Look up an entity by source and locationIdentifier (legacy - DEPRECATED)
- * @deprecated Use getEntityBySourceTypeAndValue() instead - this function cannot distinguish FireNumber vs PID
- */
-function getEntityBySourceAndLocationId(source, locationId) {
-    console.warn('⚠️ DEPRECATED: getEntityBySourceAndLocationId() cannot distinguish FireNumber vs PID. Use getEntityBySourceTypeAndValue() instead.');
-    // This will not work correctly with the new index format
-    // Keeping for backwards compatibility during transition
-    return null;
-}
 
 /**
  * Load script with promise-based waiting
@@ -511,9 +484,7 @@ if (typeof window !== 'undefined') {
     window.getVisionAppraisalEntity = getVisionAppraisalEntity;
     window.isBloomerangEntity = isBloomerangEntity;
     window.getBloomerangAccountNumber = getBloomerangAccountNumber;
-    // Legacy/deprecated functions (kept for backwards compatibility)
-    window.getEntityBySourceAndLocationId = getEntityBySourceAndLocationId;
-    window.getEntityBySourceTypeAndValue = getEntityBySourceTypeAndValue;
+    // Legacy functions (kept for backwards compatibility)
     window.getLocationIdentifierValue = getLocationIdentifierValue;
     window.getLocationIdentifierTypeAndValue = getLocationIdentifierTypeAndValue;
 }

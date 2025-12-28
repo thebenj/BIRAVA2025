@@ -126,26 +126,6 @@ class AttributedTerm {
     }
 
     /**
-     * LEGACY: Serialize AttributedTerm to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'AttributedTerm',
-            term: this.term,
-            fieldName: this.fieldName,
-            sourceMap: Array.from(this.sourceMap.entries()).map(([source, data]) => ({
-                source: source,
-                index: data.index,
-                identifier: data.identifier
-            })),
-            comparisonWeights: this.comparisonWeights,
-            comparisonCalculatorName: this.comparisonCalculatorName
-        };
-    }
-
-    /**
      * Deserialize AttributedTerm from JSON object
      * Uses constructor (initialization logic runs)
      * Expects sourceMap to be a Map (restored by deserializeWithTypes)
@@ -395,20 +375,6 @@ class Aliases {
     }
 
     /**
-     * LEGACY: Serialize Aliases to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'Aliases',
-            homonyms: this.homonyms.map(term => term.legacySerialize()),
-            synonyms: this.synonyms.map(term => term.legacySerialize()),
-            candidates: this.candidates.map(term => term.legacySerialize())
-        };
-    }
-
-    /**
      * Deserialize Aliases from JSON object
      * @param {Object} data - Serialized data
      * @returns {Aliases} Reconstructed Aliases instance
@@ -528,21 +494,6 @@ class Aliased {
     //     }
     //     return genericObjectCompareTo(this, other, ['alternatives']);
     // }
-
-    /**
-     * LEGACY: Serialize Aliased to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'Aliased',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize(),
-            comparisonWeights: this.comparisonWeights,
-            comparisonCalculatorName: this.comparisonCalculatorName
-        };
-    }
 
     /**
      * Deserialize Aliased from JSON object
@@ -837,19 +788,6 @@ class SimpleIdentifiers extends Aliased {
     }
 
     /**
-     * LEGACY: Serialize SimpleIdentifiers to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'SimpleIdentifiers',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize()
-        };
-    }
-
-    /**
      * Deserialize SimpleIdentifiers from JSON object
      * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
@@ -906,18 +844,6 @@ class IndicativeData {
     constructor(identifier) {
         // identifier should be either SimpleIdentifiers or ComplexIdentifiers instance
         this.identifier = identifier;
-    }
-
-    /**
-     * LEGACY: Serialize IndicativeData to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'IndicativeData',
-            identifier: this.identifier.legacySerialize()
-        };
     }
 
     /**
@@ -996,18 +922,6 @@ class IdentifyingData {
     }
 
     /**
-     * LEGACY: Serialize IdentifyingData to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'IdentifyingData',
-            identifier: this.identifier.legacySerialize()
-        };
-    }
-
-    /**
      * Deserialize IdentifyingData from JSON object
      * @param {Object} data - Serialized data
      * @returns {IdentifyingData} Reconstructed IdentifyingData instance
@@ -1043,19 +957,6 @@ class FireNumber extends SimpleIdentifiers {
     }
 
     /**
-     * LEGACY: Serialize FireNumber to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'FireNumber',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize()
-        };
-    }
-
-    /**
      * Deserialize FireNumber from JSON object
      * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
@@ -1081,19 +982,6 @@ class FireNumber extends SimpleIdentifiers {
 class PoBox extends SimpleIdentifiers {
     constructor(primaryAlias) {
         super(primaryAlias);
-    }
-
-    /**
-     * LEGACY: Serialize PoBox to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'PoBox',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize()
-        };
     }
 
     /**
@@ -1127,19 +1015,6 @@ class PID extends SimpleIdentifiers {
     }
 
     /**
-     * LEGACY: Serialize PID to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'PID',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize()
-        };
-    }
-
-    /**
      * Deserialize PID from JSON object
      * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
@@ -1165,19 +1040,6 @@ class PID extends SimpleIdentifiers {
 class ComplexIdentifiers extends Aliased {
     constructor(primaryAlias) {
         super(primaryAlias);
-    }
-
-    /**
-     * LEGACY: Serialize ComplexIdentifiers to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'ComplexIdentifiers',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize()
-        };
     }
 
     /**
@@ -1269,27 +1131,6 @@ class IndividualName extends ComplexIdentifiers {
             default:
                 return this.completeName;
         }
-    }
-
-    /**
-     * LEGACY: Serialize IndividualName to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'IndividualName',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize(),
-            title: this.title,
-            firstName: this.firstName,
-            otherNames: this.otherNames,
-            lastName: this.lastName,
-            suffix: this.suffix,
-            completeName: this.completeName,
-            termOfAddress: this.termOfAddress,
-            comparisonWeights: this.comparisonWeights  // Weighted comparison architecture
-        };
     }
 
     /**
@@ -1412,21 +1253,6 @@ class HouseholdName extends ComplexIdentifiers {
     }
 
     /**
-     * LEGACY: Serialize HouseholdName to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'HouseholdName',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize(),
-            fullHouseholdName: this.fullHouseholdName,
-            memberNames: this.memberNames.map(member => member.legacySerialize())
-        };
-    }
-
-    /**
      * Deserialize HouseholdName from JSON object
      * Handles both raw data and already-transformed instances (from deserializeWithTypes)
      * @param {Object} data - Serialized data
@@ -1487,23 +1313,6 @@ class FireNumberTerm extends AttributedTerm {
     }
 
     /**
-     * LEGACY: Serialize FireNumberTerm to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'FireNumberTerm',
-            term: this.term,
-            sourceMap: Array.from(this.sourceMap.entries()).map(([source, data]) => ({
-                source: source,
-                index: data.index,
-                identifier: data.identifier
-            }))
-        };
-    }
-
-    /**
      * Deserialize FireNumberTerm from JSON object
      * @param {Object} data - Serialized data
      * @returns {FireNumberTerm} Reconstructed FireNumberTerm instance
@@ -1560,23 +1369,6 @@ class AccountNumberTerm extends AttributedTerm {
 
         const termStr = this.term.toString();
         return /[a-zA-Z0-9]/.test(termStr);
-    }
-
-    /**
-     * LEGACY: Serialize AccountNumberTerm to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'AccountNumberTerm',
-            term: this.term,
-            sourceMap: Array.from(this.sourceMap.entries()).map(([source, data]) => ({
-                source: source,
-                index: data.index,
-                identifier: data.identifier
-            }))
-        };
     }
 
     /**
@@ -1656,23 +1448,6 @@ class EmailTerm extends AttributedTerm {
         }
 
         return this.term.substring(0, atIndex);
-    }
-
-    /**
-     * LEGACY: Serialize EmailTerm to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'EmailTerm',
-            term: this.term,
-            sourceMap: Array.from(this.sourceMap.entries()).map(([source, data]) => ({
-                source: source,
-                index: data.index,
-                identifier: data.identifier
-            }))
-        };
     }
 
     /**
@@ -1955,34 +1730,6 @@ class Address extends ComplexIdentifiers {
         );
 
         return address;
-    }
-
-    /**
-     * LEGACY: Serialize Address to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        return {
-            type: 'Address',
-            primaryAlias: this.primaryAlias.legacySerialize(),
-            alternatives: this.alternatives.legacySerialize(),
-            originalAddress: this.originalAddress ? this.originalAddress.legacySerialize() : null,
-            recipientDetails: this.recipientDetails ? this.recipientDetails.legacySerialize() : null,
-            streetNumber: this.streetNumber ? this.streetNumber.legacySerialize() : null,
-            streetName: this.streetName ? this.streetName.legacySerialize() : null,
-            streetType: this.streetType ? this.streetType.legacySerialize() : null,
-            city: this.city ? this.city.legacySerialize() : null,
-            state: this.state ? this.state.legacySerialize() : null,
-            zipCode: this.zipCode ? this.zipCode.legacySerialize() : null,
-            secUnitType: this.secUnitType ? this.secUnitType.legacySerialize() : null,
-            secUnitNum: this.secUnitNum ? this.secUnitNum.legacySerialize() : null,
-            isBlockIslandAddress: this.isBlockIslandAddress ? this.isBlockIslandAddress.legacySerialize() : null,
-            cityNormalized: this.cityNormalized ? this.cityNormalized.legacySerialize() : null,
-            processingSource: this.processingSource ? this.processingSource.legacySerialize() : null,
-            processingTimestamp: this.processingTimestamp ? this.processingTimestamp.legacySerialize() : null,
-            comparisonWeights: this.comparisonWeights  // Weighted comparison architecture
-        };
     }
 
     /**

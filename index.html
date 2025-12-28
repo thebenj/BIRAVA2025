@@ -76,6 +76,112 @@
             margin: 5px;
         }
 
+        /* Collapsible Phase Sections */
+        .phase-section {
+            border: 2px solid #2980b9;
+            border-radius: 8px;
+            margin: 15px 0;
+            background-color: #fff;
+            overflow: hidden;
+        }
+        .phase-section.phase-a {
+            border-color: #e74c3c;
+        }
+        .phase-section.phase-b {
+            border-color: #27ae60;
+        }
+        .phase-section.extra-tools {
+            border-color: #7f8c8d;
+        }
+        .phase-header {
+            padding: 12px 15px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            user-select: none;
+        }
+        .phase-section.phase-a .phase-header {
+            background-color: #fadbd8;
+        }
+        .phase-section.phase-b .phase-header {
+            background-color: #d5f5e3;
+        }
+        .phase-section.extra-tools .phase-header {
+            background-color: #ebedef;
+        }
+        .phase-header:hover {
+            filter: brightness(0.95);
+        }
+        .phase-toggle {
+            font-size: 14px;
+            font-weight: bold;
+            transition: transform 0.2s ease;
+        }
+        .phase-section.collapsed .phase-toggle {
+            transform: rotate(-90deg);
+        }
+        .phase-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .phase-subtitle {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-left: auto;
+        }
+        .phase-content {
+            padding: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .phase-section.collapsed .phase-content {
+            display: none;
+        }
+
+        /* Step styling within phases */
+        .step-box {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 12px 15px;
+            margin-bottom: 12px;
+        }
+        .step-box:last-child {
+            margin-bottom: 0;
+        }
+        .step-label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        .step-description {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+        .step-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .step-buttons button {
+            margin: 0;
+        }
+        .step-arrow {
+            color: #adb5bd;
+            font-weight: bold;
+        }
+        .step-note {
+            font-size: 11px;
+            color: #868e96;
+            font-style: italic;
+            margin-left: 8px;
+        }
+
         /* Entity Browser Styles */
         .entity-browser-section {
             background-color: #f8f9fa;
@@ -484,148 +590,284 @@
         <button id="signout_button" class="authBut myButts" onclick="handleSignoutClick()">Sign Out</button>
     </div>
     <div id="holder">
-        <div class="button-section">
-            <h3>VisionAppraisal Data Processing</h3>
-            <button id="firstButton" class="optBut" onclick="firstButterClick()">First Button</button>
-            <button id="secondButton" class="optBut" onclick="secondButterClick()">Second Button</button>
-            <button id="thirdButton" class="optBut" onclick="thirdButterClick()">Third Button</button>
-            <button id="fourthButton" class="optBut" onclick="fourthButterClick()">Fourth Button</button>
-            <button id="analyzePids" class="optBut" onclick="analyzePIDFolder()" style="background-color: #6c757d; color: white;">Analyze PID Duplicates</button>
-            <button id="cleanupPids" class="optBut" onclick="runPIDDeduplication()" style="background-color: #dc3545; color: white;">Run PID Deduplication</button>
-            <button id="firstTwo" class="optBut" onclick="firstTwoClick()">First Two</button>
-            <button id="firstThree" class="optBut" onclick="firstThreeClick()">First Three</button>
-            <button id="AllButton" class="optBut" onclick="AllClick()">All Button</button>
-            <button id="Go Again" class="optBut" onclick="goAgain()">Go Again</button>
-            <button id="MandGo" class="optBut" onclick="mergeTheTwo()">Merge and Go Again</button>
-            <button id="oneToONe" class="optBut" onclick="makeOneToOneFile()">Make One To One File</button>
-            <button id="test" class="optBut" onclick="test()">Test</button>
-        </div>
-
-        <div class="button-section">
-            <h3>Entity Reconstruction</h3>
-            <div style="margin-bottom: 15px;">
-                <label for="bloomerangConfigFileId" style="display: block; font-size: 12px; color: #333; margin-bottom: 5px;">
-                    Bloomerang Config File ID (contains current entity file IDs):
-                </label>
-                <input type="text"
-                       id="bloomerangConfigFileId"
-                       placeholder="Enter Google Drive file ID"
-                       style="width: 100%; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;"
-                       onchange="saveBloomerangConfigFileId(this.value)">
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <!-- PHASE A: Rebuild from Source Data                                           -->
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <div class="phase-section phase-a" id="phaseA">
+            <div class="phase-header" onclick="togglePhase('phaseA')">
+                <span class="phase-toggle">▼</span>
+                <span class="phase-title">PHASE A: Rebuild from Source Data</span>
+                <span class="phase-subtitle">Run when VisionAppraisal or Bloomerang source data has changed</span>
             </div>
-            <button class="optBut" onclick="loadAllEntitiesIntoMemory()" style="background-color: #28a745; color: white;">
-                🚀 Load All Entities Into Memory
-            </button>
-            <p style="font-size: 12px; color: #666; margin: 10px 0;">
-                Loads all VisionAppraisal + Bloomerang entities from Google Drive into memory for analysis
-            </p>
+            <div class="phase-content">
+                <!-- Step A0: Prepare PID List -->
+                <div class="step-box">
+                    <div class="step-label">Step A0: Prepare PID List from VisionAppraisal Website</div>
+                    <div class="step-description">Scrapes the VisionAppraisal website to build a list of all property IDs (PIDs). Run these three buttons in sequence.</div>
+                    <div class="step-buttons">
+                        <button id="firstButton" class="optBut" onclick="firstButterClick()">First Button</button>
+                        <span class="step-arrow">→</span>
+                        <button id="secondButton" class="optBut" onclick="secondButterClick()">Second Button</button>
+                        <span class="step-arrow">→</span>
+                        <button id="thirdButton" class="optBut" onclick="thirdButterClick()">Third Button</button>
+                    </div>
+                </div>
 
-            <!-- Unified Database Persistence -->
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
-                <label for="unifiedDatabaseFileId" style="display: block; font-size: 12px; color: #333; margin-bottom: 5px;">
-                    Unified Database File ID (for persistence):
-                </label>
-                <input type="text"
-                       id="unifiedDatabaseFileId"
-                       placeholder="Enter Google Drive file ID for unified database"
-                       style="width: 100%; padding: 8px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 10px;"
-                       onchange="saveUnifiedDatabaseFileId(this.value)">
+                <!-- Step A1: Download PIDs -->
+                <div class="step-box">
+                    <div class="step-label">Step A1: Download PID Details from VisionAppraisal Website</div>
+                    <div class="step-description">Downloads detailed property data for each PID. This process may fail for some PIDs due to network issues - use "Go Again" to retry failed downloads.</div>
+                    <div class="step-buttons">
+                        <button id="fourthButton" class="optBut" onclick="fourthButterClick()">Fourth Button</button>
+                        <button id="Go Again" class="optBut" onclick="goAgain()" style="background-color: #f39c12; color: white;">Go Again</button>
+                        <span class="step-note">← retry failed downloads</span>
+                    </div>
+                </div>
+
+                <!-- Step A2: Clean Up Duplicates -->
+                <div class="step-box">
+                    <div class="step-label">Step A2: Clean Up PID Duplicates</div>
+                    <div class="step-description">Analyzes and removes duplicate PID files from previous runs. "Analyze" is safe (read-only), "Deduplication" moves older duplicates.</div>
+                    <div class="step-buttons">
+                        <button id="analyzePids" class="optBut" onclick="analyzePIDFolder()" style="background-color: #6c757d; color: white;">Analyze PID Duplicates</button>
+                        <button id="cleanupPids" class="optBut" onclick="runPIDDeduplication()" style="background-color: #dc3545; color: white;">Run PID Deduplication</button>
+                    </div>
+                </div>
+
+                <!-- Step A3: Consolidate PID Files -->
+                <div class="step-box">
+                    <div class="step-label">Step A3: Consolidate PID Files to Local Storage</div>
+                    <div class="step-description">Combines all PID files from Google Drive into one local file (<code>everyThingWithPid.json</code>). Run this after downloading new PIDs to update local data with latest assessment/appraisal values.</div>
+                    <div class="step-buttons">
+                        <button class="optBut" onclick="generateFreshEveryThingWithPid()" id="refreshPidDataBtn" style="background-color: #17a2b8; color: white;">
+                            📥 Refresh Local PID Data from Google Drive
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step A4: Process VA Data and Create Entities -->
+                <div class="step-box">
+                    <div class="step-label">Step A4: Process VisionAppraisal Data and Create Entities</div>
+                    <div class="step-description">Two-part process: (a) Clean names, parse addresses, extract MBLU fields. (b) Create entity objects (Individual, Household, Business, LegalConstruct).</div>
+                    <div class="step-buttons" style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 12px; font-weight: 600; color: #495057;">(a)</span>
+                            <button class="optBut" onclick="processAndSaveVisionAppraisal()" id="visionProcessBtn">
+                                🔄 Process & Save VisionAppraisal Data
+                            </button>
+                            <span class="step-note">Cleans and saves processed records</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 12px; font-weight: 600; color: #495057;">(b)</span>
+                            <button class="optBut" onclick="runEntityProcessing()" id="entityProcessBtn">
+                                🏗️ Create Entities from Processed Data
+                            </button>
+                            <span class="step-note">Creates entity objects from processed data</span>
+                        </div>
+                        <div style="display: flex; gap: 15px; margin-top: 5px; padding-left: 20px;">
+                            <label style="font-size: 11px; color: #666;">
+                                Detailed Results:
+                                <select id="showDetailedResults" style="padding: 2px 5px; font-size: 11px;">
+                                    <option value="false">Off</option>
+                                    <option value="true">On</option>
+                                </select>
+                            </label>
+                            <label style="font-size: 11px; color: #666;">
+                                Quiet Mode:
+                                <select id="quietMode" style="padding: 2px 5px; font-size: 11px;">
+                                    <option value="true">On</option>
+                                    <option value="false">Off</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step A5: Process Bloomerang -->
+                <div class="step-box">
+                    <div class="step-label">Step A5: Process Bloomerang Data</div>
+                    <div class="step-description">First export "all data.csv" from the Bloomerang application, then click to process. Creates Individual and AggregateHousehold entities with household information.</div>
+                    <div class="step-buttons">
+                        <button class="optBut" onclick="readBloomerangWithEntities(true)">Process Bloomerang CSV</button>
+                    </div>
+                </div>
+
+                <!-- Step A6: Build and Save Unified Database -->
+                <div class="step-box">
+                    <div class="step-label">Step A6: Build and Save Unified Database</div>
+                    <div class="step-description">Combines VisionAppraisal and Bloomerang entities into a unified keyed database. Save to Google Drive for future use.</div>
+                    <div style="margin-bottom: 10px;">
+                        <label for="bloomerangConfigFileId" style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">
+                            Bloomerang Config File ID (contains current entity file IDs):
+                        </label>
+                        <input type="text"
+                               id="bloomerangConfigFileId"
+                               placeholder="Enter Google Drive file ID"
+                               style="width: 100%; max-width: 400px; padding: 6px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;"
+                               onchange="saveBloomerangConfigFileId(this.value)">
+                    </div>
+                    <div class="step-buttons" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="optBut" onclick="loadAllEntitiesIntoMemory()" style="background-color: #28a745; color: white;">
+                                🚀 Load All Entities Into Memory
+                            </button>
+                            <span class="step-note">Builds unified database from source files</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="optBut" onclick="recordUnifiedDatabase()" style="background-color: #3498db; color: white;" id="recordUnifiedBtn">
+                                💾 Record Unified Database
+                            </button>
+                            <span class="step-note">Saves to Google Drive for future use</span>
+                        </div>
+                    </div>
+                    <div style="margin-top: 10px;">
+                        <label for="unifiedDatabaseFileId" style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">
+                            Unified Database File ID (for persistence):
+                        </label>
+                        <input type="text"
+                               id="unifiedDatabaseFileId"
+                               placeholder="Enter Google Drive file ID for unified database"
+                               style="width: 100%; max-width: 400px; padding: 6px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;"
+                               onchange="saveUnifiedDatabaseFileId(this.value)">
+                    </div>
+                </div>
             </div>
-            <button class="optBut" onclick="recordUnifiedDatabase()" style="background-color: #3498db; color: white;" id="recordUnifiedBtn">
-                💾 Record Unified Database
-            </button>
-            <button class="optBut" onclick="loadAndRecordEntities()" style="background-color: #9b59b6; color: white;" id="loadAndRecordBtn">
-                📥 Load & Record Entities
-            </button>
-            <button class="optBut" onclick="loadUnifiedDatabaseFromDrive()" style="background-color: #e67e22; color: white;" id="loadUnifiedBtn">
-                📂 Load Unified Database
-            </button>
-            <p style="font-size: 12px; color: #666; margin: 10px 0;">
-                <strong>Record Unified Database:</strong> Saves in-memory entities to Google Drive.<br>
-                <strong>Load & Record:</strong> Loads from source files (VA + Bloomerang) AND saves unified database.<br>
-                <strong>Load Unified Database:</strong> Loads previously saved unified database from Google Drive (no regeneration).
-            </p>
-            <button class="optBut" onclick="splitDatabaseForAppsScript()" style="background-color: #27ae60; color: white;" id="splitDbBtn">
-                ✂️ Split Database for Apps Script
-            </button>
-            <p style="font-size: 12px; color: #666; margin: 10px 0;">
-                <strong>Split Database:</strong> Creates 3 files (VA Part 1, VA Part 2, Bloomerang) under 50MB each for Google Apps Script.
-                Requires unified database loaded first. File IDs will be displayed in console and saved to localStorage.
-            </p>
-            <button class="optBut" onclick="runFullEntityAnalysisWithCSV()" style="background-color: #8e44ad; color: white;" id="analyzeAllEntitiesBtn">
-                📊 Analyze All Entities & Download CSV
-            </button>
-            <button class="optBut" onclick="runChunkedEntityAnalysis()" style="background-color: #16a085; color: white;" id="analyzeChunkedBtn">
-                📦 Chunked Analysis (Memory-Safe)
-            </button>
-            <button class="optBut" onclick="runGoogleDriveAnalysis()" style="background-color: #e74c3c; color: white;" id="analyzeGoogleDriveBtn">
-                ☁️ Analyze to Google Drive
-            </button>
-            <p style="font-size: 12px; color: #666; margin: 10px 0;">
-                <strong>Requires entities loaded first!</strong> Runs comparisons on all entity types (Individual, AggregateHousehold, Business, LegalConstruct) and downloads a CSV with one row per entity summarizing match results. <em>Chunked version</em> downloads in 200-entity batches to prevent browser memory issues. <em>Google Drive version</em> uploads each entity's matches directly to Google Drive (most memory-efficient).
-            </p>
         </div>
 
-        <div class="button-section">
-            <h3>Other Data Sources</h3>
-            <button class="optBut" onclick="readBloomerangWithEntities(true)">Process Bloomerang CSV</button>
-            <button class="optBut" onclick="analyzeBloomerangCSV()">Analyze CSV Quality</button>
-            <button class="optBut" onclick="readPhonebook()">Process Phonebook Data</button>
-        </div>
-
-        <div class="button-section">
-            <h3>VisionAppraisal Data Processing</h3>
-            <button class="optBut" onclick="generateFreshEveryThingWithPid()" id="refreshPidDataBtn" style="background-color: #17a2b8; color: white;">
-                📥 Refresh Local PID Data from Google Drive
-            </button>
-            <p style="font-size: 12px; color: #666; margin: 10px 0;">
-                <strong>Step 0:</strong> Downloads all PID files from Google Drive folder and consolidates them into the local
-                <code>everyThingWithPid.json</code> file. Run this after downloading new PIDs via Button 4 to update
-                local data with latest assessment/appraisal values.
-            </p>
-            <button class="optBut" onclick="processAndSaveVisionAppraisal()" id="visionProcessBtn">
-                🔄 Process & Save VisionAppraisal Data
-            </button>
-            <p style="font-size: 12px; color: #666; margin: 10px 0;">
-                <strong>Step 1:</strong> Cleans name tags, parses MBLU fields,
-                extracts addresses, and saves all 1,576 processed records to Google Drive
-                (File ID: 1oIW1m1Qw2lyreU-uGMX3jUka9LwaBTAf).
-                <br><strong>Use for matching:</strong> Creates processed dataset with
-                <code>processedOwnerName</code>, parsed addresses, and enhanced fields.
-            </p>
-        </div>
-
-        <div class="button-section">
-            <h3>VisionAppraisal Entity Creation</h3>
-            <div style="margin-bottom: 15px;">
-                <label for="showDetailedResults" style="display: block; margin-bottom: 5px; font-weight: bold;">Show Detailed Results:</label>
-                <select id="showDetailedResults" style="margin-bottom: 10px; padding: 5px;">
-                    <option value="false">false - Normal output only</option>
-                    <option value="true">true - Show detailed address processing by case</option>
-                </select>
-                <p style="font-size: 11px; color: #666; margin: 5px 0;">Controls whether to display detailed address processing information for each parser case.</p>
-
-                <label for="quietMode" style="display: block; margin-bottom: 5px; font-weight: bold;">Quiet Mode:</label>
-                <select id="quietMode" style="margin-bottom: 10px; padding: 5px;">
-                    <option value="true">true - Suppress parser messages</option>
-                    <option value="false">false - Show all parser output</option>
-                </select>
-                <p style="font-size: 11px; color: #666; margin: 5px 0;">Controls whether to suppress individual parser case messages during processing.</p>
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <!-- PHASE B: Work with Saved Data                                               -->
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <div class="phase-section phase-b" id="phaseB">
+            <div class="phase-header" onclick="togglePhase('phaseB')">
+                <span class="phase-toggle">▼</span>
+                <span class="phase-title">PHASE B: Work with Saved Data</span>
+                <span class="phase-subtitle">Skip Phase A if source data hasn't changed</span>
             </div>
+            <div class="phase-content">
+                <!-- Step B1: Load Unified Database -->
+                <div class="step-box">
+                    <div class="step-label">Step B1: Load Unified Database from Google Drive</div>
+                    <div class="step-description">Loads a previously saved unified entity database. Use this to skip Phase A when source data hasn't changed.</div>
+                    <div style="margin-bottom: 10px;">
+                        <label style="display: block; font-size: 11px; color: #666; margin-bottom: 3px;">
+                            Unified Database File ID:
+                        </label>
+                        <input type="text"
+                               id="unifiedDatabaseFileIdB"
+                               placeholder="Enter Google Drive file ID for unified database"
+                               style="width: 100%; max-width: 400px; padding: 6px; font-size: 11px; border: 1px solid #ccc; border-radius: 4px;"
+                               onchange="saveUnifiedDatabaseFileId(this.value); document.getElementById('unifiedDatabaseFileId').value = this.value;">
+                    </div>
+                    <div class="step-buttons">
+                        <button class="optBut" onclick="loadUnifiedDatabaseFromDrive()" style="background-color: #e67e22; color: white;" id="loadUnifiedBtn">
+                            📂 Load Unified Database
+                        </button>
+                    </div>
+                </div>
 
-            <button class="optBut" onclick="runEntityProcessing()" id="entityProcessBtn">
-                🏗️ Create Entities from Processed Data
-            </button>
-            <p style="font-size: 12px; color: #666; margin: 10px 0;">
-                <strong>Step 2:</strong> Loads processed VisionAppraisal data and creates entity objects
-                using the production parser. Saves 2,317 entities to Google Drive
-                (File ID: 19cgccMYNBboL07CmMP-5hNNGwEUBXgCI).
-                <br><strong>Prerequisites:</strong> Step 1 must complete first.
-            </p>
+                <!-- Step B2: EntityGroups -->
+                <div class="step-box">
+                    <div class="step-label">Step B2: Build or Load EntityGroups</div>
+                    <div class="step-description">Use the EntityGroup Browser section below to build new groups from the unified database, or load previously saved groups.</div>
+                    <div style="font-size: 12px; color: #495057; padding: 8px; background-color: #e8f4fd; border-radius: 4px;">
+                        ↓ See <strong>EntityGroup Browser</strong> section below
+                    </div>
+                </div>
+
+                <!-- Step B3: Reports -->
+                <div class="step-box">
+                    <div class="step-label">Step B3: Generate Reports</div>
+                    <div class="step-description">Export CSV reports, assessment value reports, and lightweight JSON for Google Apps Script.</div>
+                    <div style="font-size: 12px; color: #495057; padding: 8px; background-color: #e8f4fd; border-radius: 4px;">
+                        ↓ See <strong>CSV Reports</strong> panel in EntityGroup Browser below
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div class="utility-buttons">
-            <button id="readmeButton" class="optBut" onclick="showReadme()">📖 README</button>
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <!-- EXTRA TOOLS (collapsed by default)                                          -->
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <div class="phase-section extra-tools collapsed" id="extraTools">
+            <div class="phase-header" onclick="togglePhase('extraTools')">
+                <span class="phase-toggle">▼</span>
+                <span class="phase-title">🔧 Extra Tools</span>
+                <span class="phase-subtitle">Advanced operations, shortcuts, and development utilities</span>
+            </div>
+            <div class="phase-content">
+                <!-- Shortcuts -->
+                <div class="step-box">
+                    <div class="step-label">Shortcuts</div>
+                    <div class="step-description">Convenience buttons that combine multiple steps.</div>
+                    <div class="step-buttons">
+                        <button id="firstTwo" class="optBut" onclick="firstTwoClick()">First Two</button>
+                        <button id="firstThree" class="optBut" onclick="firstThreeClick()">First Three</button>
+                        <button id="AllButton" class="optBut" onclick="AllClick()">All Button</button>
+                        <button id="MandGo" class="optBut" onclick="mergeTheTwo()">Merge and Go Again</button>
+                    </div>
+                </div>
+
+                <!-- Database Operations -->
+                <div class="step-box">
+                    <div class="step-label">Database Operations</div>
+                    <div class="step-description">Advanced database manipulation tools.</div>
+                    <div class="step-buttons" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="optBut" onclick="loadAndRecordEntities()" style="background-color: #9b59b6; color: white;" id="loadAndRecordBtn">
+                                📥 Load & Record Entities
+                            </button>
+                            <span class="step-note">Loads from source AND saves unified database</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="optBut" onclick="splitDatabaseForAppsScript()" style="background-color: #27ae60; color: white;" id="splitDbBtn">
+                                ✂️ Split Database for Apps Script
+                            </button>
+                            <span class="step-note">Creates 3 files under 50MB each</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Entity Analysis -->
+                <div class="step-box">
+                    <div class="step-label">Entity Analysis</div>
+                    <div class="step-description">Run comparisons on all entities and generate analysis reports. Requires entities loaded first.</div>
+                    <div class="step-buttons" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="optBut" onclick="runFullEntityAnalysisWithCSV()" style="background-color: #8e44ad; color: white;" id="analyzeAllEntitiesBtn">
+                                📊 Analyze All Entities & Download CSV
+                            </button>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="optBut" onclick="runChunkedEntityAnalysis()" style="background-color: #16a085; color: white;" id="analyzeChunkedBtn">
+                                📦 Chunked Analysis (Memory-Safe)
+                            </button>
+                            <span class="step-note">Downloads in 200-entity batches</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="optBut" onclick="runGoogleDriveAnalysis()" style="background-color: #e74c3c; color: white;" id="analyzeGoogleDriveBtn">
+                                ☁️ Analyze to Google Drive
+                            </button>
+                            <span class="step-note">Most memory-efficient</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button class="optBut" onclick="analyzeBloomerangCSV()">Analyze CSV Quality</button>
+                            <span class="step-note">Bloomerang CSV analysis</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Development Tools -->
+                <div class="step-box">
+                    <div class="step-label">Development Tools</div>
+                    <div class="step-description">Utilities for development and testing.</div>
+                    <div class="step-buttons">
+                        <button id="oneToONe" class="optBut" onclick="makeOneToOneFile()">Make One To One File</button>
+                        <button id="test" class="optBut" onclick="test()">Test</button>
+                        <button class="optBut" onclick="readPhonebook()">Process Phonebook Data</button>
+                        <button id="readmeButton" class="optBut" onclick="showReadme()">📖 README</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Unified Entity Browser Section -->
@@ -738,6 +980,11 @@
                     <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; color: #495057; cursor: pointer;">
                         <input type="checkbox" id="loadOverrideRulesCheckbox" checked style="cursor: pointer;">
                         Load override rules
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; color: #495057;" title="Leave blank for full build. Enter a number (e.g., 200) for faster test builds.">
+                        <span>Sample size:</span>
+                        <input type="number" id="entityGroupSampleSize" min="10" max="4000" placeholder="(full)"
+                               style="width: 70px; padding: 4px 6px; border: 1px solid #ced4da; border-radius: 4px; font-size: 12px;">
                     </label>
                     <span style="color: #999; margin: 0 5px;">|</span>
                     <button id="entityGroupSaveToFileIdBtn" class="action-button" style="background-color: #17a2b8; padding: 10px 16px; font-weight: 600;">
@@ -928,7 +1175,6 @@
     <script type="text/javascript" src="./scripts/performance/optimizedProcessing.js"></script>
     <script type="text/javascript" src="./scripts/address/addressProcessing.js"></script>
     <script type="text/javascript" src="./scripts/testing/addressTesting.js"></script>
-    <script type="text/javascript" src="./scripts/data/sampleDataLoader.js"></script>
     <script type="text/javascript" src="./scripts/postProcessing.js"></script>
     <script type="text/javascript" src="./scripts/phonebook.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/aliasClasses.js"></script>
@@ -940,26 +1186,52 @@
     <script type="text/javascript" src="./scripts/visionAppraisalParser.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/visionAppraisal.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/processAllVisionAppraisalRecords.js"></script>
-    <script type="text/javascript" src="./scripts/integration/matchingEngine.js"></script>
-    <script type="text/javascript" src="./scripts/integration/contactDiscovery.js"></script>
-    <script type="text/javascript" src="./scripts/integration/nameAnalysis.js"></script>
-    <script type="text/javascript" src="./scripts/integration/testPlugin.js"></script>
     <script type="text/javascript" src="./scripts/testAttributedTermSubclasses.js"></script>
     <script type="text/javascript" src="./scripts/bloomerang.js"></script>
 
-    <!-- Unified Entity Browser System -->
-    <script type="text/javascript" src="./scripts/dataSourceManager.js"></script>
+    <!-- Unified Entity Browser System (dataSourceManager.js archived Dec 2025 - unused) -->
     <script type="text/javascript" src="./scripts/entityRenderer.js"></script>
     <script type="text/javascript" src="./scripts/matching/universalEntityMatcher.js"></script>
     <script type="text/javascript" src="./scripts/unifiedEntityBrowser.js"></script>
 
-    <!-- Legacy Entity Browsers (kept for reference) -->
-    <script type="text/javascript" src="./scripts/entityBrowser.js"></script>
-    <script type="text/javascript" src="./scripts/visionAppraisalBrowser.js"></script>
+    <!-- Legacy browsers archived Dec 2025: entityBrowser.js, dataSourceManager.js, visionAppraisalBrowser.js -->
     <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
     <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 
     <script>
+        // Phase section toggle functionality
+        function togglePhase(phaseId) {
+            const section = document.getElementById(phaseId);
+            if (section) {
+                section.classList.toggle('collapsed');
+            }
+        }
+
+        // Sync the two unified database file ID inputs
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputA = document.getElementById('unifiedDatabaseFileId');
+            const inputB = document.getElementById('unifiedDatabaseFileIdB');
+
+            // Load saved value into both inputs
+            const savedFileId = localStorage.getItem('birava_unifiedDatabaseFileId');
+            if (savedFileId) {
+                if (inputA) inputA.value = savedFileId;
+                if (inputB) inputB.value = savedFileId;
+            }
+
+            // Sync inputs when either changes
+            if (inputA) {
+                inputA.addEventListener('change', function() {
+                    if (inputB) inputB.value = this.value;
+                });
+            }
+            if (inputB) {
+                inputB.addEventListener('change', function() {
+                    if (inputA) inputA.value = this.value;
+                });
+            }
+        });
+
         // README Modal functionality - now loads CLAUDE.md
         async function showReadme() {
             const modal = document.getElementById('readmeModal');

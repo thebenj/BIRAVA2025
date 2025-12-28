@@ -272,7 +272,8 @@ async function loadEntityGroupDatabase() {
             throw new Error('Invalid EntityGroup database format - missing groups or stats');
         }
 
-        entityGroupBrowser.loadedDatabase = data;
+        // Deserialize to proper EntityGroupDatabase class instance (restores serialize() method)
+        entityGroupBrowser.loadedDatabase = EntityGroupDatabase.deserialize(data);
 
         showEntityGroupStatus(`Loaded ${Object.keys(data.groups).length} EntityGroups successfully!`, 'success');
 
@@ -404,9 +405,20 @@ async function buildNewEntityGroupDatabase() {
             }
         }
 
-        showEntityGroupStatus('Building EntityGroup database... This may take several minutes.', 'loading');
+        // Check for sample size (for testing - blank means full build)
+        const sampleSizeInput = document.getElementById('entityGroupSampleSize');
+        const sampleSizeValue = sampleSizeInput ? parseInt(sampleSizeInput.value, 10) : null;
+        const sampleSize = (sampleSizeValue && sampleSizeValue > 0) ? sampleSizeValue : null;
+
+        if (sampleSize) {
+            showEntityGroupStatus(`Building EntityGroup database with SAMPLE of ${sampleSize} entities (test mode)...`, 'loading');
+            console.log(`[EntityGroupBrowser] SAMPLE MODE: Using ${sampleSize} entities for faster testing`);
+        } else {
+            showEntityGroupStatus('Building EntityGroup database... This may take several minutes.', 'loading');
+        }
+
         if (buildBtn) {
-            buildBtn.innerHTML = '⏳ Building...';
+            buildBtn.innerHTML = sampleSize ? `⏳ Building (${sampleSize})...` : '⏳ Building...';
             buildBtn.disabled = true;
         }
 
@@ -414,7 +426,8 @@ async function buildNewEntityGroupDatabase() {
         const result = await buildEntityGroupDatabase({
             verbose: true,
             buildConsensus: true,
-            saveToGoogleDrive: true  // Auto-save to new files - tokens expire after 1 hour
+            saveToGoogleDrive: true,  // Auto-save to new files - tokens expire after 1 hour
+            sampleSize: sampleSize    // null = full build, number = stratified sample for testing
         });
 
         entityGroupBrowser.loadedDatabase = result;

@@ -220,28 +220,6 @@ class HouseholdInformation {
     }
 
     /**
-     * LEGACY: Serialize HouseholdInformation to a plain object for storage
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * Iterates over properties automatically (no hardcoded property lists)
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        const serialized = {
-            type: this.constructor.name
-        };
-
-        const propertyNames = Object.getOwnPropertyNames(this);
-        propertyNames.forEach(propertyName => {
-            if (propertyName !== 'constructor' && propertyName !== 'comparisonCalculator') {
-                // Skip constructor and comparisonCalculator (function reference)
-                serialized[propertyName] = this[propertyName];
-            }
-        });
-
-        return serialized;
-    }
-
-    /**
      * Deserialize a plain object back to HouseholdInformation instance
      * @param {Object} data - Serialized data
      * @returns {HouseholdInformation} Reconstructed HouseholdInformation instance

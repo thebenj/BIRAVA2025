@@ -28,6 +28,7 @@ const visionAppraisalBrowser = {
  * @returns {Promise<void>} Resolves when entities are loaded into visionAppraisalBrowser.entities
  */
 async function loadVisionAppraisalData() {
+    console.log('🔴 DIAGNOSTIC: visionAppraisalBrowser.js loadVisionAppraisalData() CALLED');
     showVAStatus('Loading VisionAppraisal entities from Google Drive...', 'loading');
 
     try {
@@ -83,6 +84,7 @@ async function loadVisionAppraisalData() {
  * Show all VisionAppraisal entities
  */
 function showAllVA() {
+    console.log('🔴 DIAGNOSTIC: visionAppraisalBrowser.js showAllVA() CALLED');
     if (!visionAppraisalBrowser.entities) {
         showVAStatus('VisionAppraisal data not loaded. Click "Load VisionAppraisal Data" first.', 'error');
         return;
@@ -100,6 +102,7 @@ function showAllVA() {
  * Perform search across VisionAppraisal entities
  */
 function performVASearch() {
+    console.log('🔴 DIAGNOSTIC: visionAppraisalBrowser.js performVASearch() CALLED');
     const query = document.getElementById('vaSearchInput').value.trim().toLowerCase();
 
     if (!query) {
@@ -313,6 +316,7 @@ function selectVAEntity(index, element) {
  * View selected VisionAppraisal entity details with enhanced HTML display
  */
 function viewSelectedVAEntity() {
+    console.log('🔴 DIAGNOSTIC: visionAppraisalBrowser.js viewSelectedVAEntity() CALLED');
     if (!visionAppraisalBrowser.selectedEntity) {
         showVAStatus('Please select an entity first', 'error');
         return;
@@ -333,6 +337,7 @@ function viewSelectedVAEntity() {
  * Generate comprehensive HTML display for VisionAppraisal entity
  */
 function generateEntityDetailHTML(entity, index) {
+    console.log('🔴 DIAGNOSTIC: visionAppraisalBrowser.js generateEntityDetailHTML() CALLED');
     const entityType = entity.type || 'Unknown';
     const entityName = extractVAEntityName(entity);
 

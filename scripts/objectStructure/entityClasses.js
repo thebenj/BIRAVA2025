@@ -49,9 +49,6 @@ class Entity {
         this.comparisonCalculatorName = 'defaultWeightedComparison';  // Serializable string name
         this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName); // Resolved function
 
-        // Legacy properties - kept for backwards compatibility during transition
-        this.label = null;    // Will be deprecated
-        this.number = null;   // Will be deprecated
     }
 
     /**
@@ -347,44 +344,6 @@ class Entity {
     }
 
     /**
-     * LEGACY: Serialize Entity to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * Iterates over properties automatically (no hardcoded property lists)
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        const serialized = {
-            type: this.constructor.name
-        };
-
-        const propertyNames = Object.getOwnPropertyNames(this);
-        propertyNames.forEach(propertyName => {
-            if (propertyName === 'constructor' || propertyName === 'comparisonCalculator') {
-                // Skip constructor and comparisonCalculator (function reference)
-                return;
-            }
-
-            const value = this[propertyName];
-            if (value === null || value === undefined) {
-                serialized[propertyName] = null;
-            } else if (Array.isArray(value)) {
-                // Handle arrays (like individuals in AggregateHousehold)
-                serialized[propertyName] = value.map(item =>
-                    item && typeof item.legacySerialize === 'function' ? item.legacySerialize() : item
-                );
-            } else if (typeof value.legacySerialize === 'function') {
-                // Objects with legacySerialize method
-                serialized[propertyName] = value.legacySerialize();
-            } else {
-                // Primitive values or plain objects
-                serialized[propertyName] = value;
-            }
-        });
-
-        return serialized;
-    }
-
-    /**
      * Deserialize Entity from JSON object
      * Uses constructor (initialization logic runs) then iterates over properties
      * @param {Object} data - Serialized data
@@ -531,17 +490,6 @@ class Individual extends Entity {
     }
 
     /**
-     * LEGACY: Serialize Individual to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        const baseData = super.legacySerialize();
-        baseData.type = 'Individual';
-        return baseData;
-    }
-
-    /**
      * Deserialize Individual from JSON object
      * Iterates over all properties in serialized data (no hardcoded property list)
      * @param {Object} data - Serialized data
@@ -595,17 +543,6 @@ class CompositeHousehold extends Entity {
     constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
         super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
         // Inherited this.name should contain IdentifyingData(HouseholdName)
-    }
-
-    /**
-     * LEGACY: Serialize CompositeHousehold to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        const baseData = super.legacySerialize();
-        baseData.type = 'CompositeHousehold';
-        return baseData;
     }
 
     /**
@@ -686,18 +623,6 @@ class AggregateHousehold extends Entity {
         };
         this.comparisonCalculatorName = 'entityWeightedComparison';
         this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
-    }
-
-    /**
-     * LEGACY: Serialize AggregateHousehold to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        const baseData = super.legacySerialize();
-        baseData.type = 'AggregateHousehold';
-        baseData.individuals = this.individuals.map(individual => individual.legacySerialize());
-        return baseData;
     }
 
     /**
@@ -883,17 +808,6 @@ class NonHuman extends Entity {
     }
 
     /**
-     * LEGACY: Serialize NonHuman to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        const baseData = super.legacySerialize();
-        baseData.type = 'NonHuman';
-        return baseData;
-    }
-
-    /**
      * Deserialize NonHuman from JSON object
      * Iterates over all properties in serialized data (no hardcoded property list)
      * @param {Object} data - Serialized data
@@ -948,17 +862,6 @@ class Business extends NonHuman {
     }
 
     /**
-     * LEGACY: Serialize Business to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        const baseData = super.legacySerialize();
-        baseData.type = 'Business';
-        return baseData;
-    }
-
-    /**
      * Deserialize Business from JSON object
      * Iterates over all properties in serialized data (no hardcoded property list)
      * @param {Object} data - Serialized data
@@ -1010,17 +913,6 @@ class Business extends NonHuman {
 class LegalConstruct extends NonHuman {
     constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
         super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
-    }
-
-    /**
-     * LEGACY: Serialize LegalConstruct to JSON-compatible object
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * @returns {Object} Serialized representation
-     */
-    legacySerialize() {
-        const baseData = super.legacySerialize();
-        baseData.type = 'LegalConstruct';
-        return baseData;
     }
 
     /**

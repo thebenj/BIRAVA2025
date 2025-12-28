@@ -2394,14 +2394,12 @@ function testAddressParsing() {
 // ============================================================================
 
 // ============================================================================
-// PHASE 3 DATA LOADING FUNCTIONS MOVED TO MODULAR ARCHITECTURE
+// PHASE 3 DATA LOADING FUNCTIONS - ARCHIVED
 // ============================================================================
-// The following functions have been extracted to: scripts/data/sampleDataLoader.js
-// - loadSampleData()
-// - loadGoogleDriveFile()
-// - extractAddressesFromSamples()
-//
-// To use these functions, include: <script src="./scripts/data/sampleDataLoader.js"></script>
+// The following functions were archived Dec 26, 2025 (Phase 2 cleanup):
+// - loadSampleData(), loadGoogleDriveFile(), extractAddressesFromSamples()
+// - Archived to: archive/deprecated_2025/sampleDataLoader.js
+// - Reason: Only used deprecated readBloomerang() function, superseded by unified database
 // ============================================================================
 
 // ============================================================================

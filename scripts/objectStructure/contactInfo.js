@@ -90,39 +90,50 @@ class Info {
     }
 
     /**
-     * LEGACY: Generic serialize method for Info subclasses
-     * NOTE: serializeWithTypes() handles serialization automatically - this method is not called
-     * Iterates over properties automatically (no hardcoded property lists)
-     * @returns {Object} Serialized representation
+     * Deserialize an object based on its actual type property
+     * Uses CLASS_REGISTRY to look up the appropriate class and call its deserialize method
+     * @param {Object} data - Serialized data with a 'type' property
+     * @returns {*} Deserialized class instance, or original data if no matching class
      */
-    legacySerialize() {
-        const serialized = {
-            type: this.constructor.name
-        };
+    static deserializeByType(data) {
+        if (!data || typeof data !== 'object') {
+            return data;
+        }
 
-        const propertyNames = Object.getOwnPropertyNames(this);
-        propertyNames.forEach(propertyName => {
-            if (propertyName !== 'constructor' && propertyName !== 'comparisonCalculator') {
-                // Serialize all properties except constructor and comparisonCalculator (function)
-                if (propertyName === 'comparisonWeights' || propertyName === 'comparisonCalculatorName') {
-                    // Serialize these directly (plain values, not IndicativeData)
-                    serialized[propertyName] = this[propertyName];
-                } else if (propertyName === 'subdivision') {
-                    // Subdivision is a plain object {pid: serializedEntityJSON, ...}
-                    // Serialize directly (already contains JSON strings)
-                    serialized[propertyName] = this[propertyName];
-                } else if (Array.isArray(this[propertyName])) {
-                    // Handle arrays (like secondaryAddress) - map each element through legacySerialize
-                    serialized[propertyName] = this[propertyName].map(item =>
-                        item && typeof item.legacySerialize === 'function' ? item.legacySerialize() : item
-                    );
-                } else {
-                    serialized[propertyName] = this[propertyName] ? this[propertyName].legacySerialize() : null;
-                }
-            }
-        });
+        // If already a class instance (not a plain object), return as-is
+        if (data.constructor && data.constructor.name !== 'Object') {
+            return data;
+        }
 
-        return serialized;
+        // Look up class by type property
+        const typeName = data.type;
+        if (!typeName) {
+            return data; // No type property, return as-is
+        }
+
+        const registry = typeof CLASS_REGISTRY !== 'undefined' ? CLASS_REGISTRY :
+                         (typeof window !== 'undefined' ? window.CLASS_REGISTRY : null);
+
+        if (!registry) {
+            console.warn('deserializeByType: CLASS_REGISTRY not available');
+            return data;
+        }
+
+        const TypeClass = registry[typeName];
+        if (!TypeClass) {
+            console.warn(`deserializeByType: No class found for type '${typeName}'`);
+            return data;
+        }
+
+        // Use fromSerializedData if available (preferred), otherwise deserialize
+        if (typeof TypeClass.fromSerializedData === 'function') {
+            return TypeClass.fromSerializedData(data);
+        } else if (typeof TypeClass.deserialize === 'function') {
+            return TypeClass.deserialize(data);
+        }
+
+        console.warn(`deserializeByType: Class '${typeName}' has no deserialize method`);
+        return data;
     }
 
     /**
@@ -159,11 +170,11 @@ class Info {
                     // HouseholdInformation object - deserialize to class instance
                     instance[key] = HouseholdInformation.deserialize(data[key]);
                 } else if (key === 'primaryAddress') {
-                    // Address object - handle already-transformed instances
-                    instance[key] = ensureDeserialized(data[key], Address);
+                    // Deserialize based on actual type in data (typically Aliased wrapping Address)
+                    instance[key] = Info.deserializeByType(data[key]);
                 } else if (key === 'secondaryAddress' || key === 'secondaryAddresses') {
-                    // Array of Address objects - handle already-transformed instances
-                    instance[key] = data[key].map(addr => addr ? ensureDeserialized(addr, Address) : null);
+                    // Array of address objects - deserialize each based on its actual type
+                    instance[key] = data[key].map(addr => addr ? Info.deserializeByType(addr) : null);
                 } else {
                     // Other properties (email, phone, poBox, etc.) - pass through directly
                     // These are NOT wrapped in IndicativeData - they're direct values or already-deserialized objects
@@ -386,9 +397,6 @@ class ContactInfo extends Info {
             hasSecondaryAddress: this.secondaryAddress !== null
         };
     }
-
-    // NOTE: ContactInfo inherits Info.legacySerialize() but it is not called.
-    // serializeWithTypes() handles serialization automatically via JSON.stringify replacer.
 
     /**
      * Deserialize ContactInfo from JSON object
