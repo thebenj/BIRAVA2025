@@ -54,7 +54,7 @@ class VisionAppraisalTagCleaner {
         // :^#^: (line break substitute) → comma
         // ::#^#:: (field delimiter) → newline
         this.cleanedString = addressString
-            .replace(/:^#^:/g, ',')       // :^#^: → ,
+            .replace(/:\^#\^:/g, ',')       // :^#^: → ,
             .replace(/::#\^#::/g, '\n');     // ::#^#:: → \n
 
         // Split on ::#^#:: to get original field structure

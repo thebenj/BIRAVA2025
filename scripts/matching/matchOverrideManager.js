@@ -260,7 +260,7 @@ class MatchOverrideManager {
             this.keyToMutualExclusionSetIndices.get(key).push(setIndex);
         }
 
-        console.log(`[OVERRIDE] Added MUTUAL exclusion set ${ruleId} with ${keys.length} keys`);
+        // Removed per-set logging - summary logged at end of loadRulesFromSheets
         return { success: true, errors: [], keyCount: keys.length };
     }
 
@@ -299,7 +299,7 @@ class MatchOverrideManager {
             this.keyToMutualInclusionSetIndices.get(key).push(setIndex);
         }
 
-        console.log(`[OVERRIDE] Added MUTUAL inclusion set ${ruleId} with ${keys.length} keys`);
+        // Removed per-set logging - summary logged at end of loadRulesFromSheets
         return { success: true, errors: [], keyCount: keys.length };
     }
 
@@ -518,6 +518,7 @@ class MatchOverrideManager {
      */
     resolveExclusionsWithPriority(entities, priorityKeys = []) {
         const toRemove = new Set();
+        const exclusionCounts = new Map(); // Track counts per ruleId for summary logging
 
         for (let i = 0; i < entities.length; i++) {
             if (toRemove.has(entities[i].key)) continue;
@@ -536,14 +537,11 @@ class MatchOverrideManager {
                 const key2Priority = priorityKeys.includes(key2);
 
                 let loser;
-                let reason;
 
                 if (key1Priority && !key2Priority) {
                     loser = key2;
-                    reason = `${key1} has founder-forced priority`;
                 } else if (key2Priority && !key1Priority) {
                     loser = key1;
-                    reason = `${key2} has founder-forced priority`;
                 } else {
                     // Same priority tier - use OnConflict rules
                     loser = ruleMeta.rule.determineLoser(
@@ -551,13 +549,24 @@ class MatchOverrideManager {
                         entities[i].score,
                         entities[j].score
                     );
-                    reason = ruleMeta.onConflict;
                 }
 
                 toRemove.add(loser);
                 this.stats.exclusionsApplied++;
-                console.log(`[OVERRIDE] Step 2 exclusion ${ruleMeta.ruleId}: ${loser} removed (${reason})`);
+
+                // Accumulate count per ruleId for summary
+                const count = exclusionCounts.get(ruleMeta.ruleId) || 0;
+                exclusionCounts.set(ruleMeta.ruleId, count + 1);
             }
+        }
+
+        // Log summary instead of per-removal messages
+        if (exclusionCounts.size > 0) {
+            const summaryParts = [];
+            for (const [ruleId, count] of exclusionCounts) {
+                summaryParts.push(`${ruleId}: ${count}`);
+            }
+            console.log(`[OVERRIDE] Step 2 exclusions applied: ${summaryParts.join(', ')}`);
         }
 
         return entities.filter(e => !toRemove.has(e.key));
@@ -1025,10 +1034,7 @@ async function loadRulesFromGoogleSheets(options = {}) {
                 });
             }
         }
-        console.log(`[OVERRIDE] Loaded ${result.forceMatches.length} FORCE_MATCH rules from sheet`);
-        if (result.mutualInclusions.length > 0) {
-            console.log(`[OVERRIDE] Loaded ${result.mutualInclusions.length} MUTUAL inclusion sets from sheet`);
-        }
+        // Logging consolidated at end of function
     } catch (err) {
         const error = `Failed to load FORCE_MATCH sheet: ${err.message || err}`;
         console.error('[OVERRIDE] ' + error);
@@ -1101,7 +1107,7 @@ async function loadRulesFromGoogleSheets(options = {}) {
                             expandedFrom: ruleId  // Track original rule for debugging
                         });
                     }
-                    console.log(`[OVERRIDE] Expanded ${ruleId} into ${otherKeys.length} pairwise exclusion rules`);
+                    // Removed per-expansion logging - count tracked in result.expandedRuleCount
                     continue;
                 }
 
@@ -1121,14 +1127,21 @@ async function loadRulesFromGoogleSheets(options = {}) {
                 });
             }
         }
-        console.log(`[OVERRIDE] Loaded ${result.forceExcludes.length} FORCE_EXCLUDE rules from sheet`);
-        if (result.mutualExclusions.length > 0) {
-            console.log(`[OVERRIDE] Loaded ${result.mutualExclusions.length} MUTUAL exclusion sets from sheet`);
-        }
+        // Logging consolidated below
     } catch (err) {
         const error = `Failed to load FORCE_EXCLUDE sheet: ${err.message || err}`;
         console.error('[OVERRIDE] ' + error);
         result.errors.push(error);
+    }
+
+    // Consolidated summary log
+    const parts = [];
+    if (result.forceMatches.length > 0) parts.push(`${result.forceMatches.length} FORCE_MATCH`);
+    if (result.forceExcludes.length > 0) parts.push(`${result.forceExcludes.length} FORCE_EXCLUDE`);
+    if (result.mutualInclusions.length > 0) parts.push(`${result.mutualInclusions.length} MUTUAL inclusion sets`);
+    if (result.mutualExclusions.length > 0) parts.push(`${result.mutualExclusions.length} MUTUAL exclusion sets`);
+    if (parts.length > 0) {
+        console.log(`[OVERRIDE] Loaded from sheets: ${parts.join(', ')}`);
     }
 
     return result;

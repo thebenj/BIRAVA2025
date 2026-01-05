@@ -1119,12 +1119,22 @@
                 </div>
 
                 <!-- Lightweight JSON Export (for Google Apps Script) -->
-                <div>
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #c8e6c9;">
                     <button onclick="downloadLightweightExport(entityGroupBrowser.loadedDatabase)" style="padding: 8px 14px; background: #9c27b0; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
                         📦 Lightweight JSON Export
                     </button>
                     <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
                         Self-contained JSON with reduced entity data embedded per group. For Google Apps Script consumption. Requires unified entity database loaded.
+                    </div>
+                </div>
+
+                <!-- Prospect Mail Merge Export -->
+                <div>
+                    <button id="prospectMailMergeBtn" onclick="runProspectMailMergeExport()" style="padding: 8px 14px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                        📬 Prospect Mail Merge
+                    </button>
+                    <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
+                        One row per group for mail merge. Loads EntityGroup database if needed. Excludes Bloomerang donors and excluded addresses.
                     </div>
                 </div>
             </div>

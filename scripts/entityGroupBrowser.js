@@ -1413,14 +1413,17 @@ function escapeHtml(text) {
 // =============================================================================
 
 /**
- * CSV Column Headers - 54 columns per reference_csvExportSpecification.md
+ * CSV Column Headers - 62 columns (expanded from 54 to add SecAddr1 components)
  */
 const CSV_HEADERS = [
     // Section 1: Identification & Mail Merge Core (10 columns)
     'RowType', 'GroupIndex', 'Key', 'MailName', 'MailAddr1', 'MailAddr2',
     'MailCity', 'MailState', 'MailZip', 'Email',
-    // Section 2: Additional Contact Info (6 columns)
-    'Phone', 'POBox', 'SecAddr1', 'SecAddr2', 'SecAddr3', 'SecAddrMore',
+    // Section 2: Additional Contact Info (14 columns - SecAddr1 expanded to 9 component columns)
+    'Phone', 'POBox',
+    'SecAddr1_primaryAlias', 'SecAddr1_streetNumber', 'SecAddr1_streetName', 'SecAddr1_streetType',
+    'SecAddr1_city', 'SecAddr1_state', 'SecAddr1_zipCode', 'SecAddr1_secUnitType', 'SecAddr1_secUnitNum',
+    'SecAddr2', 'SecAddr3', 'SecAddrMore',
     // Section 3: Entity Metadata (2 columns)
     'EntityType', 'Source',
     // Section 4: Name Alternatives (12 columns)
@@ -1704,21 +1707,50 @@ function buildSecondaryAddressColumns(addresses) {
 }
 
 /**
+ * Extract SecAddr1 component columns from the first secondary address
+ * @param {Object} entity - Entity object
+ * @returns {Array<string>} Array of 9 component values
+ */
+function extractSecAddr1Components(entity) {
+    const result = ['', '', '', '', '', '', '', '', ''];
+    if (!entity || !entity.contactInfo || !entity.contactInfo.secondaryAddress) return result;
+
+    const secondaries = entity.contactInfo.secondaryAddress;
+    if (!Array.isArray(secondaries) || secondaries.length === 0) return result;
+
+    const addr = secondaries[0];
+    if (!addr) return result;
+
+    // Extract each component directly from the Address object properties
+    result[0] = addr.primaryAlias?.term ? cleanVATags(addr.primaryAlias.term) : '';
+    result[1] = addr.streetNumber?.term ? cleanVATags(String(addr.streetNumber.term)) : '';
+    result[2] = addr.streetName?.term ? cleanVATags(addr.streetName.term) : '';
+    result[3] = addr.streetType?.term ? cleanVATags(addr.streetType.term) : '';
+    result[4] = addr.city?.term ? cleanVATags(addr.city.term) : '';
+    result[5] = addr.state?.term ? cleanVATags(addr.state.term) : '';
+    result[6] = addr.zipCode?.term ? cleanVATags(String(addr.zipCode.term)) : '';
+    result[7] = addr.secUnitType?.term ? cleanVATags(addr.secUnitType.term) : '';
+    result[8] = addr.secUnitNum?.term ? cleanVATags(String(addr.secUnitNum.term)) : '';
+
+    return result;
+}
+
+/**
  * Generate a CSV row for an entity (consensus, founding, member, or nearmiss)
  * @param {string} rowType - 'consensus', 'founding', 'member', or 'nearmiss'
  * @param {Object} entity - Entity object
  * @param {string} key - Entity database key (empty for consensus)
  * @param {number|string} groupIndex - Group index (for consensus/founding only)
  * @param {boolean} includeAlternatives - Whether to populate alternatives columns
- * @returns {Array<string>} Array of 54 column values
+ * @returns {Array<string>} Array of 62 column values
  */
 function generateCSVRow(rowType, entity, key, groupIndex, includeAlternatives) {
-    const row = new Array(54).fill('');
+    const row = new Array(62).fill('');
 
-    // Section 1: Identification & Mail Merge Core
+    // Section 1: Identification & Mail Merge Core (columns 0-9)
     row[0] = rowType;                                    // RowType
-    row[1] = (rowType === 'consensus' || rowType === 'founding') ? String(groupIndex) : ''; // GroupIndex
-    row[2] = (rowType === 'consensus') ? '' : key;       // Key
+    row[1] = (rowType === 'consensus' || rowType === 'founding' || rowType === 'consolidated') ? String(groupIndex) : ''; // GroupIndex
+    row[2] = (rowType === 'consensus' || rowType === 'consolidated') ? '' : key;       // Key
     row[3] = assembleMailName(entity);                   // MailName
 
     // Primary address components
@@ -1731,66 +1763,76 @@ function generateCSVRow(rowType, entity, key, groupIndex, includeAlternatives) {
     row[8] = addrComp.zip;                               // MailZip
     row[9] = getEntityEmail(entity);                     // Email
 
-    // Section 2: Additional Contact Info
+    // Section 2: Additional Contact Info (columns 10-23)
     row[10] = getEntityPhone(entity);                    // Phone
     row[11] = getEntityPOBox(entity);                    // POBox
 
-    // Secondary addresses
-    const secAddrs = getSecondaryAddresses(entity);
-    const secAddrCols = buildSecondaryAddressColumns(secAddrs);
-    row[12] = secAddrCols[0];                            // SecAddr1
-    row[13] = secAddrCols[1];                            // SecAddr2
-    row[14] = secAddrCols[2];                            // SecAddr3
-    row[15] = secAddrCols[3];                            // SecAddrMore
+    // SecAddr1 components (columns 12-20)
+    const secAddr1Comps = extractSecAddr1Components(entity);
+    row[12] = secAddr1Comps[0];                          // SecAddr1_primaryAlias
+    row[13] = secAddr1Comps[1];                          // SecAddr1_streetNumber
+    row[14] = secAddr1Comps[2];                          // SecAddr1_streetName
+    row[15] = secAddr1Comps[3];                          // SecAddr1_streetType
+    row[16] = secAddr1Comps[4];                          // SecAddr1_city
+    row[17] = secAddr1Comps[5];                          // SecAddr1_state
+    row[18] = secAddr1Comps[6];                          // SecAddr1_zipCode
+    row[19] = secAddr1Comps[7];                          // SecAddr1_secUnitType
+    row[20] = secAddr1Comps[8];                          // SecAddr1_secUnitNum
 
-    // Section 3: Entity Metadata
-    row[16] = getEntityTypeString(entity);               // EntityType
-    row[17] = (rowType === 'consensus') ? 'consensus' : getEntitySource(entity, key); // Source
+    // SecAddr2, SecAddr3, SecAddrMore (columns 21-23) - remaining secondary addresses as formatted strings
+    const secAddrs = getSecondaryAddresses(entity);
+    row[21] = secAddrs.length >= 2 ? secAddrs[1] : '';   // SecAddr2
+    row[22] = secAddrs.length >= 3 ? secAddrs[2] : '';   // SecAddr3
+    row[23] = secAddrs.length > 3 ? secAddrs.slice(3).join('|') : '';  // SecAddrMore
+
+    // Section 3: Entity Metadata (columns 24-25)
+    row[24] = getEntityTypeString(entity);               // EntityType
+    row[25] = (rowType === 'consensus' || rowType === 'consolidated') ? rowType : getEntitySource(entity, key); // Source
 
     // Sections 4-6: Alternatives (only for consensus row)
     if (includeAlternatives && entity) {
-        // Name alternatives (columns 18-29)
+        // Name alternatives (columns 26-37)
         const nameHom = extractAlternatives(entity.name, 'homonyms');
         const nameSyn = extractAlternatives(entity.name, 'synonyms');
         const nameCand = extractAlternatives(entity.name, 'candidates');
 
         const nameHomCols = buildAlternativeColumns(nameHom);
-        row[18] = nameHomCols[0]; row[19] = nameHomCols[1]; row[20] = nameHomCols[2]; row[21] = nameHomCols[3];
+        row[26] = nameHomCols[0]; row[27] = nameHomCols[1]; row[28] = nameHomCols[2]; row[29] = nameHomCols[3];
 
         const nameSynCols = buildAlternativeColumns(nameSyn);
-        row[22] = nameSynCols[0]; row[23] = nameSynCols[1]; row[24] = nameSynCols[2]; row[25] = nameSynCols[3];
+        row[30] = nameSynCols[0]; row[31] = nameSynCols[1]; row[32] = nameSynCols[2]; row[33] = nameSynCols[3];
 
         const nameCandCols = buildAlternativeColumns(nameCand);
-        row[26] = nameCandCols[0]; row[27] = nameCandCols[1]; row[28] = nameCandCols[2]; row[29] = nameCandCols[3];
+        row[34] = nameCandCols[0]; row[35] = nameCandCols[1]; row[36] = nameCandCols[2]; row[37] = nameCandCols[3];
 
-        // Address alternatives (columns 30-41) - from primaryAddress
+        // Address alternatives (columns 38-49) - from primaryAddress
         const addrHom = extractAlternatives(primaryAddr, 'homonyms');
         const addrSyn = extractAlternatives(primaryAddr, 'synonyms');
         const addrCand = extractAlternatives(primaryAddr, 'candidates');
 
         const addrHomCols = buildAlternativeColumns(addrHom);
-        row[30] = addrHomCols[0]; row[31] = addrHomCols[1]; row[32] = addrHomCols[2]; row[33] = addrHomCols[3];
+        row[38] = addrHomCols[0]; row[39] = addrHomCols[1]; row[40] = addrHomCols[2]; row[41] = addrHomCols[3];
 
         const addrSynCols = buildAlternativeColumns(addrSyn);
-        row[34] = addrSynCols[0]; row[35] = addrSynCols[1]; row[36] = addrSynCols[2]; row[37] = addrSynCols[3];
+        row[42] = addrSynCols[0]; row[43] = addrSynCols[1]; row[44] = addrSynCols[2]; row[45] = addrSynCols[3];
 
         const addrCandCols = buildAlternativeColumns(addrCand);
-        row[38] = addrCandCols[0]; row[39] = addrCandCols[1]; row[40] = addrCandCols[2]; row[41] = addrCandCols[3];
+        row[46] = addrCandCols[0]; row[47] = addrCandCols[1]; row[48] = addrCandCols[2]; row[49] = addrCandCols[3];
 
-        // Email alternatives (columns 42-53) - from email
+        // Email alternatives (columns 50-61) - from email
         const emailObj = entity?.contactInfo?.email;
         const emailHom = extractAlternatives(emailObj, 'homonyms');
         const emailSyn = extractAlternatives(emailObj, 'synonyms');
         const emailCand = extractAlternatives(emailObj, 'candidates');
 
         const emailHomCols = buildAlternativeColumns(emailHom);
-        row[42] = emailHomCols[0]; row[43] = emailHomCols[1]; row[44] = emailHomCols[2]; row[45] = emailHomCols[3];
+        row[50] = emailHomCols[0]; row[51] = emailHomCols[1]; row[52] = emailHomCols[2]; row[53] = emailHomCols[3];
 
         const emailSynCols = buildAlternativeColumns(emailSyn);
-        row[46] = emailSynCols[0]; row[47] = emailSynCols[1]; row[48] = emailSynCols[2]; row[49] = emailSynCols[3];
+        row[54] = emailSynCols[0]; row[55] = emailSynCols[1]; row[56] = emailSynCols[2]; row[57] = emailSynCols[3];
 
         const emailCandCols = buildAlternativeColumns(emailCand);
-        row[50] = emailCandCols[0]; row[51] = emailCandCols[1]; row[52] = emailCandCols[2]; row[53] = emailCandCols[3];
+        row[58] = emailCandCols[0]; row[59] = emailCandCols[1]; row[60] = emailCandCols[2]; row[61] = emailCandCols[3];
     }
 
     return row;
@@ -2743,6 +2785,951 @@ function exportMultiVAPropertyReport(minVAMembers = 3) {
 
 // Export for global access
 window.exportMultiVAPropertyReport = exportMultiVAPropertyReport;
+
+// =============================================================================
+// PROSPECT MAIL MERGE EXPORT
+// =============================================================================
+
+/**
+ * Get the entity type of the founding member for an EntityGroup
+ * @param {Object} group - EntityGroup object
+ * @param {Object} entityDb - Unified entity database
+ * @returns {string} Entity type name or 'Unknown'
+ */
+function getFoundingMemberType(group, entityDb) {
+    if (!group || !group.foundingMemberKey || !entityDb?.entities) {
+        return 'Unknown';
+    }
+    const founder = entityDb.entities[group.foundingMemberKey];
+    if (!founder) return 'Unknown';
+    return founder.__type || founder.type || founder.constructor?.name || 'Unknown';
+}
+
+/**
+ * Get the first secondary address from an entity as a normalized string for comparison
+ * Uses formatFullAddress() to get the same cleaned format as SecAddr1 in the CSV
+ * @param {Object} entity - Entity object
+ * @param {boolean} debug - If true, log diagnostic info
+ * @returns {string} First secondary address (normalized) or empty string
+ */
+function getFirstSecondaryAddress(entity) {
+    if (!entity?.contactInfo?.secondaryAddress) {
+        return '';
+    }
+    const secondaries = entity.contactInfo.secondaryAddress;
+    if (!Array.isArray(secondaries) || secondaries.length === 0) {
+        return '';
+    }
+
+    const firstAddr = secondaries[0];
+    if (!firstAddr) {
+        return '';
+    }
+
+    // Use formatFullAddress - same function used to generate SecAddr1 in CSV
+    const formattedAddr = formatFullAddress(firstAddr);
+
+    // Normalize for comparison: lowercase, trim, collapse whitespace
+    const normalized = normalizeAddressForComparison(formattedAddr);
+    return normalized;
+}
+
+/**
+ * Normalize an address string for comparison
+ * @param {string} addr - Address string
+ * @returns {string} Normalized address
+ */
+function normalizeAddressForComparison(addr) {
+    if (!addr || typeof addr !== 'string') return '';
+    return addr.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+// Storage for excluded mailing addresses (loaded from Google Sheet)
+let mailMergeExcludedAddresses = new Set();
+
+/**
+ * Load excluded mailing addresses from Google Sheet
+ * Sheet ID: 1SznUWxOrYZAHx_PdEI1jLWTB-n85optL_TET3BNRbvc
+ * Reads first column of the sheet
+ * @returns {Promise<{count: number, errors: string[]}>}
+ */
+async function loadMailMergeExcludedAddresses() {
+    const SHEET_ID = '1SznUWxOrYZAHx_PdEI1jLWTB-n85optL_TET3BNRbvc';
+    const errors = [];
+
+    try {
+        const params = {
+            spreadsheetId: SHEET_ID,
+            range: 'A:A',  // First column only
+            valueRenderOption: 'UNFORMATTED_VALUE'
+        };
+
+        const response = await gapi.client.sheets.spreadsheets.values.get(params);
+        const rows = response.result.values || [];
+
+        // Clear existing and load new
+        mailMergeExcludedAddresses.clear();
+
+        for (const row of rows) {
+            if (row && row[0]) {
+                const rawAddr = String(row[0]);
+                const addr = normalizeAddressForComparison(rawAddr);
+                if (addr) {
+                    mailMergeExcludedAddresses.add(addr);
+                }
+            }
+        }
+
+        console.log(`[MAIL MERGE] Loaded ${mailMergeExcludedAddresses.size} excluded addresses from sheet`);
+        return { count: mailMergeExcludedAddresses.size, errors };
+
+    } catch (err) {
+        const error = `Failed to load excluded addresses: ${err.message || err}`;
+        console.error('[MAIL MERGE] ' + error);
+        errors.push(error);
+        return { count: 0, errors };
+    }
+}
+
+/**
+ * Check if an entity's first secondary address is in the excluded list
+ * @param {Object} entity - Entity object
+ * @returns {boolean} True if address is excluded
+ */
+function isAddressExcluded(entity) {
+    const firstSecondary = getFirstSecondaryAddress(entity);
+    if (!firstSecondary) return false;
+    return mailMergeExcludedAddresses.has(firstSecondary);
+}
+
+// Export for global access
+window.loadMailMergeExcludedAddresses = loadMailMergeExcludedAddresses;
+window.mailMergeExcludedAddresses = mailMergeExcludedAddresses;
+
+/**
+ * Check if all members of a group are connected via contactInfo similarity.
+ * Uses flood-fill: starting from first member, find all members reachable
+ * via edges where contactInfo score > threshold.
+ *
+ * Uses universalCompareTo (same as entity group building) to get contactInfo scores.
+ *
+ * @param {Object} group - EntityGroup object with memberKeys
+ * @param {Object} entityDb - Entity database with .entities property
+ * @returns {boolean} True if all members are connected via contactInfo edges
+ */
+function isGroupContactInfoConnected(group, entityDb) {
+    const memberKeys = group.memberKeys || [];
+
+    // Groups with 0 or 1 members are trivially connected
+    if (memberKeys.length <= 1) {
+        return true;
+    }
+
+    // Get threshold from MATCH_CRITERIA
+    const threshold = window.MATCH_CRITERIA?.trueMatch?.contactInfoAlone || 0.87;
+
+    // Get all member entities
+    const memberEntities = {};
+    for (const key of memberKeys) {
+        const entity = entityDb.entities[key];
+        if (entity) {
+            memberEntities[key] = entity;
+        }
+    }
+
+    const validKeys = Object.keys(memberEntities);
+
+    // If we couldn't find all entities, cannot determine connectivity
+    if (validKeys.length !== memberKeys.length) {
+        return false;
+    }
+
+    // Flood-fill from the first member
+    const reached = new Set();
+    const toVisit = [validKeys[0]];
+    reached.add(validKeys[0]);
+
+    while (toVisit.length > 0 && reached.size < validKeys.length) {
+        const currentKey = toVisit.pop();
+        const currentEntity = memberEntities[currentKey];
+
+        // Check current entity against all unreached entities
+        for (const candidateKey of validKeys) {
+            if (reached.has(candidateKey)) {
+                continue;
+            }
+
+            const candidateEntity = memberEntities[candidateKey];
+
+            // Use universalCompareTo (same as entity group building)
+            const comparison = universalCompareTo(currentEntity, candidateEntity);
+            const contactInfoScore = comparison.details?.components?.contactInfo?.similarity;
+
+            // Check if contactInfo score passes threshold
+            let passesThreshold = contactInfoScore !== null && contactInfoScore !== undefined && contactInfoScore > threshold;
+
+            // MAIL MERGE FALLBACK: When BOTH entities have PO Box secondary addresses
+            // AND BOTH have null/undefined secUnitNum (badly parsed PO Box number),
+            // fall back to comparing primaryAlias.term strings directly.
+            // This handles the specific case where PO Box addresses are identical but
+            // component comparison returns 0 due to missing secUnitNum.
+            if (!passesThreshold) {
+                const curSecAddr = currentEntity?.contactInfo?.secondaryAddress?.[0];
+                const candSecAddr = candidateEntity?.contactInfo?.secondaryAddress?.[0];
+
+                if (curSecAddr && candSecAddr) {
+                    const curIsPOBox = typeof isPOBoxAddress === 'function' && isPOBoxAddress(curSecAddr);
+                    const candIsPOBox = typeof isPOBoxAddress === 'function' && isPOBoxAddress(candSecAddr);
+
+                    // Only apply fallback when BOTH are PO Box AND BOTH have null secUnitNum
+                    if (curIsPOBox && candIsPOBox && !curSecAddr.secUnitNum && !candSecAddr.secUnitNum) {
+                        const curTerm = curSecAddr.primaryAlias?.term;
+                        const candTerm = candSecAddr.primaryAlias?.term;
+
+                        if (curTerm && candTerm) {
+                            const overallAloneThreshold = window.MATCH_CRITERIA?.trueMatch?.overallAlone || 0.905;
+                            const termSimilarity = levenshteinSimilarity(curTerm, candTerm);
+                            if (termSimilarity > overallAloneThreshold) {
+                                passesThreshold = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (passesThreshold) {
+                reached.add(candidateKey);
+                toVisit.push(candidateKey);
+
+                // Early exit: if we've reached all members, we're done
+                if (reached.size === validKeys.length) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    // Return true only if we reached all members
+    return reached.size === validKeys.length;
+}
+
+/**
+ * Determine the name to use for a collapsed mail merge row.
+ *
+ * Rules:
+ * 1. If exactly one member is type "Individual" → use that Individual's name
+ * 2. If exactly two members are type "Individual" AND their names pass the
+ *    true match threshold (nameAlone > 0.875) → use either name (first one)
+ * 3. All other cases → use the consensus name
+ *
+ * Uses universalCompareTo (same as entity group building) to get name scores.
+ *
+ * @param {Object} group - EntityGroup object
+ * @param {Object} entityDb - Entity database with .entities property
+ * @returns {Object} The entity whose name should be used for the collapsed row
+ */
+function getCollapsedRowNameEntity(group, entityDb) {
+    const memberKeys = group.memberKeys || [];
+    const consensusEntity = group.consensusEntity || entityDb.entities[group.foundingMemberKey];
+
+    // Find all Individual-type members
+    const individuals = [];
+    for (const key of memberKeys) {
+        const entity = entityDb.entities[key];
+        if (entity && entity.constructor.name === 'Individual') {
+            individuals.push({ key, entity });
+        }
+    }
+
+    // Rule 1: Exactly one Individual → use that Individual's name
+    if (individuals.length === 1) {
+        return individuals[0].entity;
+    }
+
+    // Rule 2: Exactly two Individuals → check if names pass threshold
+    if (individuals.length === 2) {
+        const nameThreshold = window.MATCH_CRITERIA?.trueMatch?.nameAlone || 0.875;
+
+        // Use universalCompareTo to get name score
+        const comparison = universalCompareTo(individuals[0].entity, individuals[1].entity);
+        const nameScore = comparison.details?.components?.name?.similarity;
+
+        if (nameScore !== null && nameScore !== undefined && nameScore > nameThreshold) {
+            // Names match well enough, use the first one
+            return individuals[0].entity;
+        }
+    }
+
+    // Rule 3: All other cases → use consensus name
+    return consensusEntity;
+}
+
+/**
+ * Generate CSV rows for a single EntityGroup for mail merge export
+ *
+ * Differences from generateEntityGroupRows:
+ * - Never includes nearmiss rows
+ * - Single-member groups: only founding row (no consensus row)
+ * - Multi-member groups that are contactInfo-connected: single collapsed row
+ * - Other multi-member groups: consensus + founding + member rows
+ *
+ * @param {Object} group - EntityGroup object
+ * @param {Object} entityDb - Entity database with .entities property
+ * @returns {Object} { rows: Array<Array<string>>, collapsed: boolean }
+ */
+function generateMailMergeGroupRows(group, entityDb) {
+    const rows = [];
+    const memberCount = group.memberKeys?.length || 0;
+
+    if (memberCount === 1) {
+        // Single-member group: only show founding member row (no consensus)
+        const foundingEntity = getEntityByKey(group.foundingMemberKey);
+        if (foundingEntity) {
+            rows.push(generateCSVRow('founding', foundingEntity, group.foundingMemberKey, group.index, false));
+        }
+        return { rows, collapsed: false };
+    }
+
+    // Multi-member group: check if contactInfo-connected
+    if (isGroupContactInfoConnected(group, entityDb)) {
+        // Collapse to single row: use consensus for all fields except name
+        const consensusEntity = group.consensusEntity || getEntityByKey(group.foundingMemberKey);
+        if (consensusEntity) {
+            // Generate row from consensus entity
+            const row = generateCSVRow('consolidated', consensusEntity, '', group.index, true);
+
+            // Override Key (column 2) with label indicating consolidated group
+            row[2] = 'CONSOLIDATED_GROUP';
+
+            // Override name (column 3) with appropriate entity's name
+            const nameEntity = getCollapsedRowNameEntity(group, entityDb);
+            row[3] = assembleMailName(nameEntity);
+
+            rows.push(row);
+        }
+        return { rows, collapsed: true };
+    }
+
+    // Not contactInfo-connected: CONSENSUS COLLAPSE fallback
+    // Collapse to single row using consensus entity, mark as CONSENSUS_COLLAPSE
+    const consensusEntity = group.consensusEntity || getEntityByKey(group.foundingMemberKey);
+    if (consensusEntity) {
+        const row = generateCSVRow('consolidated', consensusEntity, '', group.index, true);
+
+        // Override Key (column 2) with label indicating consensus collapse
+        row[2] = 'CONSENSUS_COLLAPSE';
+
+        // Override name (column 3) with appropriate entity's name
+        const nameEntity = getCollapsedRowNameEntity(group, entityDb);
+        row[3] = assembleMailName(nameEntity);
+
+        rows.push(row);
+    }
+    return { rows, collapsed: true };
+}
+
+// Simplified mail merge headers - just what's needed for address labels
+const SIMPLE_MAIL_MERGE_HEADERS = [
+    'Name',      // Recipient name
+    'Address1',  // Street address line 1
+    'Address2',  // Unit/Apt (optional)
+    'City',
+    'State',
+    'ZIP'
+];
+
+/**
+ * Generate a simplified mail merge row from an entity
+ * Uses secondary address (mailing address) components
+ * @param {Object} entity - Entity object
+ * @returns {Array<string>} Array of 6 column values
+ */
+function generateSimpleMailMergeRow(entity) {
+    const row = ['', '', '', '', '', ''];
+
+    // Name
+    row[0] = assembleMailName(entity);
+
+    // Get secondary address components (the mailing address)
+    const secAddr = entity?.contactInfo?.secondaryAddress?.[0];
+    if (secAddr) {
+        // Get unit type and number
+        const unitType = secAddr.secUnitType?.term ? cleanVATags(secAddr.secUnitType.term) : '';
+        const unitNum = secAddr.secUnitNum?.term ? cleanVATags(String(secAddr.secUnitNum.term)) : '';
+
+        // Check if this is a PO BOX address
+        if (unitType === 'PO BOX') {
+            // PO BOX goes in Address1
+            row[1] = [unitType, unitNum].filter(p => p).join(' ');
+            // Address2 stays empty for PO BOX addresses
+        } else {
+            // Street address: build Address1 from street components
+            const streetNum = secAddr.streetNumber?.term ? cleanVATags(String(secAddr.streetNumber.term)) : '';
+            const streetName = secAddr.streetName?.term ? cleanVATags(secAddr.streetName.term) : '';
+            const streetType = secAddr.streetType?.term ? cleanVATags(secAddr.streetType.term) : '';
+            const parts = [streetNum, streetName, streetType].filter(p => p);
+            row[1] = parts.join(' ');
+
+            // Address2: unit type + unit number (APT, STE, etc.)
+            if (unitType || unitNum) {
+                row[2] = [unitType, unitNum].filter(p => p).join(' ');
+            }
+        }
+
+        // City, State, ZIP
+        row[3] = secAddr.city?.term ? cleanVATags(secAddr.city.term) : '';
+        row[4] = secAddr.state?.term ? cleanVATags(secAddr.state.term) : '';
+        // Pad 4-digit ZIP codes to 5-digit (user must import CSV with ZIP column as text)
+        let zip = secAddr.zipCode?.term ? String(secAddr.zipCode.term) : '';
+        if (/^\d{4}$/.test(zip)) {
+            zip = '0' + zip;  // Pad 4-digit to 5-digit
+        }
+        row[5] = zip;
+    }
+
+    return row;
+}
+
+/**
+ * Export prospect mail merge spreadsheet
+ *
+ * Based on exportEntityGroupsToCSV but with additional exclusion rules and sorting.
+ * Generates TWO CSVs: full 62-column format and simplified 6-column format.
+ *
+ * Exclusion rules:
+ * - No Bloomerang members (prospects only)
+ * - Group size <= maxGroupSize
+ * - Founding member's first secondary address not in excluded addresses list
+ *
+ * Row rules:
+ * - No nearmiss rows
+ * - Single-member groups: founding row only (no consensus)
+ * - Multi-member groups: consensus + founding + member rows
+ *
+ * @param {Object} groupDatabase - EntityGroupDatabase
+ * @param {Object} options - Export options
+ * @param {number} options.maxGroupSize - Maximum group size to include (default: 23)
+ * @returns {Object} {csv, simpleCsv, stats}
+ */
+function exportProspectMailMerge(groupDatabase, options = {}) {
+    const maxGroupSize = options.maxGroupSize || 23;
+
+    const entityDb = window.unifiedEntityDatabase;
+    if (!entityDb || !entityDb.entities) {
+        throw new Error('Unified Entity Database not loaded');
+    }
+
+    const allGroups = Object.values(groupDatabase.groups || {});
+
+    // Start with prospect groups (no Bloomerang members) - same as existing export
+    const prospectGroups = allGroups.filter(g => !g.hasBloomerangMember);
+
+    // Exclusion 1: filter out groups with too many members
+    let excludedForSize = 0;
+    let excludedForAddress = 0;
+
+    const eligibleGroups = prospectGroups.filter(group => {
+        const memberCount = group.memberKeys?.length || 0;
+        if (memberCount > maxGroupSize) {
+            excludedForSize++;
+            return false;
+        }
+
+        // Exclusion 2: filter out groups where founding member's first secondary address is excluded
+        const founder = entityDb.entities[group.foundingMemberKey];
+        if (founder && isAddressExcluded(founder)) {
+            excludedForAddress++;
+            return false;
+        }
+
+        return true;
+    });
+
+    // Sort: Primary by founding member type (custom order), Secondary by member count descending
+    const typeOrder = ['Individual', 'AggregateHousehold', 'LegalConstruct', 'Business'];
+
+    eligibleGroups.sort((a, b) => {
+        const typeA = getFoundingMemberType(a, entityDb);
+        const typeB = getFoundingMemberType(b, entityDb);
+
+        // Primary sort: entity type by custom order
+        const orderA = typeOrder.indexOf(typeA);
+        const orderB = typeOrder.indexOf(typeB);
+        // Put unknown types at the end
+        const effectiveOrderA = orderA === -1 ? typeOrder.length : orderA;
+        const effectiveOrderB = orderB === -1 ? typeOrder.length : orderB;
+
+        if (effectiveOrderA !== effectiveOrderB) {
+            return effectiveOrderA - effectiveOrderB;
+        }
+
+        // Secondary sort: member count descending
+        const countA = a.memberKeys?.length || 0;
+        const countB = b.memberKeys?.length || 0;
+        return countB - countA;
+    });
+
+    // Build CSV header rows
+    const headerRow = CSV_HEADERS.map(h => csvEscape(h)).join(',');
+    const simpleHeaderRow = SIMPLE_MAIL_MERGE_HEADERS.map(h => csvEscape(h)).join(',');
+
+    // Generate BOTH row sets in single pass through eligible groups
+    const rows = [];           // Full 62-column rows
+    const simpleRows = [];     // Simplified 6-column rows
+    let collapsedGroupCount = 0;
+
+    for (const group of eligibleGroups) {
+        const result = generateMailMergeGroupRows(group, entityDb);
+        rows.push(...result.rows);
+        if (result.collapsed) {
+            collapsedGroupCount++;
+        }
+
+        // For simplified CSV: one row per group using consensus entity
+        // (mail merge only needs one address per household)
+        const consensusEntity = group.consensusEntity || entityDb.entities[group.foundingMemberKey];
+        if (consensusEntity) {
+            // Get the name from the appropriate entity (same logic as collapsed rows)
+            const nameEntity = getCollapsedRowNameEntity(group, entityDb);
+            const simpleRow = generateSimpleMailMergeRow(consensusEntity);
+            // Override name with the selected name entity
+            simpleRow[0] = assembleMailName(nameEntity);
+            simpleRows.push(simpleRow);
+        }
+    }
+
+    // Build full CSV string
+    const dataRows = rows.map(row => row.map(v => csvEscape(v)).join(','));
+    const csv = [headerRow, ...dataRows].join('\n');
+
+    // Build simplified CSV string
+    const simpleDataRows = simpleRows.map(row => row.map(v => csvEscape(v)).join(','));
+    const simpleCsv = [simpleHeaderRow, ...simpleDataRows].join('\n');
+
+    return {
+        csv,
+        simpleCsv,
+        stats: {
+            totalGroups: allGroups.length,
+            totalProspectGroups: prospectGroups.length,
+            excludedForSize,
+            excludedForAddress,
+            maxGroupSize,
+            eligibleGroups: eligibleGroups.length,
+            collapsedGroups: collapsedGroupCount,
+            rowCount: rows.length,
+            simpleRowCount: simpleRows.length
+        }
+    };
+}
+
+/**
+ * Download prospect mail merge spreadsheets (triggered from UI or console)
+ * Automatically loads excluded addresses from Google Sheet before export.
+ * Downloads TWO files:
+ *   1. prospect_mailmerge_YYYY-MM-DD.csv - Full 62-column format
+ *   2. prospect_mailmerge_simple_YYYY-MM-DD.csv - Simplified 6-column format for address labels
+ * @param {Object} options - Export options
+ * @param {number} options.maxGroupSize - Maximum group size to include (default: 23)
+ */
+async function downloadProspectMailMerge(options = {}) {
+    const db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+    if (!db) {
+        console.error('Please load an EntityGroup database first');
+        showEntityGroupStatus('Please load an EntityGroup database first', 'error');
+        return;
+    }
+
+    if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+        console.error('Please load the Unified Entity Database first');
+        showEntityGroupStatus('Please load the Unified Entity Database first', 'error');
+        return;
+    }
+
+    const maxGroupSize = options.maxGroupSize || 23;
+
+    try {
+        // Load excluded addresses from Google Sheet
+        showEntityGroupStatus('Loading excluded addresses from Google Sheet...', 'loading');
+        const addrResult = await loadMailMergeExcludedAddresses();
+        if (addrResult.errors.length > 0) {
+            console.warn('Errors loading excluded addresses:', addrResult.errors);
+        }
+
+        console.log(`Generating Prospect Mail Merge (max group size: ${maxGroupSize})...`);
+        showEntityGroupStatus(`Generating Prospect Mail Merge (max group size: ${maxGroupSize})...`, 'loading');
+
+        const result = exportProspectMailMerge(db, options);
+        const dateStr = new Date().toISOString().slice(0, 10);
+
+        // Download full CSV
+        const blob1 = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+        const url1 = URL.createObjectURL(blob1);
+        const link1 = document.createElement('a');
+        link1.href = url1;
+        link1.download = `prospect_mailmerge_${dateStr}.csv`;
+        document.body.appendChild(link1);
+        link1.click();
+        document.body.removeChild(link1);
+        URL.revokeObjectURL(url1);
+
+        // Small delay between downloads to ensure both trigger
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Download simplified CSV
+        const blob2 = new Blob([result.simpleCsv], { type: 'text/csv;charset=utf-8;' });
+        const url2 = URL.createObjectURL(blob2);
+        const link2 = document.createElement('a');
+        link2.href = url2;
+        link2.download = `prospect_mailmerge_simple_${dateStr}.csv`;
+        document.body.appendChild(link2);
+        link2.click();
+        document.body.removeChild(link2);
+        URL.revokeObjectURL(url2);
+
+        const statusMsg = `Prospect Mail Merge: ${result.stats.eligibleGroups} groups. ` +
+            `Full: ${result.stats.rowCount} rows. Simple: ${result.stats.simpleRowCount} rows. ` +
+            `Excluded: ${result.stats.excludedForSize} (size), ${result.stats.excludedForAddress} (address)`;
+
+        console.log(statusMsg);
+        console.log('Full stats:', result.stats);
+        showEntityGroupStatus(statusMsg, 'success');
+
+        return result.stats;
+
+    } catch (error) {
+        console.error('Prospect mail merge export error:', error);
+        showEntityGroupStatus(`Export error: ${error.message}`, 'error');
+    }
+}
+
+// Export for global access
+window.exportProspectMailMerge = exportProspectMailMerge;
+window.downloadProspectMailMerge = downloadProspectMailMerge;
+
+// =============================================================================
+// BLOOMERANG-ONLY ENTITY GROUPS MATCH CANDIDATES REPORT
+// =============================================================================
+
+/**
+ * Check if an entity group contains ONLY Bloomerang members (no VisionAppraisal members)
+ * @param {Object} group - EntityGroup object
+ * @returns {boolean} True if all members are from Bloomerang
+ */
+function isBloomerangOnlyGroup(group) {
+    if (!group.memberKeys || group.memberKeys.length === 0) {
+        return false;
+    }
+    // Check if ALL member keys start with 'bloomerang:'
+    return group.memberKeys.every(key => key.startsWith('bloomerang:'));
+}
+
+/**
+ * Find top N VisionAppraisal entities by name similarity score for a given Bloomerang entity.
+ * Uses universalCompareTo() to get the name component score.
+ * @param {Object} bloomerangEntity - The Bloomerang entity to find matches for
+ * @param {Object} visionAppraisalEntities - Object keyed by database key {key: entity, ...}
+ * @param {number} topN - Number of top matches to return (default: 5)
+ * @param {number} minScore - Minimum name similarity score threshold (default: 0.35)
+ * @returns {Array<{key: string, entity: Object, nameScore: number}>}
+ */
+function findTopVAMatchesByName(bloomerangEntity, visionAppraisalEntities, topN = 5, minScore = 0.35) {
+    const results = [];
+
+    for (const [vaKey, vaEntity] of Object.entries(visionAppraisalEntities)) {
+        try {
+            const comparison = universalCompareTo(bloomerangEntity, vaEntity);
+            const nameScore = comparison.details?.components?.name?.similarity || 0;
+
+            // Only include if above minimum threshold
+            if (nameScore >= minScore) {
+                results.push({
+                    key: vaKey,
+                    entity: vaEntity,
+                    nameScore: nameScore
+                });
+            }
+        } catch (e) {
+            // Skip entities that fail comparison
+        }
+    }
+
+    // Sort by nameScore descending
+    results.sort((a, b) => b.nameScore - a.nameScore);
+
+    return results.slice(0, topN);
+}
+
+/**
+ * Export Bloomerang-Only Match Candidates Report
+ *
+ * This report identifies entity groups that contain ONLY Bloomerang entities (no VisionAppraisal
+ * members), then for each group, finds the top VisionAppraisal entities with the highest name
+ * similarity scores across all members of that group.
+ *
+ * Output structure for each Bloomerang-only group:
+ * - Consensus row (first row of the set)
+ * - VA candidate rows sorted by name score (deduplicated across all members, min 35% threshold)
+ *
+ * @param {Object} groupDatabase - EntityGroupDatabase
+ * @param {Object} options - Export options
+ * @param {number} options.candidatesPerMember - Number of VA candidates per member (default: 5)
+ * @param {number} options.minNameScore - Minimum name similarity threshold (default: 0.35)
+ * @returns {Object} {csv, stats}
+ */
+function exportBloomerangOnlyMatchCandidates(groupDatabase, options = {}) {
+    const candidatesPerMember = options.candidatesPerMember || 5;
+    const minNameScore = options.minNameScore || 0.35;
+
+    const entityDb = window.unifiedEntityDatabase;
+    if (!entityDb || !entityDb.entities) {
+        throw new Error('Unified Entity Database not loaded');
+    }
+
+    // Get VisionAppraisal entities for comparison
+    const vaEntities = getEntitiesBySource('visionAppraisal');
+    const vaEntityCount = Object.keys(vaEntities).length;
+    console.log(`[BLOOMERANG CANDIDATES] Found ${vaEntityCount} VisionAppraisal entities for comparison`);
+
+    const allGroups = Object.values(groupDatabase.groups || {});
+
+    // Filter to Bloomerang-only groups
+    const bloomerangOnlyGroups = allGroups.filter(isBloomerangOnlyGroup);
+    console.log(`[BLOOMERANG CANDIDATES] Found ${bloomerangOnlyGroups.length} Bloomerang-only groups out of ${allGroups.length} total`);
+
+    // Sort by group index for consistent output
+    bloomerangOnlyGroups.sort((a, b) => a.index - b.index);
+
+    // Build CSV
+    const headerRow = CSV_HEADERS.map(h => csvEscape(h)).join(',');
+    const rows = [];
+    let totalCandidatesGenerated = 0;
+    let groupsProcessed = 0;
+
+    for (const group of bloomerangOnlyGroups) {
+        groupsProcessed++;
+
+        // Log progress every 10 groups
+        if (groupsProcessed % 10 === 0) {
+            console.log(`[BLOOMERANG CANDIDATES] Processing group ${groupsProcessed}/${bloomerangOnlyGroups.length}...`);
+        }
+
+        // 1. Consensus row (or founding member if no consensus)
+        const consensusEntity = group.consensusEntity || entityDb.entities[group.foundingMemberKey];
+        if (consensusEntity) {
+            rows.push(generateCSVRow('consensus', consensusEntity, '', group.index, true));
+        }
+
+        // 2. Collect candidates from all members, deduplicate, sort by score
+        const allCandidates = []; // {key, entity, nameScore}
+        const seenVAKeys = new Set();
+
+        for (const memberKey of group.memberKeys) {
+            const memberEntity = entityDb.entities[memberKey];
+            if (!memberEntity) continue;
+
+            // Find top N VisionAppraisal matches by name score for this member
+            const topMatches = findTopVAMatchesByName(memberEntity, vaEntities, candidatesPerMember, minNameScore);
+
+            // Add to collection, deduplicating by VA key
+            for (const match of topMatches) {
+                if (!seenVAKeys.has(match.key)) {
+                    seenVAKeys.add(match.key);
+                    allCandidates.push(match);
+                }
+            }
+        }
+
+        // Sort all candidates by nameScore descending
+        allCandidates.sort((a, b) => b.nameScore - a.nameScore);
+
+        // Generate candidate rows
+        for (const candidate of allCandidates) {
+            const row = generateCSVRow('candidate', candidate.entity, candidate.key, '', false);
+            // Override RowType to include score
+            row[0] = `candidate (name:${candidate.nameScore.toFixed(4)})`;
+            rows.push(row);
+            totalCandidatesGenerated++;
+        }
+    }
+
+    // Build CSV string
+    const dataRows = rows.map(row => row.map(v => csvEscape(v)).join(','));
+    const csv = [headerRow, ...dataRows].join('\n');
+
+    return {
+        csv,
+        stats: {
+            totalGroups: allGroups.length,
+            bloomerangOnlyGroups: bloomerangOnlyGroups.length,
+            visionAppraisalEntities: vaEntityCount,
+            candidatesPerMember,
+            minNameScore,
+            totalCandidatesGenerated,
+            rowCount: rows.length
+        }
+    };
+}
+
+/**
+ * Download Bloomerang-Only Match Candidates Report
+ * @param {Object} options - Export options
+ * @param {number} options.candidatesPerMember - Number of VA candidates per member (default: 5)
+ * @param {number} options.minNameScore - Minimum name similarity threshold (default: 0.35)
+ */
+async function downloadBloomerangOnlyMatchCandidates(options = {}) {
+    const db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+    if (!db) {
+        console.error('Please load an EntityGroup database first');
+        showEntityGroupStatus('Please load an EntityGroup database first', 'error');
+        return;
+    }
+
+    if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+        console.error('Please load the Unified Entity Database first');
+        showEntityGroupStatus('Please load the Unified Entity Database first', 'error');
+        return;
+    }
+
+    try {
+        const candidatesPerMember = options.candidatesPerMember || 5;
+        const minNameScore = options.minNameScore || 0.35;
+
+        console.log(`Generating Bloomerang-Only Match Candidates Report (${candidatesPerMember} candidates/member, min score: ${minNameScore})...`);
+        showEntityGroupStatus(`Generating Bloomerang-Only Match Candidates Report...`, 'loading');
+
+        const result = exportBloomerangOnlyMatchCandidates(db, options);
+        const dateStr = new Date().toISOString().slice(0, 10);
+
+        // Download CSV
+        const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `bloomerang_only_match_candidates_${dateStr}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        const statusMsg = `Bloomerang-Only Match Candidates: ${result.stats.bloomerangOnlyGroups} groups, ` +
+            `${result.stats.totalCandidatesGenerated} VA candidates generated, ` +
+            `${result.stats.rowCount} total rows`;
+
+        console.log(statusMsg);
+        console.log('Full stats:', result.stats);
+        showEntityGroupStatus(statusMsg, 'success');
+
+        return result.stats;
+
+    } catch (error) {
+        console.error('Bloomerang-only match candidates export error:', error);
+        showEntityGroupStatus(`Export error: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Run Bloomerang-Only Match Candidates Export - wrapper that loads databases if needed
+ * Called from console. Loads databases from Google Drive if not already loaded.
+ */
+async function runBloomerangOnlyMatchCandidatesExport(options = {}) {
+    try {
+        // Step 1: Check if unified entity database is loaded, load if not
+        if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+            showEntityGroupStatus('Loading Unified Entity Database...', 'loading');
+            await loadUnifiedDatabaseForEntityGroups();
+
+            if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+                showEntityGroupStatus('Failed to load Unified Entity Database', 'error');
+                return;
+            }
+        }
+
+        // Step 2: Check if EntityGroup database is loaded, load if not
+        let db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+
+        if (!db) {
+            showEntityGroupStatus('Loading EntityGroup database...', 'loading');
+            await loadEntityGroupDatabase();
+
+            db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+            if (!db) {
+                showEntityGroupStatus('Failed to load EntityGroup database', 'error');
+                return;
+            }
+        }
+
+        // Step 3: Run the export
+        await downloadBloomerangOnlyMatchCandidates(options);
+
+    } catch (error) {
+        console.error('Bloomerang-only match candidates error:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Export for global access
+window.exportBloomerangOnlyMatchCandidates = exportBloomerangOnlyMatchCandidates;
+window.downloadBloomerangOnlyMatchCandidates = downloadBloomerangOnlyMatchCandidates;
+window.runBloomerangOnlyMatchCandidatesExport = runBloomerangOnlyMatchCandidatesExport;
+
+/**
+ * Run Prospect Mail Merge Export - wrapper that loads EntityGroup database if needed
+ * Called from UI button. Loads database from Google Drive if not already loaded,
+ * then runs downloadProspectMailMerge.
+ */
+async function runProspectMailMergeExport() {
+    const btn = document.getElementById('prospectMailMergeBtn');
+    const originalText = btn ? btn.innerHTML : '';
+
+    try {
+        // Step 1: Check if unified entity database is loaded, load if not
+        if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+            if (btn) btn.innerHTML = 'Loading Unified DB...';
+            showEntityGroupStatus('Loading Unified Entity Database...', 'loading');
+
+            // Use the existing function to load unified database
+            await loadUnifiedDatabaseForEntityGroups();
+
+            // Check if load succeeded
+            if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+                showEntityGroupStatus('Failed to load Unified Entity Database', 'error');
+                if (btn) btn.innerHTML = originalText;
+                return;
+            }
+        }
+
+        // Step 2: Check if EntityGroup database is loaded, load if not
+        let db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+
+        if (!db) {
+            if (btn) btn.innerHTML = 'Loading EntityGroup DB...';
+            showEntityGroupStatus('Loading EntityGroup database...', 'loading');
+
+            await loadEntityGroupDatabase();
+
+            // Check if load succeeded
+            db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+            if (!db) {
+                showEntityGroupStatus('Failed to load EntityGroup database', 'error');
+                if (btn) btn.innerHTML = originalText;
+                return;
+            }
+        }
+
+        // Step 3: Run the mail merge export
+        if (btn) btn.innerHTML = 'Generating...';
+        await downloadProspectMailMerge();
+
+    } catch (error) {
+        console.error('Prospect mail merge error:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    } finally {
+        if (btn) btn.innerHTML = originalText;
+    }
+}
+
+window.runProspectMailMergeExport = runProspectMailMergeExport;
 
 // =============================================================================
 // INITIALIZATION ON DOM READY

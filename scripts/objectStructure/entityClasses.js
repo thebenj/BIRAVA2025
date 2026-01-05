@@ -11,6 +11,131 @@
  * - Communications Hierarchy: Email > (BI PO Box OR Off-island primary) > Off-island only
  */
 
+// ============================================================================
+// COMBINED ADDRESS DETECTION AND SPLITTING
+// Handles VisionAppraisal addresses containing both PO Box and street address
+// ============================================================================
+
+const COMBINED_ADDRESS_PATTERNS = {
+    PO_BOX: [
+        /^P\.?\s*O\.?\s*BOX\s+[A-Z0-9]+/i,  // PO BOX 123, P.O. BOX 123
+        /^POST\s*OFFICE\s*BOX\s+[A-Z0-9]+/i, // POST OFFICE BOX 123
+        /^PO\s*BO\s*X\s*[A-Z0-9]+/i,        // PO BO X302 (typo)
+        /^BOX\s+[A-Z0-9]+/i                  // BOX 123
+    ],
+    STREET: /^\d+\s+[A-Z]/i  // Starts with number followed by letter
+};
+
+/**
+ * Clean VisionAppraisal tags from a string for pattern matching
+ */
+function cleanTagsForPatternMatching(str) {
+    if (!str) return '';
+    return str
+        .replace(/:\^#\^:/g, ', ')      // :^#^: → comma+space
+        .replace(/::#\^#::/g, ', ')     // ::#^#:: → comma+space
+        .trim();
+}
+
+/**
+ * Check if a line looks like a PO Box address
+ */
+function isPOBoxLine(line) {
+    const cleaned = cleanTagsForPatternMatching(line);
+    return COMBINED_ADDRESS_PATTERNS.PO_BOX.some(pattern => pattern.test(cleaned));
+}
+
+/**
+ * Check if a line looks like a street address (starts with number + letter)
+ */
+function isStreetAddressLine(line) {
+    const cleaned = cleanTagsForPatternMatching(line);
+    return COMBINED_ADDRESS_PATTERNS.STREET.test(cleaned);
+}
+
+/**
+ * Clean up empty segments after removing text from address
+ */
+function cleanupEmptySegments(str, delimiter) {
+    if (!str) return '';
+
+    let result = str;
+    const delimEscaped = delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const doubleDelimPattern = new RegExp(delimEscaped + '\\s*' + delimEscaped, 'g');
+
+    // Keep replacing until no more double delimiters
+    let previousResult;
+    do {
+        previousResult = result;
+        result = result.replace(doubleDelimPattern, delimiter);
+    } while (result !== previousResult);
+
+    // Remove leading and trailing delimiters
+    const leadingPattern = new RegExp('^\\s*' + delimEscaped + '\\s*');
+    const trailingPattern = new RegExp('\\s*' + delimEscaped + '\\s*$');
+    result = result.replace(leadingPattern, '').replace(trailingPattern, '').trim();
+
+    return result;
+}
+
+/**
+ * Analyze an address string to detect if it contains both PO Box and street address
+ * @param {string} rawAddress - Raw address with VisionAppraisal tags
+ * @returns {Object} Analysis result with shouldSplit flag and split addresses if applicable
+ */
+function analyzeCombinedAddress(rawAddress) {
+    const result = {
+        original: rawAddress,
+        shouldSplit: false,
+        poBoxLine: null,
+        streetLine: null,
+        splitAddresses: null
+    };
+
+    if (!rawAddress || typeof rawAddress !== 'string') {
+        return result;
+    }
+
+    // Split on VisionAppraisal tags to get lines
+    const lines = rawAddress
+        .split(/::#\^#::|:\^#\^:/)
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
+
+    // Analyze each line
+    for (const line of lines) {
+        if (isPOBoxLine(line)) result.poBoxLine = line;
+        if (isStreetAddressLine(line) && !isPOBoxLine(line)) result.streetLine = line;
+    }
+
+    // If both PO Box and street address found, build split versions
+    if (result.poBoxLine && result.streetLine) {
+        result.shouldSplit = true;
+
+        // VisionAppraisal delimiter patterns
+        const DELIMITERS = ['::#^#::', ':^#^:'];
+
+        // Version 1: Remove street address, keep PO Box + city/state/zip
+        let poBoxVersion = rawAddress.replace(result.streetLine, '');
+        for (const delim of DELIMITERS) {
+            poBoxVersion = cleanupEmptySegments(poBoxVersion, delim);
+        }
+
+        // Version 2: Remove PO Box, keep street + city/state/zip
+        let streetVersion = rawAddress.replace(result.poBoxLine, '');
+        for (const delim of DELIMITERS) {
+            streetVersion = cleanupEmptySegments(streetVersion, delim);
+        }
+
+        result.splitAddresses = {
+            poBoxAddress: poBoxVersion,
+            streetAddress: streetVersion
+        };
+    }
+
+    return result;
+}
+
 /**
  * Entity - Top level parent class
  * Base class for all entity types in the system
@@ -82,15 +207,40 @@ class Entity {
         }
 
         // Process ownerAddress parameter
+        // Track multiple owner address objects for combined address case
+        let ownerAddressObjects = [];
+
         if (ownerAddress !== null) {
             const ownerType = this._detectParameterType(ownerAddress);
 
             if (ownerType === 'text') {
-                // Case a) Text - pass through address parser
-                ownerAddressObject = this._processTextToAddressNew(ownerAddress, 'ownerAddress');
+                // Case a) Text - check for combined PO Box + street address first
+                const combinedAnalysis = analyzeCombinedAddress(ownerAddress);
+
+                if (combinedAnalysis.shouldSplit) {
+                    // Combined address detected - create two Address objects
+                    // PO Box is added FIRST (index 0), street address SECOND (index 1)
+                    const poBoxAddressObj = this._processTextToAddressNew(
+                        combinedAnalysis.splitAddresses.poBoxAddress,
+                        'ownerAddress'
+                    );
+                    const streetAddressObj = this._processTextToAddressNew(
+                        combinedAnalysis.splitAddresses.streetAddress,
+                        'ownerAddress'
+                    );
+
+                    // Order matters: PO Box first, street second
+                    if (poBoxAddressObj) ownerAddressObjects.push(poBoxAddressObj);
+                    if (streetAddressObj) ownerAddressObjects.push(streetAddressObj);
+                } else {
+                    // Normal single address - pass through address parser
+                    ownerAddressObject = this._processTextToAddressNew(ownerAddress, 'ownerAddress');
+                    if (ownerAddressObject) ownerAddressObjects.push(ownerAddressObject);
+                }
             } else if (ownerType === 'address') {
                 // Case b) Address object - direct use
                 ownerAddressObject = ownerAddress;
+                ownerAddressObjects.push(ownerAddressObject);
             } else if (ownerType === 'complexIdentifier') {
                 // Case c) Complex identifier - identification setup, no action yet
                 console.log('Complex identifier detected for ownerAddress - no processing implemented yet');
@@ -101,7 +251,7 @@ class Entity {
         }
 
         // If we have valid Address objects, instantiate ContactInfo and assign them
-        if (propertyAddressObject || ownerAddressObject) {
+        if (propertyAddressObject || ownerAddressObjects.length > 0) {
             if (!this.contactInfo) {
                 this.contactInfo = new ContactInfo();
             }
@@ -110,8 +260,9 @@ class Entity {
                 this.contactInfo.setPrimaryAddress(propertyAddressObject);
             }
 
-            if (ownerAddressObject) {
-                this.contactInfo.addSecondaryAddress(ownerAddressObject);
+            // Add all owner address objects as secondary addresses
+            for (const addrObj of ownerAddressObjects) {
+                this.contactInfo.addSecondaryAddress(addrObj);
             }
         }
     }

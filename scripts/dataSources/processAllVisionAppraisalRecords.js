@@ -35,7 +35,6 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
             await new Promise((resolve, reject) => {
                 const existing = document.querySelector(`script[src="${script}"]`);
                 if (existing) {
-                    console.log(`  ↩️  ${script} (already loaded)`);
                     resolve();
                     return;
                 }
@@ -43,10 +42,12 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
                 const s = document.createElement('script');
                 s.src = script;
                 s.onload = resolve;
-                s.onerror = reject;
+                s.onerror = () => {
+                    console.error(`  ❌ Failed to load: ${script}`);
+                    reject(new Error(`Failed to load script: ${script}`));
+                };
                 document.head.appendChild(s);
             });
-            console.log(`  ✅ ${script}`);
         }
 
         // Wait for dependencies to settle

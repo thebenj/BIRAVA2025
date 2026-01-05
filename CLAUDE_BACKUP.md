@@ -5,8 +5,8 @@
 read_order: [ROOT_CAUSE_DEBUGGING_RULE, COMPLETION_VERIFICATION_RULE, CURRENT_WORK_CONTEXT, TERMINOLOGY, MANDATORY_COMPARETO_ARCHITECTURE]
 focus_section: ROOT_CAUSE_DEBUGGING_RULE_then_COMPLETION_VERIFICATION_RULE_then_CURRENT_WORK_CONTEXT
 processing_directive: ignore_visual_formatting_process_semantic_content_only
-last_updated: 2025-12-24
-version: 85.0_REGRESSION_TEST_IN_PROGRESS
+last_updated: 2026-01-04
+version: 101.0_SESSION25_DUAL_CSV_EXPORT
 ```
 
 ---
@@ -85,154 +85,219 @@ CLAUDE_MD_UPDATE_PROTECTION:
 
 ## CURRENT_WORK_CONTEXT
 ```yaml
-# December 27, 2025 - Session 20
+# January 4, 2026 - Session 25
 
-immediate_status: ALL_CLEANUP_PHASES_COMPLETE
-current_focus: Code cleanup plan fully executed
-next_action: User to decide next priorities
+immediate_status: SESSION25_DUAL_CSV_EXPORT_COMPLETE
+current_focus: Mail merge finalization - dual CSV export with simplified format
+next_action: User verification of simplified CSV format
 
-# Session 20 Summary
-session20_work:
-  task_2.3_entity_label_number:
-    action: Removed entity.label and entity.number from Entity constructor
-    file_modified: scripts/objectStructure/entityClasses.js
-    lines_removed: 3 (comment + two property initializations)
-    rationale: |
-      - Properties were never part of documented architecture
-      - Only initialized to null, never populated with data
-      - Only consumer was archived visionAppraisalBrowser.js
-      - No replacement needed - they served no functional purpose
+# Session 25 - Mail Merge Enhancements (USER_VERIFIED_WORKING)
+session25_work:
+  project: Prospect Mail Merge Finalization
+  status: USER_VERIFIED_WORKING
+
+  enhancement_3_dual_csv_export:
+    problem: |
+      User needed a simplified CSV format for actual mail merge address labels,
+      with just the essential columns (Name, Address1, Address2, City, State, ZIP).
+    solution: |
+      Modified exportProspectMailMerge() to generate TWO CSVs in a single pass:
+      1. Full 62-column format (prospect_mailmerge_YYYY-MM-DD.csv)
+      2. Simplified 6-column format (prospect_mailmerge_simple_YYYY-MM-DD.csv)
+      downloadProspectMailMerge() now downloads both files.
+    files_modified:
+      - scripts/entityGroupBrowser.js:
+        - Added SIMPLE_MAIL_MERGE_HEADERS constant
+        - Added generateSimpleMailMergeRow() function
+        - Modified exportProspectMailMerge() to build both CSVs
+        - Modified downloadProspectMailMerge() to download both files
+    simplified_csv_columns: [Name, Address1, Address2, City, State, ZIP]
+    fixes_applied:
+      - PO BOX addresses now go in Address1 (not Address2)
+      - 4-digit ZIP codes padded with leading zero (e.g., 2807 → 02807)
+    note: CSV leading zeros require user to import ZIP column as text in Excel/Sheets
     status: USER_VERIFIED_WORKING
 
-  phase4_browser_consolidation:
-    task_4.1_entityBrowser: Archived to archive/browser_2025/ - USER_VERIFIED_WORKING
-    task_4.1_dataSourceManager: Archived to archive/browser_2025/ (unused abstraction layer) - USER_VERIFIED_WORKING
-    task_4.2_visionAppraisalBrowser: Archived to archive/browser_2025/ - USER_VERIFIED_WORKING
-    task_4.3_extractNameFromEntity: Already archived with nameAnalysisForMatching.js in Phase 3
+  enhancement_1_consensus_collapse_fallback:
+    problem: |
+      Some entity groups weren't collapsing in mail merge even when they should.
+      Root cause: address parsing errors (e.g., "VERO BEACH" parsed as streetName="VERO", city="Bch")
+      caused contactInfo comparison to fail threshold even for identical addresses.
+    solution: |
+      Modified generateMailMergeGroupRows() to use CONSENSUS_COLLAPSE as final fallback.
+      Multi-member groups that don't pass isGroupContactInfoConnected() now collapse to
+      single consensus row instead of outputting multiple rows.
+    file_modified: scripts/entityGroupBrowser.js (generateMailMergeGroupRows function, lines 3122-3137)
+    behavior:
+      - Groups passing contactInfo threshold: Key = "CONSOLIDATED_GROUP"
+      - Groups NOT passing threshold: Key = "CONSENSUS_COLLAPSE" (new fallback)
+      - Both use consensus entity for address, getCollapsedRowNameEntity() for name
+    status: USER_VERIFIED_WORKING
 
-  archive_browser_2025_contents:
-    - entityBrowser.js: Legacy Bloomerang-only browser, superseded by unifiedEntityBrowser.js
-    - dataSourceManager.js: Unused abstraction layer, never integrated into production workflow
-    - visionAppraisalBrowser.js: Legacy VA browser, confirmed dead code via diagnostic testing
+  enhancement_2_one_click_mail_merge_button:
+    problem: |
+      Running mail merge export required manually loading both Unified Entity Database
+      and EntityGroup Database first. User wanted one-click operation.
+    solution: |
+      Added "Prospect Mail Merge" button to CSV Reports panel in index.html.
+      Created runProspectMailMergeExport() wrapper function that:
+      1. Checks if Unified Entity Database loaded, loads if not
+      2. Checks if EntityGroup Database loaded, loads if not
+      3. Runs downloadProspectMailMerge()
+      Button shows progress: "Loading Unified DB..." → "Loading EntityGroup DB..." → "Generating..."
+    files_modified:
+      - index.html: Added button in CSV Reports panel (lines 1131-1139)
+      - scripts/entityGroupBrowser.js: Added runProspectMailMergeExport() function (lines 3315-3364)
+    status: USER_VERIFIED_WORKING
 
-# Session 19 Summary (Dec 26)
-session19_work:
-  phase2_session19_additions:
-    task_2.1_sampleDataLoader: Archived to archive/deprecated_2025/ - USER_VERIFIED_WORKING
-    task_2.2_deprecated_lookups: Deleted getEntityBySourceTypeAndValue and getEntityBySourceAndLocationId - USER_VERIFIED_WORKING
+  cleanup_diagnostic_logging_removed:
+    description: Removed all [MAIL MERGE DIAG] console.log statements
+    files_cleaned:
+      - scripts/entityGroupBrowser.js: getFirstSecondaryAddress(), loadMailMergeExcludedAddresses(), exportProspectMailMerge(), runProspectMailMergeExport()
+    status: COMPLETE
 
-  phase3_completed:
-    task_3.1_legacySerialize: Removed 25+ methods from 4 files (householdInformation.js, contactInfo.js, entityClasses.js, aliasClasses.js) - USER_VERIFIED_WORKING
-    task_3.2_legacyInfo: KEEP - speculative structure for future legacy source data (user decision)
-    task_3.3_nameAnalysisForMatching: Archived to archive/deprecated_2025/ - USER_VERIFIED_WORKING
+# Session 24 - Multiple Enhancements (ALL COMPLETE)
+session24_work:
+  project: Consensus secondary address sorting + Combined address splitting
+  status: USER_VERIFIED_WORKING
 
-# Key Generation Architecture (RESOLVED Dec 26)
-key_generation_resolution:
-  status: RESOLVED_BY_USER_DECISION
-  decision: Option 3 - Keep intentional separation, no changes needed
-  rationale: |
-    Two key formats serve different purposes:
-    - generateEntityKey() → internal/transient keys for intermediate processing
-    - generateUnifiedEntityKey() → final unified keys for production database
-    Production workflow always regenerates unified keys, so no functional risk exists.
+  enhancement_1_consensus_secondary_address_sorting:
+    problem: |
+      Consensus entity secondary addresses had no ordering - they appeared in
+      arbitrary order based on which member was processed first.
+    solution: |
+      Modified _deduplicateAddresses() in entityGroup.js to sort by "popularity".
+      After deduplication, each unique address is scored by summing its similarity
+      to ALL original addresses (including duplicates). Addresses appearing in
+      more members' records score higher and are sorted first.
+    file_modified: scripts/objectStructure/entityGroup.js (_deduplicateAddresses method, lines 354-430)
+    logic: |
+      1. Build deduplicated list (unchanged)
+      2. Score each unique address: sum of compareTo() scores vs ALL original addresses
+      3. Sort by score descending (most popular first)
+    example: |
+      If 3 members have "PO BOX 123" and 1 member has "45 MAIN ST":
+      - "PO BOX 123" scores ~3.0 (high similarity to 3 addresses)
+      - "45 MAIN ST" scores ~1.0 (high similarity to 1 address)
+      Result: ["PO BOX 123", "45 MAIN ST"]
+    requires_rebuild: EntityGroup database only (not Unified Entity Database)
+    status: USER_VERIFIED_WORKING
 
-# Session 18 Summary
-session18_work:
-  serialize_bug_fixed:
-    symptom: "Save as New Files" threw "groupDb.serialize is not a function"
-    root_cause: |
-      ContactInfo.deserializeBase() hardcoded Address class for primaryAddress,
-      but serialized data has type 'Aliased' (wrapper class). Address.deserialize()
-      threw "Invalid Address serialization format" because data.type !== 'Address'.
-    fix_applied:
-      - Added Info.deserializeByType() in contactInfo.js - dynamic dispatch using CLASS_REGISTRY
-      - Updated primaryAddress/secondaryAddress deserialization to use deserializeByType()
-      - Updated loadEntityGroupDatabase() to deserialize JSON into EntityGroupDatabase instance
-    files_modified: [scripts/objectStructure/contactInfo.js, scripts/entityGroupBrowser.js]
-    status: USER_TESTED_WORKING
+  enhancement_2_combined_address_splitting:
+    problem: |
+      Some VisionAppraisal owner addresses contain both a PO Box and a street address
+      in a single field, e.g.: "PO BOX 735::#^#::247 MILL POND LANE::#^#::BLOCK ISLAND:^#^: RI 02807"
+      The address parser cannot handle this - it needs TWO separate address strings.
+    solution: |
+      Integrated detection and splitting directly into Entity._processAddressParameters().
+      When ownerAddress text is detected as combined (has both PO Box and street):
+      1. Split into two versions (PO Box + city/state/zip, street + city/state/zip)
+      2. Parse each through _processTextToAddressNew()
+      3. Add BOTH as secondary addresses (PO Box first at index 0, street at index 1)
+    file_modified: scripts/objectStructure/entityClasses.js
+    code_added:
+      - Helper functions at top of file (lines 14-137): analyzeCombinedAddress(), isPOBoxLine(), isStreetAddressLine(), cleanupEmptySegments()
+      - Modified _processAddressParameters() (lines 209-273): detects combined addresses and creates two Address objects
+    diagnostic_script: scripts/diagnostics/combinedAddressDiagnostic.js (v4, used for validation)
+    validation_results:
+      total_records: 2319
+      combined_addresses_detected: 36
+      parse_success_rate: 100%
+      verified_entity: Fire #841 now has 2 secondary addresses (PO Box first, street second)
+    requires_rebuild: Unified Entity Database (affects Entity construction)
+    status: USER_VERIFIED_WORKING
 
-  baseline_regression_test: ALL_12_TESTS_PASSED
+# Session 23 Summary - Address Comparison Fixes (VERIFIED WORKING)
+session23_work:
+  project: Fix secondary address comparison for Mail Merge
+  documentation: reference_session23_regexFix.md (detailed change log created)
+  status: USER_VERIFIED_WORKING
 
-  phase1_file_cleanup:
-    task_1.1_claude_backups: COMPLETE (19 files deleted, kept CLAUDE.md and CLAUDE_BACKUP.md)
-    task_1.2_obsolete_folder: COMPLETE (archived to archive/obsolete_2024/ with README)
-    task_1.3_serverW_stub: COMPLETE (deleted)
-    task_1.4_test_files: COMPLETE (7 files moved to scripts/testing/)
-    task_1.5_documentation: COMPLETE (consolidated to reference_systemDocumentation.md, 49 files archived to archive/reference_docs_2025/)
-    task_1.6_integration_folder: COMPLETE (6 files archived to archive/integration_2025/, 4 script tags removed from index.html, folder deleted)
-    post_phase_regression: USER_VERIFIED_WORKING
+  fix_1_regex_tag_cleaning:
+    problem: |
+      VisionAppraisal tag `:^#^:` was not being replaced with comma.
+      Regex /:^#^:/g didn't work because ^ is a regex metacharacter.
+      The `::#^#::` regex was correctly escaped, but `:^#^:` was not.
+    symptom: |
+      Secondary addresses like "WASHINGTON DEPOT:^#^: CT 06794" remained unparsed.
+      City/state components were undefined, streetName contained garbage.
+    fix: Changed /:^#^:/g to /:\^#\^:/g (escaped carets)
+    files_modified:
+      - scripts/address/addressProcessing.js line 57
+      - scripts/nameMatching/namePatternAnalyzer.js lines 103-104
+    verified_with_diagnostic: Tags now correctly replaced with commas
+    affects: Unified Entity Database creation (must rebuild)
+    status: USER_VERIFIED_WORKING
 
-  documentation_consolidation:
-    new_file: reference_systemDocumentation.md
-    content: 8-section comprehensive guide (927 lines)
-    sections: [Project Overview, Architecture, Core Algorithms, Data Specs, Production Ops, Dev Principles, Apps Script, Critical Files]
-    archived: 49 reference files to archive/reference_docs_2025/
+  fix_2_pobox_error_report:
+    problem: |
+      When two PO Box addresses have identical zip but both have undefined secUnitNum,
+      comparison returns 0 silently. This is a data quality issue.
+    fix: |
+      Added console.error logging in comparePOBoxAddresses() when this condition occurs.
+      Reports both address primaryAlias.term values and explains the issue.
+    file_modified: scripts/utils.js (comparePOBoxAddresses function)
+    affects: Diagnostic visibility only, no behavioral change
+    status: USER_VERIFIED_WORKING
 
-  integration_folder_cleanup:
-    archived_files: [matchingEngine.js, contactDiscovery.js, nameAnalysis.js, testPlugin.js, dualSourceEntityCapacityAssessment.js, visionAppraisalFieldAudit.js]
-    reason: Early-stage tools superseded by current entityGroupBuilder/universalEntityMatcher architecture
-    index_html_updated: Removed 4 script tags
+  fix_3_isPOBoxAddress_false_positives:
+    problem: |
+      isPOBoxAddress() used .includes('PO') which matched "POND", "POOL", "PORT", etc.
+      Addresses like "SANDS POND ROAD" were incorrectly flagged as PO Box addresses.
+    fix: |
+      Rewrote checkForPOBox() helper with precise regex patterns:
+      - /P\.?O\.?[\sB]/ - matches PO, P.O., P.O, PO. followed by space or B
+      - /[O\.\s]BOX/ - matches BOX preceded by O, period, or space
+      - /POST\s?OFFICE/ - matches POST OFFICE with or without space
+      Now only collapses multiple spaces to single space, doesn't strip periods.
+    file_modified: scripts/utils.js (isPOBoxAddress function, lines 708-735)
+    affects: EntityGroup building (comparison logic), NOT unified database creation
+    status: USER_VERIFIED_WORKING
 
-  phase2_completed:
-    task_2.1_readBloomerang: sampleDataLoader.js archived to archive/deprecated_2025/ - USER_VERIFIED_WORKING
-    task_2.2_deprecated_lookups: getEntityBySourceTypeAndValue and getEntityBySourceAndLocationId deleted - USER_VERIFIED_WORKING
-    task_2.3_entity_label_number: Deferred to Phase 4 (used in legacy visionAppraisalBrowser.js)
-    task_2.4_key_generation: RESOLVED - keep intentional separation (user decision)
+  fix_4_mail_merge_pobox_fallback:
+    problem: |
+      When PO Box addresses have badly parsed components (secUnitNum is null for both),
+      Address.compareTo() returns 0 even for identical addresses.
+      This prevents mail merge groups from collapsing when they should.
+    fix: |
+      Added fallback in isGroupContactInfoConnected() (MAIL MERGE ONLY, not entity group building).
+      Conditions for fallback:
+        1. contactInfoScore doesn't pass threshold
+        2. BOTH entities have PO Box secondary addresses (via isPOBoxAddress())
+        3. BOTH have null/undefined secUnitNum
+      When all conditions met: compare primaryAlias.term strings with Levenshtein.
+      If similarity > trueMatch.overallAlone (0.905), consider it a match.
+    file_modified: scripts/entityGroupBrowser.js (isGroupContactInfoConnected function, lines 2980-3007)
+    affects: ONLY mail merge group collapsing, NOT entity group building
+    critical_note: |
+      INITIAL IMPLEMENTATION WAS WRONG - fallback was placed in addressWeightedComparison()
+      which affected ALL comparisons including entity group building. This caused massive
+      false positive matching. Correctly reimplemented in mail merge code only.
+    status: USER_VERIFIED_WORKING
 
-# Session 17 Summary (Dec 24)
-session17_work:
-  baseline_regression_test:
-    test_script_created: reference_baselineRegressionTestScript.md
-    quick_tests_1_to_3: ALL_PASSED
-    standard_tests_4_to_7: ALL_PASSED
-    full_test_8: PASSED (unified database save/load with test file)
-    full_test_9: BLOCKED_BY_BUG (fixed in Session 18)
-    full_tests_10_to_12: PENDING
+  diagnostic_logging_removed: true
 
-  baseline_values_recorded:
-    unified_entity_count: 4099
-    entitygroup_count_full: 1972
-    force_match_rules: 5
-    force_exclude_rules: 53
-    mutual_exclusion_sets: 2
+  rebuild_completed:
+    unified_entity_database: Rebuilt with regex fix
+    entitygroup_database: Rebuilt with isPOBoxAddress fix
 
-  sample_size_feature_added:
-    purpose: Enable faster testing (200 sample = ~2 min vs 25 min full build)
-    files_modified: [index.html, scripts/entityGroupBrowser.js]
-    status: USER_TESTED_WORKING
+# Session 22 Summary (earlier Jan 4, 2026)
+session22_work:
+  project: Prospect Mail Merge Spreadsheet
+  blocking_issue_discovered: Address.compareTo() returning 0 for identical secondary addresses
+  root_cause_identified: Regex bug in VisionAppraisalTagCleaner (Session 23 fixed this)
+  code_written:
+    - isGroupContactInfoConnected(): Flood-fill connectivity check
+    - getCollapsedRowNameEntity(): Name selection logic for consolidated rows
+    - extractSecAddr1Components(): Extract secondary address components for CSV
+  csv_expanded: 54 to 62 columns (SecAddr1 now 9 component columns)
 
-  production_file_ids:
-    unified_database: "1Z2V4Pi8KoxUR9B47KffEQI6gCs7rOS2Y"
-    entitygroup_database: "120z4Q_JVWjSij2BOyv93s_XnJ-SLqR1N"
-    entitygroup_reference: "10LPpCPBWkc8ZQDqCake-0QenVWjCRpdd"
-
-  test_file_ids:
-    unified_database_test: "1a1pTRw7AXK_QPU26AsGPcb3UG2BskP8c"
-
-# Session 16 Summary (earlier Dec 24)
-session16_work:
-  phase0_tasks_completed: [0.1, 0.2, 0.3, 0.4, 0.5]
-  browser_ui_reorganization: USER_TESTED_WORKING
-  reference_productionProcess_updated: Phase A/B structure documented
-
-# Session 15 Summary (Dec 23)
-session15_work:
-  git_milestone_created:
-    tag: v1.0.0-stable-dec-23-2025
-    purpose: Safe rollback point before code cleanup
-  cleanup_plan_created: reference_codeCleanupPlan.md
-
-# Resolved Features
-resolved_features:
-  step9_household_pulling: RESOLVED
-  phase_order_swap: RESOLVED (VA phases 1-3, Bloomerang phases 4-6)
-
-# Overall System Status
-all_foundational_layers: USER_VERIFIED_WORKING
-entitygroup_system: USER_VERIFIED_WORKING
-match_override_system: USER_VERIFIED_WORKING (all phases + MUTUAL rows)
-keyed_database_migration: USER_VERIFIED_WORKING
-comparison_architecture: USER_VERIFIED_WORKING
+# Session 21 Summary (December 28, 2025)
+session21_work:
+  project: Prospect Mail Merge Spreadsheet
+  challenge_1_exclusions: USER_VERIFIED_WORKING
+  challenge_2_row_source: USER_VERIFIED_WORKING
+  functions_created: [downloadProspectMailMerge, exportProspectMailMerge, generateMailMergeGroupRows, loadMailMergeExcludedAddresses, getFirstSecondaryAddress, isAddressExcluded, getFoundingMemberType]
 
 # For Historic Session Details
 see_reference: reference_sessionHistory.md
@@ -277,20 +342,21 @@ MATCH_OVERRIDE_SYSTEM:
   google_sheets:
     FORCE_MATCH_SHEET_ID: '1WWq8rgVyIKgf3qhVpl5mBiVQllljum0JVm2e_h-WZo8'
     FORCE_EXCLUDE_SHEET_ID: '1nZIqcBa3LW1DcUKXVr1jNCGsZqq6JLTaxJSpXSZyulk'
-  row_formats:
-    regular: "RuleID | Key1 | Key2 | OnConflict | Reason | Status"
-    mutual: "RuleID | MUTUAL | key1::^::key2::^::key3 | (ignored) | (ignored) | Status"
-    one_to_many: "RuleID | Key1 | keyA::^::keyB::^::keyC | OnConflict | Reason | Status"
-  ui_integration: Checkbox "Load override rules" next to Build New button
-  spec_files: [reference_matchOverrideSystem.md, reference_matchOverrideImplementationPlan.md]
 
-HOUSEHOLD_CROSS_REFERENCES:
-  description: Links between household members using database keys
-  properties:
-    parentKey: Database key of the parent AggregateHousehold entity
-    siblingKeys: Array of database keys for other individuals in same household
-    entityGroupIndex: Index of EntityGroup (populated during group construction)
-  key_principle: NEVER generate keys twice - set cross-references AFTER database is built using actual existing keys
+MATCH_CRITERIA_THRESHOLDS:
+  description: Thresholds used for entity matching decisions
+  location: scripts/unifiedEntityBrowser.js MATCH_CRITERIA object
+  trueMatch:
+    overallAndName: { overall: 0.80, name: 0.83 }
+    contactInfoAlone: 0.87
+    overallAlone: 0.905
+    nameAlone: 0.875
+  nearMatch:
+    overallAndName: { overall: 0.77, name: 0.80 }
+    contactInfoAlone: 0.85
+    overallAlone: 0.875
+    nameAlone: 0.845
+  usage_rule: Always reference window.MATCH_CRITERIA, never hardcode thresholds
 ```
 
 ---
@@ -311,6 +377,13 @@ MULTIPLE_COMPARISON_ENTRY_POINTS:
 CALCULATOR_REGISTRY:
   location: scripts/utils.js COMPARISON_CALCULATOR_REGISTRY
   calculators: [defaultWeightedComparison, addressWeightedComparison, contactInfoWeightedComparison, entityWeightedComparison]
+
+ADDRESS_COMPARISON_FALLBACK:
+  new_in_session_23: |
+    addressWeightedComparison() now has primaryAlias.term fallback at start.
+    If both addresses have primaryAlias.term with Levenshtein similarity > 0.905,
+    returns that score without doing component comparison.
+    Handles cases where identical addresses have badly parsed components.
 
 SAME_LOCATION_HANDLING:
   trigger: areSameLocationEntities(entity1, entity2) returns true
@@ -349,6 +422,8 @@ CRITICAL_LESSONS:
   - function_return_values: Always assign return values (e.g., window.unifiedEntityDatabase = buildUnifiedEntityDatabase())
   - saved_vs_memory: Always rebuild EntityGroup database to test code changes; loaded files reflect OLD code
   - database_key_generation: NEVER generate keys twice - use keys that already exist in database
+  - regex_metacharacters: In JavaScript regex, ^ is a metacharacter - escape as \^ for literal match
+  - NO_CACHE_BUST_QUERYSTRINGS: NEVER add ?timestamp or ?Date.now() to script URLs - server checks last 3 chars for extension, querystrings break this. Use hard refresh (Ctrl+Shift+R) instead.
 ```
 
 ---
@@ -357,6 +432,7 @@ CRITICAL_LESSONS:
 ```yaml
 PRIMARY_DOCUMENTATION:
   reference_systemDocumentation.md: Consolidated system guide (8 sections, 927 lines)
+  reference_session23_regexFix.md: Detailed documentation of Session 23 changes
   contents: [Architecture, Algorithms, Data Specs, Production Ops, Dev Principles, Apps Script, Critical Files]
   READ_WHEN: Need any system documentation - this is the single authoritative source
 
@@ -367,7 +443,7 @@ ARCHIVED_DOCUMENTATION:
 
 CODE_CLEANUP:
   archive/reference_docs_2025/reference_codeCleanupPlan.md: 5-phase cleanup plan
-  phases: [Phase 0 COMPLETE, Phase 1 COMPLETE, Phase 2 Deprecated Functions, Phase 3 Orphaned Code, Phase 4 Browser Consolidation]
+  phases: [Phase 0 COMPLETE, Phase 1 COMPLETE, Phase 2 COMPLETE, Phase 3 COMPLETE, Phase 4 COMPLETE]
   rollback_tag: v1.0.0-stable-dec-23-2025
 
 CORE_CODE_LOCATIONS:
@@ -376,9 +452,8 @@ CORE_CODE_LOCATIONS:
   browsers: scripts/ (entityGroupBrowser.js, unifiedEntityBrowser.js, entityRenderer.js)
   serialization: scripts/utils/classSerializationUtils.js
   export: scripts/export/lightweightExporter.js
-
-GOOGLE_APPS_SCRIPT:
-  googleAppsScripts/: Folder containing Apps Script code for Sheets integration
+  address_processing: scripts/address/addressProcessing.js
+  comparison_calculators: scripts/utils.js (addressWeightedComparison, contactInfoWeightedComparison, etc.)
 ```
 
 ---
@@ -386,49 +461,24 @@ GOOGLE_APPS_SCRIPT:
 ## CURRENT_STATUS_TRACKER
 ```yaml
 current_work:
-  phase0_status: COMPLETE
-  phase1_status: COMPLETE (all 6 tasks done, post-phase regression passed)
-  phase2_status: COMPLETE (all 4 tasks done - 2.1 archived, 2.2 deleted, 2.3 removed, 2.4 resolved)
-  phase3_status: COMPLETE (3.1 legacySerialize removed, 3.2 legacyInfo KEEP, 3.3 nameAnalysis archived)
-  phase4_status: COMPLETE (all 3 browser files archived to archive/browser_2025/, USER_VERIFIED_WORKING)
-  ALL_PHASES: COMPLETE - Code cleanup plan fully executed
-  code_cleanup_plan: archive/reference_docs_2025/reference_codeCleanupPlan.md
+  ALL_CLEANUP_PHASES: COMPLETE
+  session25_enhancements: USER_VERIFIED_WORKING
 
 regression_test_status:
-  test_1_server_start: PASSED
-  test_2_ui_structure: PASSED
-  test_3_load_unified_db: PASSED (4099 entities)
-  test_4_entitygroup_build: PASSED (sample mode working)
-  test_5_unified_entity_browser: PASSED
-  test_6_entitygroup_browser: PASSED
-  test_7_match_override_verification: PASSED (5/53/2 rules)
-  test_8_unified_db_save_load: PASSED (using test file)
-  test_9_entitygroup_save_load: PASSED (bug fixed Dec 26)
-  test_10_csv_export: PASSED
-  test_11_lightweight_export: PASSED
-  test_12_assessment_report: PASSED
-  ALL_TESTS: PASSED (Dec 26, 2025)
+  ALL_12_TESTS: PASSED (Dec 26, 2025) - needs re-run after Session 23-25 changes
 
 verified_features:
-  browser_ui_reorganization: USER_TESTED_WORKING (Dec 24)
-  sample_size_feature: USER_TESTED_WORKING (Dec 24)
-  entitygroup_save_load_roundtrip: USER_TESTED_WORKING (Dec 26)
-  csv_export: USER_TESTED_WORKING (Dec 26)
-  lightweight_export: USER_TESTED_WORKING (Dec 26)
-  assessment_report: USER_TESTED_WORKING (Dec 26)
-  step9_household_pulling: RESOLVED
-  phase_order_swap: RESOLVED (VA phases 1-3, Bloomerang phases 4-6)
-  household_cross_reference_keys: RESOLVED (informally verified Dec 22)
-  match_override_system: ALL_PHASES_USER_VERIFIED_WORKING
-  mutual_rows_feature: USER_VERIFIED_WORKING
-  one_to_many_expansion: USER_VERIFIED_WORKING
-  lightweight_exporter_v2: USER_VERIFIED_WORKING
-  csv_currency_parsing: USER_VERIFIED_WORKING
-  same_location_fix: USER_VERIFIED_WORKING
   all_foundational_layers: USER_VERIFIED_WORKING
+  entitygroup_system: USER_VERIFIED_WORKING
+  match_override_system: USER_VERIFIED_WORKING
+  mail_merge_export: USER_VERIFIED_WORKING
+  one_click_mail_merge_button: USER_VERIFIED_WORKING
+  dual_csv_export: USER_VERIFIED_WORKING
 
-pending_execution:
-  - None - all cleanup tasks complete
+active_project:
+  name: Prospect Mail Merge Export
+  spec: reference_prospectMailMerge.md
+  status: USER_VERIFIED_WORKING - dual CSV export complete
 ```
 
 ---
@@ -455,17 +505,57 @@ MANDATORY_BACKUP:
 
 ## SESSION_METADATA
 ```yaml
-last_updated: December_27_2025
-document_version: 93.0_ALL_CLEANUP_COMPLETE
-previous_version: 92.0_PHASE4_COMPLETE
+last_updated: January_04_2026
+document_version: 100.0_SESSION25_MAIL_MERGE_ENHANCEMENTS
+previous_version: 99.0_SESSION24_INTEGRATION_COMPLETE
 
 version_notes: |
-  Version 93.0 - Session 20 Task 2.3 complete, ALL CLEANUP DONE:
-  - Removed entity.label and entity.number from Entity constructor (entityClasses.js)
-  - Properties were never populated, only consumer was archived visionAppraisalBrowser.js
-  - USER_VERIFIED_WORKING
-  - ALL code cleanup phases (0-4) and all tasks now complete
-  - Code cleanup plan from Dec 23 fully executed
+  Version 100.0 - Session 25 Mail Merge Enhancements:
+  1. CONSENSUS_COLLAPSE FALLBACK: Multi-member groups that fail contactInfo threshold
+     now collapse to single consensus row (Key="CONSENSUS_COLLAPSE") instead of
+     outputting multiple rows. This handles address parsing errors gracefully.
+  2. ONE-CLICK MAIL MERGE BUTTON: Added "Prospect Mail Merge" button to CSV Reports
+     panel that auto-loads both databases if needed, then exports.
+  3. DIAGNOSTIC CLEANUP: Removed all [MAIL MERGE DIAG] logging from entityGroupBrowser.js
+  - Files modified: index.html, scripts/entityGroupBrowser.js
+  - STATUS: USER_VERIFIED_WORKING
+
+  Version 99.0 - Session 24 Integration Complete:
+  - Integrated combined address splitting into entityClasses.js
+  - Added helper functions: analyzeCombinedAddress(), isPOBoxLine(), isStreetAddressLine(), cleanupEmptySegments()
+  - Modified Entity._processAddressParameters() to detect combined PO Box + street addresses
+  - When detected: creates TWO Address objects (PO Box first, street second)
+  - Verified: Fire #841 now has 2 secondary addresses with correct order
+  - STATUS: USER_VERIFIED_WORKING
+
+  Version 98.0 - Session 24 Diagnostic Validated:
+  - Fixed combinedAddressDiagnostic.js v3→v4: now handles BOTH ::#^#:: and :^#^: delimiters
+  - Ran full diagnostic: 36 combined addresses detected out of 2319 records
+  - Tested all 36 split addresses through processAddress(): 100% success rate
+  - Reviewed 39 "no clear pattern" cases: all are normal addresses, none need splitting
+
+  Version 97.0 - Session 24 Combined Address Diagnostic:
+  - Created scripts/diagnostics/combinedAddressDiagnostic.js (v3)
+  - Implements user's approach: work with original string, remove unwanted portion, cleanup delimiters
+
+  Version 96.0 - Session 23 Multiple Fixes:
+  1. REGEX FIX: VisionAppraisal tag `:^#^:` now correctly replaced (escaped carets in regex)
+     - addressProcessing.js line 57
+     - namePatternAnalyzer.js lines 103-104
+  2. primaryAlias.term FALLBACK: Address comparison now checks raw strings first
+     - If Levenshtein > 0.905, bypasses component comparison
+     - Handles identical addresses with badly parsed components
+  3. PO BOX ERROR REPORT: Logs when both addresses are PO Box with undefined secUnitNum
+  4. isPOBoxAddress FIX: No longer matches "POND", "POOL", etc.
+     - Precise regex patterns for PO, P.O., POST OFFICE, BOX
+
+  Documentation created: reference_session23_regexFix.md
+
+  REBUILD REQUIRED:
+  - Unified Entity Database (regex fix affects parsing)
+  - EntityGroup Database (comparison logic changed)
+
+  Diagnostic logging present in isGroupContactInfoConnected() - remove after testing
 
 working_directory: /home/robert-benjamin/RPBprojects/VisionAppraisal/BIRAVA2025
 platform: linux

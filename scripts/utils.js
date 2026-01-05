@@ -705,17 +705,33 @@ function defaultWeightedComparison(otherObject, detailed = false) {
 function isPOBoxAddress(addr) {
     if (!addr) return false;
 
-    // Helper to normalize and check a string value
+    // Helper to check a string value for PO Box indicators
     const checkForPOBox = (value) => {
         if (!value) return false;
         const term = value.term !== undefined ? value.term : value;
-        // Normalize: uppercase, remove periods and spaces
-        const normalized = String(term).toUpperCase().replace(/\./g, '').replace(/\s+/g, '');
-        // Check for various PO Box indicators
-        return normalized.includes('BOX') ||
-               normalized.includes('PO') ||
-               normalized.includes('POSTOFFICE') ||
-               normalized === 'POB';
+        // Normalize: uppercase, collapse multiple spaces to single space
+        const upperTerm = String(term).toUpperCase().replace(/\s+/g, ' ');
+
+        // Test for PO Box patterns:
+        // PO, P.O., P.O, PO. - each followed by space or B (with optional space before B)
+        // Covers: "PO BOX", "P.O. BOX", "P.O BOX", "PO. BOX", "POBOX", "P.O.BOX", etc.
+        if (/P\.?O\.?[\sB]/.test(upperTerm)) {
+            return true;
+        }
+
+        // Test for BOX preceded by O, space, or period
+        // Covers: "OBOX", "O BOX", ".BOX", ". BOX", " BOX"
+        // This catches cases like "P.O. BOX" and standalone "BOX 123" when preceded by valid char
+        if (/[O\.\s]BOX/.test(upperTerm)) {
+            return true;
+        }
+
+        // Test for POST OFFICE (with or without space)
+        if (/POST\s?OFFICE/.test(upperTerm)) {
+            return true;
+        }
+
+        return false;
     };
 
     // Check secUnitType
@@ -905,6 +921,19 @@ function comparePOBoxAddresses(addr1, addr2, detailed = false) {
 
             if (zipSim === 1) {
                 result = round10(secUnitSim);
+
+                // ERROR REPORT: Both addresses are PO Box with identical zip but both have undefined secUnitNum
+                // This indicates bad data - PO Box number was not parsed correctly
+                if (!addr1.secUnitNum && !addr2.secUnitNum) {
+                    const addr1Term = addr1.primaryAlias?.term || addr1.originalAddress?.term || 'unknown';
+                    const addr2Term = addr2.primaryAlias?.term || addr2.originalAddress?.term || 'unknown';
+                    console.error('[comparePOBoxAddresses] DATA QUALITY ERROR: Both addresses identified as PO Box but neither has parsed secUnitNum (PO Box number).');
+                    console.error('  Address 1:', addr1Term);
+                    console.error('  Address 2:', addr2Term);
+                    console.error('  This results in comparison score of 0 even if addresses are identical.');
+                    console.error('  Likely cause: PO Box number was absorbed into streetName during parsing.');
+                }
+
                 if (detailed) {
                     components = {
                         zipCode: { baseValue: addr1.zipCode || '', targetValue: addr2.zipCode || '', similarity: 1.0, weight: 0, contribution: 0, method: 'levenshtein', note: 'Perfect match - secUnitNum only' },

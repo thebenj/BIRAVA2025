@@ -352,9 +352,14 @@ class EntityGroup {
     }
 
     /**
-     * Deduplicate addresses by comparing them
-     * @param {Array<Address>} addresses - Array of Address objects
-     * @returns {Array<Address>} Deduplicated array
+     * Deduplicate addresses by comparing them, then sort by popularity.
+     *
+     * Popularity is determined by summing similarity scores when comparing
+     * each deduplicated address against ALL original addresses (with duplicates).
+     * Addresses appearing in more members' records will score higher.
+     *
+     * @param {Array<Address>} addresses - Array of Address objects (may contain duplicates)
+     * @returns {Array<Address>} Deduplicated array sorted by popularity (highest first)
      * @private
      */
     _deduplicateAddresses(addresses) {
@@ -364,6 +369,7 @@ class EntityGroup {
         const unique = [];
         const ADDRESS_SIMILARITY_THRESHOLD = 0.85; // Consider addresses similar if >85%
 
+        // Step 1: Build deduplicated list (same logic as before)
         for (const address of addresses) {
             if (!address) continue;
 
@@ -371,7 +377,6 @@ class EntityGroup {
 
             for (const existing of unique) {
                 try {
-                    // Compare addresses if both have compareTo
                     if (typeof address.compareTo === 'function') {
                         const similarity = address.compareTo(existing);
                         if (similarity >= ADDRESS_SIMILARITY_THRESHOLD) {
@@ -389,7 +394,39 @@ class EntityGroup {
             }
         }
 
-        return unique;
+        // Step 2: If only one unique address, no need to sort
+        if (unique.length <= 1) {
+            return unique;
+        }
+
+        // Step 3: Score each unique address by popularity
+        // Sum similarity scores against ALL original addresses (including duplicates)
+        const scored = unique.map(uniqueAddr => {
+            let totalScore = 0;
+
+            for (const origAddr of addresses) {
+                if (!origAddr) continue;
+
+                try {
+                    if (typeof uniqueAddr.compareTo === 'function') {
+                        const similarity = uniqueAddr.compareTo(origAddr);
+                        if (typeof similarity === 'number') {
+                            totalScore += similarity;
+                        }
+                    }
+                } catch (e) {
+                    // Skip comparison errors
+                }
+            }
+
+            return { address: uniqueAddr, score: totalScore };
+        });
+
+        // Step 4: Sort by score descending (most popular first)
+        scored.sort((a, b) => b.score - a.score);
+
+        // Step 5: Return just the addresses in sorted order
+        return scored.map(item => item.address);
     }
 
     /**

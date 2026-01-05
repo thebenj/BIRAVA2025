@@ -100,8 +100,8 @@ class NamePatternAnalyzer {
             if (ownerName && typeof ownerName === 'string' && ownerName.trim().length > 0) {
                 // Clean up any remaining VisionAppraisal tags
                 ownerName = ownerName
-                    .replace(/:^#^:/g, ', ')     // Line break markers to commas
-                    .replace(/::#^#::/g, ' ')   // Space markers to spaces
+                    .replace(/:\^#\^:/g, ', ')     // Line break markers to commas
+                    .replace(/::#\^#::/g, ' ')   // Space markers to spaces
                     .replace(/\s+/g, ' ')       // Multiple spaces to single
                     .trim();
 
