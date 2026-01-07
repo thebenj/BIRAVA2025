@@ -20,14 +20,52 @@
 // CONFIGURATION
 // =============================================================================
 
+// CONFIG object - populated from "parameters" sheet by loadConfigFromSheet()
 const CONFIG = {
-  // VisionAppraisal split into 2 parts (each under 50MB)
-  VISION_APPRAISAL_1_FILE_ID: '',  // FireNumber < 800 - SET AFTER RUNNING splitUnifiedDatabaseThreeWay()
-  VISION_APPRAISAL_2_FILE_ID: '',  // FireNumber >= 800 - SET AFTER RUNNING splitUnifiedDatabaseThreeWay()
-  BLOOMERANG_FILE_ID: '',          // SET AFTER RUNNING splitUnifiedDatabaseThreeWay()
-  ENTITYGROUP_DATABASE_FILE_ID: '11JE61z922ZyU_TGo9aBsTH-gQvzPhj4P',
-  ENTITYGROUP_REFERENCE_FILE_ID: '1D8xQN0oETUPq2Ygel8oh8-8r7EhS-6RH'
+  VISION_APPRAISAL_1_FILE_ID: '',   // B1: FireNumber < 800
+  VISION_APPRAISAL_2_FILE_ID: '',   // B2: FireNumber >= 800
+  BLOOMERANG_FILE_ID: '',           // B3: Bloomerang entities
+  ENTITYGROUP_DATABASE_FILE_ID: '', // B4: EntityGroup database
+  ENTITYGROUP_REFERENCE_FILE_ID: '' // B5: EntityGroup reference
 };
+
+/**
+ * Load CONFIG values from the "parameters" sheet.
+ * Reads file IDs from cells B1-B5.
+ * @returns {boolean} true if config loaded successfully
+ */
+function loadConfigFromSheet() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const paramSheet = ss.getSheetByName('parameters');
+
+    if (!paramSheet) {
+      Logger.log('WARNING: "parameters" sheet not found. CONFIG not loaded.');
+      return false;
+    }
+
+    // Read B1:B5 in one call for efficiency
+    const values = paramSheet.getRange('B1:B5').getValues();
+
+    CONFIG.VISION_APPRAISAL_1_FILE_ID = String(values[0][0] || '').trim();
+    CONFIG.VISION_APPRAISAL_2_FILE_ID = String(values[1][0] || '').trim();
+    CONFIG.BLOOMERANG_FILE_ID = String(values[2][0] || '').trim();
+    CONFIG.ENTITYGROUP_DATABASE_FILE_ID = String(values[3][0] || '').trim();
+    CONFIG.ENTITYGROUP_REFERENCE_FILE_ID = String(values[4][0] || '').trim();
+
+    Logger.log('CONFIG loaded from parameters sheet:');
+    Logger.log('  VA Part 1: ' + (CONFIG.VISION_APPRAISAL_1_FILE_ID ? 'Set' : 'Empty'));
+    Logger.log('  VA Part 2: ' + (CONFIG.VISION_APPRAISAL_2_FILE_ID ? 'Set' : 'Empty'));
+    Logger.log('  Bloomerang: ' + (CONFIG.BLOOMERANG_FILE_ID ? 'Set' : 'Empty'));
+    Logger.log('  EntityGroup DB: ' + (CONFIG.ENTITYGROUP_DATABASE_FILE_ID ? 'Set' : 'Empty'));
+    Logger.log('  EntityGroup Ref: ' + (CONFIG.ENTITYGROUP_REFERENCE_FILE_ID ? 'Set' : 'Empty'));
+
+    return true;
+  } catch (e) {
+    Logger.log('ERROR loading config from sheet: ' + e.message);
+    return false;
+  }
+}
 
 // =============================================================================
 // CSV COLUMN HEADERS (54 columns per spec)
@@ -69,6 +107,9 @@ let entityToGroupIndex = null;    // Lookup: entity key -> array of group indice
  */
 function initializeAllDatabases() {
   Logger.log('=== Initializing All Databases ===');
+
+  // Ensure CONFIG is loaded from parameters sheet
+  loadConfigFromSheet();
 
   // Load entity databases
   initializeEntityDatabase();
@@ -917,11 +958,16 @@ function clearOutput() {
 
 /**
  * Create custom menu when spreadsheet opens.
+ * Also loads CONFIG from "parameters" sheet.
  */
 function onOpen() {
+  // Load file IDs from parameters sheet
+  loadConfigFromSheet();
+
   const ui = SpreadsheetApp.getUi();
   ui.createMenu('Entity Lookup')
     .addItem('Initialize All Databases', 'initializeAllDatabases')
+    .addItem('Reload Config from Parameters', 'loadConfigFromSheet')
     .addSeparator()
     .addItem('Lookup Selected Key', 'lookupSelectedEntity')
     .addItem('Lookup All Keys (Column A)', 'lookupAllEntities')

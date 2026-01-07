@@ -278,6 +278,7 @@ function buildUnifiedEntityDatabase() {
         const entityType = entity.constructor?.name;
         if (entityType === 'Individual') {
             const householdInfo = entity.otherInfo?.householdInformation;
+
             if (householdInfo && householdInfo.isInHousehold) {
                 // Determine household identifier
                 // Option 1: Use householdInformation.householdIdentifier if set
@@ -314,6 +315,7 @@ function buildUnifiedEntityDatabase() {
 
         // Set parentKey to the household's database key
         const householdKey = householdIdentifierToKey.get(householdId);
+
         if (householdKey) {
             householdInfo.parentKey = householdKey;
             parentKeysSet++;
@@ -322,13 +324,31 @@ function buildUnifiedEntityDatabase() {
         // Set siblingKeys to all OTHER individuals in the same household
         const siblingsInHousehold = householdIdentifierToIndividualKeys.get(householdId) || [];
         const siblingKeys = siblingsInHousehold.filter(k => k !== individualKey);
+
         if (siblingKeys.length > 0) {
             householdInfo.siblingKeys = siblingKeys;
             siblingKeysSet++;
         }
     }
 
+    // Fourth pass: set individualKeys[] on each Bloomerang household
+    // This provides key-based navigation from household to members (symmetric with parentKey)
+    let individualKeysSet = 0;
+    for (const [householdId, householdKey] of householdIdentifierToKey) {
+        const household = database.entities[householdKey];
+        if (!household) continue;
+
+        // Get the individual keys for this household
+        const memberKeys = householdIdentifierToIndividualKeys.get(householdId) || [];
+
+        if (memberKeys.length > 0) {
+            household.individualKeys = memberKeys;
+            individualKeysSet++;
+        }
+    }
+
     console.log(`  Bloomerang cross-references: ${parentKeysSet} parentKeys, ${siblingKeysSet} siblingKeys set`);
+    console.log(`  Bloomerang households with individualKeys: ${individualKeysSet}`);
     console.log(`  Households found: ${householdIdentifierToKey.size}, Individuals in households: ${individualKeyToHouseholdId.size}`);
 
     database.metadata.totalEntities = Object.keys(database.entities).length;

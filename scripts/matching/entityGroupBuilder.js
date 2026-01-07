@@ -83,6 +83,15 @@ async function buildEntityGroupDatabase(options = {}) {
     const groupDb = new EntityGroupDatabase();
     groupDb.constructionTimestamp = new Date().toISOString();
 
+    // NOTE: parentKeyToChildren Map construction was removed in Session 29 migration.
+    // Household member lookup now uses entity.individualKeys[] (persisted on Bloomerang households)
+    // instead of runtime Map. This eliminates O(N) scan at startup.
+
+    // Reset override rule applied counts before build
+    if (window.matchOverrideManager) {
+        window.matchOverrideManager.resetAppliedCounts();
+    }
+
     // Record sample mode info if applicable
     if (config.sampleSize && config.sampleSize < totalEntities) {
         groupDb.sampleMode = {
@@ -128,6 +137,39 @@ async function buildEntityGroupDatabase(options = {}) {
 
     log('\n=== ENTITY GROUP CONSTRUCTION COMPLETE ===');
     log(groupDb.getSummary());
+
+    // Report unused override rules (concise format)
+    if (window.matchOverrideManager) {
+        const unused = window.matchOverrideManager.getUnusedRules();
+        const totalUnused = unused.unusedForceMatch.length + unused.unusedForceExclude.length +
+                           unused.unusedMutualInclusion.length + unused.unusedMutualExclusion.length;
+
+        if (totalUnused > 0) {
+            log('\n--- UNUSED OVERRIDE RULES ---');
+
+            if (unused.unusedForceMatch.length > 0) {
+                const ruleIds = unused.unusedForceMatch.map(r => r.ruleId).join(', ');
+                log(`  FORCE_MATCH (${unused.unusedForceMatch.length}): ${ruleIds}`);
+            }
+
+            if (unused.unusedForceExclude.length > 0) {
+                const ruleIds = unused.unusedForceExclude.map(r => r.ruleId).join(', ');
+                log(`  FORCE_EXCLUDE (${unused.unusedForceExclude.length}): ${ruleIds}`);
+            }
+
+            if (unused.unusedMutualInclusion.length > 0) {
+                const ruleIds = unused.unusedMutualInclusion.map(s => s.ruleId).join(', ');
+                log(`  MUTUAL_INCLUDE (${unused.unusedMutualInclusion.length}): ${ruleIds}`);
+            }
+
+            if (unused.unusedMutualExclusion.length > 0) {
+                const ruleIds = unused.unusedMutualExclusion.map(s => s.ruleId).join(', ');
+                log(`  MUTUAL_EXCLUDE (${unused.unusedMutualExclusion.length}): ${ruleIds}`);
+            }
+        } else {
+            log('\n--- All override rules were applied at least once ---');
+        }
+    }
 
     // Save to Google Drive if requested - always creates NEW files
     if (config.saveToGoogleDrive) {
@@ -763,10 +805,14 @@ function findMatchesForEntity(baseKey, baseEntity, groupDb, entityDb) {
         // Skip self
         if (targetKey === baseKey) continue;
 
-        // Skip already assigned entities (for true matches only - near misses can be assigned)
+        // OPTIMIZATION: Check assignment status BEFORE expensive comparison
+        // Already-assigned entities cannot become true matches, so skip comparison entirely.
+        // Near misses can include assigned entities, but we prioritize speed over
+        // recording all possible near misses (most near misses are unassigned anyway).
         const isAssigned = groupDb.isEntityAssigned(targetKey);
+        if (isAssigned) continue;
 
-        // Perform comparison
+        // Perform comparison (only for unassigned entities)
         const comparison = universalCompareTo(baseEntity, targetEntity);
         const overallScore = comparison.score;
 
@@ -785,13 +831,11 @@ function findMatchesForEntity(baseKey, baseEntity, groupDb, entityDb) {
 
         // Check if true match
         if (isTrueMatch(overallScore, nameScore, contactInfoScore)) {
-            if (!isAssigned) {
-                trueMatches.push({
-                    key: targetKey,
-                    entity: targetEntity,
-                    scores: { overall: overallScore, name: nameScore, contactInfo: contactInfoScore }
-                });
-            }
+            trueMatches.push({
+                key: targetKey,
+                entity: targetEntity,
+                scores: { overall: overallScore, name: nameScore, contactInfo: contactInfoScore }
+            });
         }
         // Check if near miss (only if not a true match)
         else if (isNearMatch(overallScore, nameScore, contactInfoScore)) {
@@ -851,8 +895,8 @@ function collectHouseholdRelatedKeys(founderKey, founderEntity, naturalMatches, 
         if (!key) return;
         if (alreadyInGroup.has(key)) return;
         if (householdPulled.includes(key)) return;
-        if (!entityDb[key]) return;  // Key doesn't exist in database
-        if (groupDb.isEntityAssigned(key)) return;  // Already in another group
+        if (!entityDb[key]) return;
+        if (groupDb.isEntityAssigned(key)) return;
 
         householdPulled.push(key);
         alreadyInGroup.add(key);  // Prevent duplicates within this step
@@ -860,8 +904,10 @@ function collectHouseholdRelatedKeys(founderKey, founderEntity, naturalMatches, 
 
     /**
      * Helper to extract household keys from an entity
+     * @param {Entity} entity - The entity to extract household keys from
+     * @param {string} entityKey - Database key of the entity (needed for Bloomerang household lookup)
      */
-    function extractHouseholdKeys(entity) {
+    function extractHouseholdKeys(entity, entityKey) {
         if (!entity) return;
 
         // Check for householdInformation on the entity itself (Individual entities)
@@ -881,7 +927,8 @@ function collectHouseholdRelatedKeys(founderKey, founderEntity, naturalMatches, 
 
         // If entity is an AggregateHousehold, check embedded individuals for sibling keys
         if (entity.constructor?.name === 'AggregateHousehold' && entity.individuals && Array.isArray(entity.individuals)) {
-            for (const individual of entity.individuals) {
+            for (let i = 0; i < entity.individuals.length; i++) {
+                const individual = entity.individuals[i];
                 const indivHouseholdInfo = individual.otherInfo?.householdInformation;
                 if (indivHouseholdInfo && indivHouseholdInfo.siblingKeys && Array.isArray(indivHouseholdInfo.siblingKeys)) {
                     for (const siblingKey of indivHouseholdInfo.siblingKeys) {
@@ -889,28 +936,38 @@ function collectHouseholdRelatedKeys(founderKey, founderEntity, naturalMatches, 
                     }
                 }
             }
+
+            // FIX: For Bloomerang households, embedded individuals don't have siblingKeys set.
+            // We need to find standalone individual entities whose parentKey points to this household.
+            // This ensures that when a household is pulled, its individual members are also pulled.
+            // MIGRATION: Use persisted entity.individualKeys[] instead of runtime parentKeyToChildren Map
+            if (entityKey && isBloomerangKey(entityKey) && entity.individualKeys && Array.isArray(entity.individualKeys)) {
+                for (const childKey of entity.individualKeys) {
+                    tryAddKey(childKey);
+                }
+            }
         }
     }
 
     // Process founder
-    extractHouseholdKeys(founderEntity);
+    extractHouseholdKeys(founderEntity, founderKey);
 
     // Process natural matches
     for (const match of naturalMatches) {
         const entity = match.entity || entityDb[match.key];
-        extractHouseholdKeys(entity);
+        extractHouseholdKeys(entity, match.key);
     }
 
     // Process founder forced
     for (const key of founderForced) {
         const entity = entityDb[key];
-        extractHouseholdKeys(entity);
+        extractHouseholdKeys(entity, key);
     }
 
     // Process forced from naturals
     for (const key of forcedFromNaturals) {
         const entity = entityDb[key];
-        extractHouseholdKeys(entity);
+        extractHouseholdKeys(entity, key);
     }
 
     return householdPulled;
@@ -1032,6 +1089,21 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
     // Step 8: Resolve exclusions among forced-from-naturals
     forcedFromNaturals = overrideManager.resolveExclusionsOnConflict(forcedFromNaturals);
 
+    // Mark force-match rules as applied for entities that made it into final lists
+    for (const key of founderForced) {
+        overrideManager.markForceMatchApplied(founderKey, key);
+    }
+    for (const match of naturalMatches) {
+        // Mark force matches that brought in forcedFromNaturals
+        for (const forcedKey of forcedFromNaturals) {
+            // Check if this natural match was responsible for pulling in forcedKey
+            const forcedByMatch = overrideManager.getForceMatchesFor(match.key);
+            if (forcedByMatch.includes(forcedKey)) {
+                overrideManager.markForceMatchApplied(match.key, forcedKey);
+            }
+        }
+    }
+
     // Step 9: Collect household-related keys from all members
     // When any member is added to the group, pull in their parent household and siblings
     const householdPulled = collectHouseholdRelatedKeys(
@@ -1063,8 +1135,12 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
  */
 function markHouseholdIndividualsAsAssigned(householdKey, householdEntity, groupDb, entityDb) {
     // Only applies to AggregateHousehold entities
-    if (householdEntity.constructor.name !== 'AggregateHousehold') return;
-    if (!householdEntity.individuals || householdEntity.individuals.length === 0) return;
+    if (householdEntity.constructor.name !== 'AggregateHousehold') {
+        return;
+    }
+    if (!householdEntity.individuals || householdEntity.individuals.length === 0) {
+        return;
+    }
 
     // For Bloomerang households, individuals are stored as separate entities
     // We need to find them by matching (they share accountNumber pattern or other identifiers)

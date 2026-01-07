@@ -230,8 +230,15 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
         console.log(`Processing ${lines.length - 1} data rows (plus header)...`);
 
         // Parse CSV rows
+        // Pre-process: Fix quoted currency amounts in column G (field 6) that contain commas
+        // e.g., "$1,500.00" becomes "$1500.00" to prevent comma-split issues
         const rows = lines.slice(1).map((line, index) => {
-            const fields = line.split(',').map(field => field.replace(/\^#C#\^/g, ',').trim());
+            // Fix quoted currency amounts: replace "$X,XXX.XX" pattern (remove comma inside quotes)
+            const fixedLine = line.replace(/"(\$[\d,]+\.\d{2})\s*"/g, (match, amount) => {
+                return amount.replace(/,/g, '');
+            });
+            const fields = fixedLine.split(',').map(field => field.replace(/\^#C#\^/g, ',').trim());
+
             return {
                 rowIndex: index + 1, // 1-based indexing for data rows
                 fields: fields,
@@ -450,8 +457,13 @@ async function readBloomerangWithEntitiesQuiet(saveToGoogleDrive = false, batchI
         const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== '');
 
         // Parse CSV rows (EXACT COPY)
+        // Pre-process: Fix quoted currency amounts in column G (field 6) that contain commas
         const rows = lines.slice(1).map((line, index) => {
-            const fields = line.split(',').map(field => field.replace(/\^#C#\^/g, ',').trim());
+            // Fix quoted currency amounts: replace "$X,XXX.XX" pattern (remove comma inside quotes)
+            const fixedLine = line.replace(/"(\$[\d,]+\.\d{2})\s*"/g, (match, amount) => {
+                return amount.replace(/,/g, '');
+            });
+            const fields = fixedLine.split(',').map(field => field.replace(/\^#C#\^/g, ',').trim());
             return {
                 rowIndex: index + 1, // 1-based indexing for data rows
                 fields: fields,
@@ -1098,6 +1110,7 @@ function determineEntityType(fields, fieldMap) {
 
     // Check household membership
     const isInHouseholdValue = isInHousehold.toString().toLowerCase().trim();
+
     if (isInHouseholdValue === 'true' || isInHouseholdValue === '1' || isInHouseholdValue === 'yes') {
         // Individual is in a household - will be handled as AggregateHousehold member
         return 'AggregateHousehold';
@@ -1281,6 +1294,18 @@ function createAccountNumberSimpleIdentifiers(accountNumber, rowIndex, dataSourc
  *
  * CRITICAL: This function must NEVER return null - all household members must be processed
  * to avoid massive data loss (previously 1088 records were being skipped)
+ *
+ * ARCHITECTURAL NOTE (Session 29):
+ * This function populates household.individuals[] with Individual entity objects.
+ * After serialization/deserialization, these become SNAPSHOT COPIES - separate object
+ * instances from the canonical Individual entities in unifiedEntityDatabase.entities[].
+ *
+ * Bloomerang households ALSO have household.individualKeys[] (set in unifiedDatabasePersistence.js)
+ * which contains database keys for looking up the canonical Individual entities.
+ *
+ * When canonical/current data is needed, use individualKeys[] for database lookup.
+ * When uniform access across VA and Bloomerang is needed, use individuals[] directly.
+ * (VisionAppraisal households only have individuals[], not individualKeys[])
  *
  * @param {Array} fields - CSV field array for the individual record
  * @param {Object} fieldMap - Field index mappings
@@ -1844,30 +1869,20 @@ function aggregateEntitiesIntoCollections(entities, households, additionalEntiti
     }
 
     // Process any additional entities
-    let diagHouseholdsFromAdditional = 0;
-    let diagIndividualsFromAdditional = 0;
-    console.log('[DIAGNOSTIC] additionalEntities length:', additionalEntities.length);
     for (const entity of additionalEntities) {
         const entityType = entity.constructor.name;
 
         if (entityType === 'Individual') {
             const key = generateEntityKey(entity);
             collections.individuals.set(key, entity);
-            diagIndividualsFromAdditional++;
         } else if (entityType === 'AggregateHousehold' || entityType === 'CompositeHousehold') {
             const key = generateEntityKey(entity);
             collections.households.set(key, entity);
-            diagHouseholdsFromAdditional++;
-            if (entity.individuals && entity.individuals.length > 0) {
-                console.log('[DIAGNOSTIC] Additional household has ' + entity.individuals.length + ' individuals');
-            }
         } else {
             const key = generateEntityKey(entity);
             collections.nonHumans.set(key, entity);
         }
     }
-    console.log('[DIAGNOSTIC] From additionalEntities: households=' + diagHouseholdsFromAdditional +
-                ', individuals=' + diagIndividualsFromAdditional);
 
     // Update metadata
     collections.metadata.totalProcessed = collections.individuals.size +

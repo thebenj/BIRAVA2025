@@ -746,11 +746,27 @@ class CompositeHousehold extends Entity {
  * This class will collect individuals who are associated by household that are also
  * instantiated objects on their own. This class will have an array of individuals as a property.
  * name property should contain IdentifyingData with HouseholdName ComplexIdentifiers (synthesized)
+ *
+ * MEMBER ACCESS GUIDANCE (Session 29):
+ * Two properties provide access to household members:
+ *
+ * 1. this.individuals[] - Array of Individual OBJECTS
+ *    - VisionAppraisal: ONLY option (VA individuals are not standalone keyed entities)
+ *    - Bloomerang: Contains SNAPSHOT copies (may drift from canonical data after serialization)
+ *    - Use when: Uniform access across data sources is needed, or database not available
+ *
+ * 2. this.individualKeys[] - Array of database KEY STRINGS (Bloomerang only)
+ *    - Set during unifiedDatabasePersistence.js buildUnifiedEntityDatabase() Pass 4
+ *    - Look up canonical entities via: unifiedEntityDatabase.entities[key]
+ *    - Use when: Canonical/current data is needed and database is loaded
+ *
+ * Future data sources may follow either pattern. Check for individualKeys[] availability
+ * before deciding which approach to use.
  */
 class AggregateHousehold extends Entity {
     constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
         super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
-        this.individuals = []; // Array of Individual objects
+        this.individuals = []; // Array of Individual objects (see guidance above)
         // Inherited this.name should contain IdentifyingData(HouseholdName) - typically synthesized
         this.initializeWeightedComparison();
     }

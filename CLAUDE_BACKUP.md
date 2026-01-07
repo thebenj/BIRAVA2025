@@ -5,8 +5,8 @@
 read_order: [ROOT_CAUSE_DEBUGGING_RULE, COMPLETION_VERIFICATION_RULE, CURRENT_WORK_CONTEXT, TERMINOLOGY, MANDATORY_COMPARETO_ARCHITECTURE]
 focus_section: ROOT_CAUSE_DEBUGGING_RULE_then_COMPLETION_VERIFICATION_RULE_then_CURRENT_WORK_CONTEXT
 processing_directive: ignore_visual_formatting_process_semantic_content_only
-last_updated: 2026-01-04
-version: 101.0_SESSION25_DUAL_CSV_EXPORT
+last_updated: 2026-01-07
+version: 107.0_SESSION29_INDIVIDUALKEYS_MIGRATION
 ```
 
 ---
@@ -85,11 +85,357 @@ CLAUDE_MD_UPDATE_PROTECTION:
 
 ## CURRENT_WORK_CONTEXT
 ```yaml
-# January 4, 2026 - Session 25
+# January 7, 2026 - Session 29
 
-immediate_status: SESSION25_DUAL_CSV_EXPORT_COMPLETE
-current_focus: Mail merge finalization - dual CSV export with simplified format
-next_action: User verification of simplified CSV format
+immediate_status: SESSION29_INDIVIDUALKEYS_MIGRATION_COMPLETE
+current_focus: individuals[] to individualKeys[] migration - DONE
+next_action: No pending work - migration complete, documentation added
+
+# Session 29 - individuals[] Deprecation Migration
+session29_work:
+  date: January 7, 2026
+
+  # individualKeys UI Navigation - USER_VERIFIED_WORKING
+  individualkeys_ui_navigation:
+    status: USER_VERIFIED_WORKING
+    summary: Added clickable "View Entity" buttons for entity key properties in detail view
+    purpose: |
+      Enable navigation from household.individualKeys[] to individual entities,
+      proving the key-based architecture works before migrating code away from individuals[].
+
+    implementation:
+      server_side_additions:
+        - ENTITY_KEY_PROPERTIES constant: Set of property names containing entity keys
+        - looksLikeEntityKey(): Detects strings matching entity key patterns
+        - Modified generatePropertyRow(): Single entity keys get "View Entity" button
+
+      client_side_additions:
+        - looksLikeEntityKey(): Same detection for popup window
+        - isEntityKeyProperty(): Checks if path contains entity key property name
+        - navigateToEntityByKey(): Looks up entity and calls renderEntityDetailsWindow()
+        - Modified renderPropertyRowForModal(): Entity keys in expanded arrays get "View Entity" button
+
+      css_additions:
+        - .view-entity-btn: Purple button styling (distinct from expand buttons)
+
+    supported_properties:
+      - individualKeys: Household → Individuals
+      - parentKey: Individual → Household
+      - siblingKeys: Individual → Siblings
+      - memberKeys: EntityGroup → Members
+      - foundingMemberKey: EntityGroup → Founding member
+      - nearMissKeys: EntityGroup → Near misses
+
+    file_modified: scripts/entityRenderer.js
+    user_flow: |
+      1. View entity details for a Bloomerang household
+      2. In Interactive Explorer, click "Expand Array" on individualKeys
+      3. Each key shows with purple "View Entity" button
+      4. Click button → opens that individual's detail window
+
+  # individuals[] Deprecation Plan - COMPLETE
+  individuals_deprecation_plan:
+    status: COMPLETE
+    goal: Migrate all code from household.individuals[] to household.individualKeys[]
+    rationale: |
+      - Single source of truth (no duplicate entity data)
+      - No data desync risk
+      - Memory efficiency (entities exist once, not twice)
+      - Consistency with existing key-based patterns (parentKey, siblingKeys, memberKeys)
+
+    # REDUNDANCY DISCOVERED (Session 29):
+    # parentKeyToChildren Map (built at runtime in entityGroupBuilder.js) is redundant
+    # with household.individualKeys[] (persisted on entity in unifiedDatabasePersistence.js).
+    # Both contain: householdKey → [childIndividualKeys]
+    # Migration should eliminate parentKeyToChildren in favor of individualKeys[].
+
+    migration_categories:
+      category_1_easy:
+        description: Already has entityDb available
+        files:
+          - entityGroupBrowser.js extractGroupLastNames() - MIGRATED
+          - entityGroupBrowser.js extractGroupFirstNames() - MIGRATED
+          - entityGroupBrowser.js extractAllNamesFromEntity() - MIGRATED (with fallback)
+        status: USER_VERIFIED_WORKING
+
+      category_2_medium:
+        description: Needs entityDb passed in OR can use individualKeys[] directly
+        files:
+          - entityGroupBuilder.js collectHouseholdRelatedKeys() - MIGRATED
+            DONE: Now uses entity.individualKeys[] instead of parentKeyToChildren Map
+          - entityGroupBuilder.js buildEntityGroupDatabase() - MIGRATED
+            DONE: Removed parentKeyToChildren Map construction (~17 lines)
+            DONE: Removed groupDb._parentKeyToChildren storage
+          - entityGroupBuilder.js function signatures - MIGRATED
+            DONE: Removed parentKeyToChildren parameter from collectHouseholdRelatedKeys()
+            DONE: Removed parentKeyToChildren argument from both call sites
+          - entityRenderer.js findHouseholdMembers() - MIGRATED
+            DONE: Now checks individualKeys[] first, falls back to individuals[]
+            DONE: Bloomerang households use canonical entity data from database
+        status: USER_VERIFIED_WORKING
+
+      category_3_hard:
+        description: Architectural challenges
+        files:
+          - bloomerang.js processHouseholdMember() - where individuals[] is CREATED
+          - entityGroup.js _buildConsensus() - consensus entities are synthetic
+          - universalEntityMatcher.js compareIndividualToHousehold() - core matching
+          - universalEntityMatcher.js compareHouseholdToHousehold() - core matching
+        status: NOT_NEEDED
+        decision: |
+          KEEP individuals[] on Bloomerang households. Reasons:
+          1. Architectural parallelism: VA households ONLY have individuals[] (no individualKeys[])
+             Code handling "any household" would need branching without this parallelism.
+          2. Minimal performance benefit: individuals[] is populated during CSV processing anyway
+          3. Categories 1-2 migrations ensure code that CAN use individualKeys[] DOES use it
+          4. Category 3 code (matching, consensus) needs uniform structure across data sources
+
+          RISK MITIGATION: Added architectural comment to bloomerang.js processHouseholdMember()
+          documenting that individuals[] becomes "snapshot data" after serialization.
+          When canonical data needed: use individualKeys[] lookup.
+          When uniform access needed: use individuals[] directly.
+
+      category_4_testing:
+        description: Test/diagnostic scripts - low priority
+        status: DEFERRED
+
+# Session 28 - First Name Matching Enhancement
+session28_work:
+  date: January 7, 2026
+
+  # Bloomerang Name Match Report - First Name Enhancement - USER_VERIFIED_WORKING
+  firstname_matching_enhancement:
+    status: USER_VERIFIED_WORKING
+    summary: Enhanced Bloomerang Last Name Match report to also check for first name matches
+    purpose: |
+      Improve match quality by identifying VA entities that match BOTH first and last names
+      from Bloomerang groups, surfacing higher-confidence matches at the top of the report.
+
+    new_function_created:
+      - extractGroupFirstNames(group, entityDb): Extracts all first names from Bloomerang group members
+        location: scripts/entityGroupBrowser.js (lines ~3471-3500)
+        mirrors: extractGroupLastNames() but extracts firstName instead of lastName
+
+    modified_functions:
+      findVAEntitiesByLastName:
+        change: Added optional firstNames parameter
+        new_signature: findVAEntitiesByLastName(vaEntities, lastNames, firstNames = null)
+        new_return_properties: [matchedFirstName, hasFirstNameMatch]
+        logic: For each VA entity matching a last name, also checks if any first name appears as distinct word
+
+      exportBloomerangLastNameMatches:
+        changes:
+          - Now extracts both last names AND first names from each group
+          - Passes first names to findVAEntitiesByLastName()
+          - Sorts candidates within each group (first+last matches before last-name-only)
+          - Sorts groups (groups with first+last matches appear first)
+          - Added groupsWithFirstNameMatches to stats
+        sorting_logic: |
+          Within each group: VA entities with both first+last match come first
+          Between groups: Groups with at least one first+last match appear before last-name-only groups
+          Within each category: Groups sorted by group index
+
+      downloadBloomerangLastNameMatches:
+        change: Status message now shows count of groups with first+last matches
+
+    file_modified: scripts/entityGroupBrowser.js
+    console_command: await runBloomerangLastNameMatchExport()
+    output_file: bloomerang_lastname_matches_YYYY-MM-DD.csv (unchanged name)
+
+  # Unused Rules Report - DEFERRED
+  unused_rules_report:
+    status: DEFERRED
+    reason: |
+      Exclusion tracking verification is difficult - requires removing rules and comparing
+      database builds. Unused rules are relatively harmless, so this is deprioritized.
+    analysis_completed: |
+      Code trace confirmed markExclusionApplied() is correctly called in all exclusion methods.
+      Rules may appear "unused" if the excluded entities never match algorithmically in the
+      first place (low similarity scores mean the exclusion rule is never triggered).
+
+  # Bloomerang Household Investigation - USER_VERIFIED_WORKING
+  bloomerang_household_investigation:
+    status: USER_VERIFIED_WORKING
+    reference_doc: reference_bloomerangHouseholdInvestigation.md
+    problems_investigated:
+      problem_1_csv_parsing: USER_VERIFIED_WORKING (fixed in earlier session)
+      problem_2_data_desync: NO_ISSUES_FOUND
+
+    investigation_findings: |
+      Diagnostic comparison of household.individuals[] vs top-level Individual entities
+      showed NO data mismatches across 428 households and 768 nested individuals.
+      The nested individuals are separate object copies (due to serialization/deserialization)
+      but their data matches the canonical top-level entities.
+
+    architecture_enhancement:
+      name: individualKeys[] on AggregateHousehold
+      status: USER_VERIFIED_WORKING
+      purpose: Key-based navigation from household to members (symmetric with parentKey)
+      implementation: |
+        - Fourth pass added to buildUnifiedEntityDatabase()
+        - Uses existing householdIdentifierToIndividualKeys map
+        - No key regeneration - uses keys already in database.entities
+        - All 428 Bloomerang households now have individualKeys[] populated
+      file_modified: scripts/unifiedDatabasePersistence.js
+
+    diagnostic_cleanup:
+      status: COMPLETE
+      removed_from:
+        - scripts/unifiedDatabasePersistence.js (ANDERSON DIAG, HOUSEHOLD DESYNC DIAG)
+        - scripts/bloomerang.js (ANDERSON DIAG, MICHAEL DIAG, [DIAGNOSTIC])
+
+# Session 27 Summary (January 6, 2026)
+session27_summary:
+  household_pulling_bugfix: USER_VERIFIED_WORKING
+  performance_opt_1: USER_VERIFIED_WORKING (isEntityAssigned before universalCompareTo)
+  performance_opt_2: USER_VERIFIED_WORKING (parentKey index for O(1) lookup)
+  lastname_report_single_member: USER_VERIFIED_WORKING
+  unused_rules_report: DEFERRED (exclusion tracking difficult to verify)
+  carbone_diagnostic_removal: CODED_NOT_TESTED
+
+# Session 27 - Performance Optimizations and Cleanup
+session27_work:
+  date: January 6, 2026
+
+  # Household Pulling Bug Fix - USER_VERIFIED_WORKING
+  household_pulling_bugfix:
+    status: USER_VERIFIED_WORKING
+    summary: Carbone household (1674AH) now correctly pulls Carolyn (1674) and Frank (328)
+    diagnostic_logging: REMOVED (cleanup completed this session)
+
+  # Performance Optimization 1 - USER_VERIFIED_WORKING
+  performance_opt_1:
+    status: USER_VERIFIED_WORKING
+    change: Move isEntityAssigned() check BEFORE universalCompareTo() in findMatchesForEntity()
+    impact: Skips expensive comparison for already-assigned entities
+    file: scripts/matching/entityGroupBuilder.js
+
+  # Performance Optimization 2 - USER_VERIFIED_WORKING
+  performance_opt_2:
+    status: USER_VERIFIED_WORKING
+    change: Build parentKey→childKeys index once at start of build, use O(1) lookup instead of O(N) scan
+    impact: Eliminates ~500,000 iterations for Bloomerang household member lookup
+    file: scripts/matching/entityGroupBuilder.js
+    implementation: |
+      - Build parentKeyToChildren Map at start of buildEntityGroupDatabase()
+      - Store in groupDb._parentKeyToChildren
+      - collectHouseholdRelatedKeys() now uses index lookup instead of database scan
+
+  # Bloomerang Last Name Report - Single Member Enhancement - USER_VERIFIED_WORKING
+  lastname_report_single_member:
+    status: USER_VERIFIED_WORKING
+    changes:
+      - Single-member groups now show entity key instead of consensus
+      - GroupIndex shows "SINGLE" for single-member groups
+      - RowType is "member" for single-member groups (enables key column output)
+    file: scripts/entityGroupBrowser.js (exportBloomerangLastNameMatches, generateCSVRow)
+
+  # Unused Override Rules Report - READY_FOR_TESTING
+  unused_rules_report:
+    status: READY_FOR_TESTING
+    purpose: Report FORCE_MATCH and FORCE_EXCLUDE rules that had no effect during build
+    implementation:
+      - Added appliedCount property to OverrideRule base class
+      - Added markForceMatchApplied() and markExclusionApplied() methods
+      - Added getUnusedRules() and resetAppliedCounts() methods
+      - Call markExclusionApplied() in all exclusion methods
+      - Report at end of buildEntityGroupDatabase()
+    files_modified:
+      - scripts/matching/matchOverrideManager.js
+      - scripts/matching/entityGroupBuilder.js
+    verbosity_fix:
+      old_format: Multi-line per rule showing truncated keys and reasons
+      new_format: Single line per rule type showing just ruleIds (e.g., "FORCE_MATCH (2): FM-001, FM-002")
+    current_issues:
+      - Inclusion tracking: WORKING
+      - Exclusion tracking: NEEDS_VERIFICATION (user testing)
+      - Output verbosity: FIXED (concise single-line format)
+
+  # OverrideRule Base Class Refactoring - CODED_SEEMS_WORKING
+  override_rule_refactor:
+    status: CODED_SEEMS_WORKING
+    change: Created OverrideRule base class, ForceMatchRule and ForceExcludeRule now extend it
+    shared_properties: [ruleId, ruleType, reason, status, appliedCount]
+    shared_methods: [validate(), involvesKey(), getKeys(), toString()]
+    file: scripts/matching/matchOverrideManager.js
+
+  # Carbone Diagnostic Logging Removal - CODED_NOT_TESTED
+  diagnostic_cleanup:
+    status: CODED_NOT_TESTED
+    files_cleaned:
+      - scripts/matching/entityGroupBuilder.js: Removed CARBONE_DIAG_KEYS, isDiagKey(), diagLog(), all usages
+      - scripts/unifiedDatabasePersistence.js: Removed all Carbone diagnostic logging
+    reference_preserved: reference_carboneDiagnostics.md (historical documentation)
+
+# Session 26 Summary (January 5, 2026)
+session26_summary:
+  household_pulling_bugfix: USER_VERIFIED_WORKING (verified Session 27)
+  bloomerang_lastname_report: USER_VERIFIED_WORKING (verified Session 27)
+  single_member_enhancement: USER_VERIFIED_WORKING (verified Session 27)
+
+# Session 26 Part 1 - Bloomerang Name Match Report (USER_VERIFIED_WORKING)
+# Enhanced in Session 28 with first name matching
+session26_work:
+  project: Bloomerang-Only Name Match Report
+  status: USER_VERIFIED_WORKING
+  enhanced_session28: First name matching + sorting added
+
+  report_purpose: |
+    For Bloomerang-only entity groups (groups with NO VisionAppraisal members),
+    find VisionAppraisal entities whose MailName contains any last name from
+    the Bloomerang group members. Optionally also checks for first name matches.
+    This helps identify potential property owners who may be the same person
+    as existing Bloomerang donors.
+
+  functions_created:
+    - extractGroupLastNames(group, entityDb): Extracts all last names from Bloomerang group members
+    - extractGroupFirstNames(group, entityDb): Extracts all first names from Bloomerang group members (Session 28)
+    - lastNameAppearsAsWord(text, lastName): Checks if lastName appears as distinct word (not substring)
+    - findVAEntitiesByLastName(vaEntities, lastNames, firstNames): Finds VA entities with matching names
+    - exportBloomerangLastNameMatches(groupDatabase): Core export function
+    - downloadBloomerangLastNameMatches(): Downloads the CSV
+    - runBloomerangLastNameMatchExport(): One-click wrapper with auto-load
+
+  word_boundary_logic: |
+    lastNameAppearsAsWord() ensures name is a distinct word:
+    - BEFORE must be: start of string, space, or punctuation
+    - AFTER must be: end of string, space, or punctuation
+    Examples:
+      "FORD" in "CLIFFORD" → NO (letter before)
+      "OFF" in "OFFSHORE" → NO (letter after)
+      "FORD" in "JOHN FORD" → YES
+      "FORD" in "FORD SMITH" → YES
+
+  output_format: |
+    For each Bloomerang-only group WITH matches:
+    - Consensus/member row (RowType='consensus' or 'member' for single-member groups)
+    - VA candidate rows (RowType='candidate')
+    Groups with NO matches are excluded from report.
+
+  sorting_behavior_session28: |
+    Within each group: VA candidates with first+last name match appear before last-name-only matches
+    Between groups: Groups with at least one first+last match appear first
+    Within each category: Groups sorted by group index
+
+  files_modified:
+    - scripts/entityGroupBrowser.js: All name match functions (lines ~3433-4041)
+
+  console_command: await runBloomerangLastNameMatchExport()
+  output_file: bloomerang_lastname_matches_YYYY-MM-DD.csv
+
+  also_created_but_superseded:
+    name: Bloomerang-Only Match Candidates Report (similarity-based)
+    functions: [exportBloomerangOnlyMatchCandidates, downloadBloomerangOnlyMatchCandidates, runBloomerangOnlyMatchCandidatesExport]
+    description: Uses universalCompareTo() name similarity scoring - more complex, less useful for this use case
+    status: FUNCTIONAL_BUT_NOT_PRIMARY
+
+  architecture_review_completed: true
+  architecture_review_findings: |
+    - findTopVAMatchesByName() duplicates logic from findBestMatches() in universalEntityMatcher.js
+    - Recommended: Refactor findBestMatches() to support name-only sorting and source filtering
+    - Recommended: Add componentMode option to universalCompareTo() for name-only comparisons
+    - Recommended: Consolidate threshold constants into single location
+  architecture_refactor_status: PENDING (deferred - simplified lastName report serves immediate need)
 
 # Session 25 - Mail Merge Enhancements (USER_VERIFIED_WORKING)
 session25_work:
@@ -463,9 +809,17 @@ CORE_CODE_LOCATIONS:
 current_work:
   ALL_CLEANUP_PHASES: COMPLETE
   session25_enhancements: USER_VERIFIED_WORKING
+  session26_lastname_report: USER_VERIFIED_WORKING
+  session26_household_pulling_bugfix: USER_VERIFIED_WORKING
+  session27_performance_optimizations: USER_VERIFIED_WORKING
+  session27_unused_rules_report: DEFERRED
+  session28_firstname_matching: USER_VERIFIED_WORKING
+  session28_individualKeys_architecture: USER_VERIFIED_WORKING
+  session29_individualKeys_ui_navigation: USER_VERIFIED_WORKING
+  session29_individuals_deprecation: IN_PROGRESS
 
 regression_test_status:
-  ALL_12_TESTS: PASSED (Dec 26, 2025) - needs re-run after Session 23-25 changes
+  ALL_12_TESTS: PASSED (Dec 26, 2025) - needs re-run after Session 23-29 changes
 
 verified_features:
   all_foundational_layers: USER_VERIFIED_WORKING
@@ -474,11 +828,25 @@ verified_features:
   mail_merge_export: USER_VERIFIED_WORKING
   one_click_mail_merge_button: USER_VERIFIED_WORKING
   dual_csv_export: USER_VERIFIED_WORKING
+  bloomerang_name_match_report: USER_VERIFIED_WORKING (enhanced with first name matching Session 28)
+  household_pulling_bugfix: USER_VERIFIED_WORKING
+  performance_optimizations: USER_VERIFIED_WORKING
+  individualKeys_architecture: USER_VERIFIED_WORKING (Session 28)
+  individualKeys_ui_navigation: USER_VERIFIED_WORKING (Session 29)
+
+pending_testing:
+  carbone_diagnostic_removal: CODED_NOT_TESTED
+
+in_progress:
+  individuals_to_individualKeys_migration: Category 1 files pending
+
+deferred:
+  unused_rules_report: DEFERRED (exclusion tracking difficult to verify, low impact)
 
 active_project:
-  name: Prospect Mail Merge Export
-  spec: reference_prospectMailMerge.md
-  status: USER_VERIFIED_WORKING - dual CSV export complete
+  name: individuals[] to individualKeys[] migration
+  status: IN_PROGRESS
+  next_step: Migrate Category 1 files (entityGroupBrowser.js)
 ```
 
 ---
@@ -505,11 +873,182 @@ MANDATORY_BACKUP:
 
 ## SESSION_METADATA
 ```yaml
-last_updated: January_04_2026
-document_version: 100.0_SESSION25_MAIL_MERGE_ENHANCEMENTS
-previous_version: 99.0_SESSION24_INTEGRATION_COMPLETE
+last_updated: January_07_2026
+document_version: 107.0_SESSION29_INDIVIDUALKEYS_MIGRATION
+previous_version: 106.0_SESSION28_INDIVIDUALKEYS_ARCHITECTURE
 
 version_notes: |
+  Version 107.0 - Session 29 - individuals[] Deprecation Migration:
+
+  USER VERIFIED WORKING THIS SESSION:
+  1. individualKeys UI Navigation
+     - Added "View Entity" buttons for entity key properties in detail view
+     - Proves key-based architecture works before migrating code
+     - Supports: individualKeys, parentKey, siblingKeys, memberKeys, foundingMemberKey, nearMissKeys
+     - File modified: scripts/entityRenderer.js
+
+  MIGRATION COMPLETE:
+  - Category 1 (easy): entityGroupBrowser.js - USER_VERIFIED_WORKING
+  - Category 2 (medium): entityGroupBuilder.js, entityRenderer.js - USER_VERIFIED_WORKING
+  - Category 3 (hard): NOT_NEEDED - architectural parallelism with VA preserved
+  - Category 4 (testing): DEFERRED - low priority
+
+  REDUNDANCY ELIMINATED (this session):
+  - parentKeyToChildren Map (runtime) was REDUNDANT with household.individualKeys[] (persisted)
+  - REMOVED: parentKeyToChildren Map construction from buildEntityGroupDatabase()
+  - REMOVED: parentKeyToChildren parameter from collectHouseholdRelatedKeys()
+  - NOW USES: entity.individualKeys[] for Bloomerang household member lookup
+  - BENEFIT: Eliminated O(N) database scan at EntityGroup build startup
+
+  ARCHITECTURAL DECISION:
+  - Category 3 (hard migrations) deemed NOT_NEEDED
+  - KEEP individuals[] on Bloomerang households for architectural parallelism with VA
+  - VisionAppraisal households ONLY have individuals[] (no individualKeys[])
+  - Future data sources may follow either pattern - defer decision until more sources added
+  - REJECTED: Getter/proxy on AggregateHousehold class (too early to lock in pattern)
+
+  DOCUMENTATION ADDED:
+  - entityClasses.js AggregateHousehold class: Member access guidance comment
+  - bloomerang.js processHouseholdMember(): Snapshot data warning comment
+  - Both explain when to use individuals[] vs individualKeys[]
+
+  CODE CHANGES:
+  - scripts/entityRenderer.js:
+    - Added ENTITY_KEY_PROPERTIES constant (line ~1780)
+    - Added looksLikeEntityKey() helper function (line ~1797)
+    - Modified generatePropertyRow() to add "View Entity" for single entity keys (line ~1933)
+    - Added client-side looksLikeEntityKey(), isEntityKeyProperty(), navigateToEntityByKey()
+    - Modified renderPropertyRowForModal() to add "View Entity" for array entity keys
+    - Added .view-entity-btn CSS styling (purple, line ~433)
+
+  MIGRATION RATIONALE:
+  - Single source of truth (no duplicate entity data)
+  - No data desync risk after serialization/deserialization
+  - Memory efficiency (entities exist once, not twice)
+  - Consistency with existing key-based patterns
+
+  Version 106.0 - Session 28 - individualKeys[] Architecture Enhancement:
+
+  READY FOR TESTING THIS SESSION:
+  1. Bloomerang Household Investigation - Problem 2 (data desync) resolved
+     - Diagnostic comparison showed NO data mismatches between household.individuals[] and top-level entities
+     - 428 households checked, 768 nested individuals compared - all data consistent
+     - Nested individuals are separate object copies (due to serialization) but data matches
+
+  2. individualKeys[] Architecture Enhancement
+     - Added fourth pass to buildUnifiedEntityDatabase() to populate household.individualKeys[]
+     - Symmetric with existing parentKey (Individual → Household) / siblingKeys (Individual → Siblings)
+     - New: individualKeys (Household → Individuals)
+     - Uses existing householdIdentifierToIndividualKeys map - NO key regeneration
+     - All 428 Bloomerang households now have individualKeys[] populated
+
+  DIAGNOSTIC CLEANUP COMPLETED:
+  - Removed all ANDERSON DIAG, MICHAEL DIAG, [DIAGNOSTIC], HOUSEHOLD DESYNC DIAG logging
+  - Files cleaned: scripts/unifiedDatabasePersistence.js, scripts/bloomerang.js
+  - Reference document updated: reference_bloomerangHouseholdInvestigation.md
+
+  CODE CHANGES:
+  - scripts/unifiedDatabasePersistence.js:
+    - Added fourth pass (lines ~334-348) to set household.individualKeys[]
+    - Removed all Anderson/household desync diagnostic logging
+
+  - scripts/bloomerang.js:
+    - Removed all MICHAEL DIAG and ANDERSON DIAG diagnostic logging
+    - Removed [DIAGNOSTIC] logging from aggregateEntitiesIntoCollections()
+
+  ARCHITECTURE SUMMARY (Bloomerang household navigation):
+    Individual → Household:  individual.otherInfo.householdInformation.parentKey
+    Individual → Siblings:   individual.otherInfo.householdInformation.siblingKeys
+    Household → Individuals: household.individualKeys (NEW)
+    Household → Individuals: household.individuals[] (legacy, kept for compatibility)
+
+  Version 105.0 - Session 28 - First Name Matching Enhancement:
+
+  VERIFIED WORKING THIS SESSION:
+  1. Bloomerang Name Match Report - Enhanced with first name matching
+     - New function: extractGroupFirstNames() - mirrors extractGroupLastNames() for first names
+     - Modified findVAEntitiesByLastName() - now accepts optional firstNames parameter
+     - Modified exportBloomerangLastNameMatches() - extracts first names, checks matches, sorts results
+     - Sorting: First+last matches appear before last-name-only, both within groups and between groups
+
+  DEFERRED:
+  - Unused Override Rules Report: Exclusion tracking verification is difficult (requires removing
+    rules and comparing builds). Code trace confirmed markExclusionApplied() is called correctly.
+    Rules appear "unused" when excluded entities never match algorithmically. Low impact, deprioritized.
+
+  CODE CHANGES:
+  - scripts/entityGroupBrowser.js:
+    - Added extractGroupFirstNames() function (lines ~3471-3500)
+    - Modified findVAEntitiesByLastName() to accept optional firstNames parameter
+    - Added hasFirstNameMatch and matchedFirstName to return objects
+    - Modified exportBloomerangLastNameMatches() with two-pass algorithm:
+      Pass 1: Collect groups with match data and first-name-match flags
+      Pass 2: Sort groups and candidates, then generate rows
+    - Updated downloadBloomerangLastNameMatches() status message to show first+last count
+
+  Version 104.0 - Session 27 - Performance Optimizations and Cleanup:
+
+  VERIFIED WORKING THIS SESSION:
+  1. Household Pulling Bug Fix - Carbone test case passes
+  2. Performance Opt 1 - isEntityAssigned() check before universalCompareTo()
+  3. Performance Opt 2 - parentKey index for O(1) household member lookup
+  4. Bloomerang Last Name Report - Single member enhancement (key + "SINGLE" in GroupIndex)
+
+  IN PROGRESS:
+  - Unused Override Rules Report: Inclusion tracking works, exclusion tracking needs verification
+  - Output is too verbose, needs reduction
+
+  CODE CHANGES:
+  - scripts/matching/matchOverrideManager.js:
+    - Created OverrideRule base class with shared properties (ruleId, ruleType, reason, status, appliedCount)
+    - ForceMatchRule and ForceExcludeRule now extend OverrideRule
+    - Added markForceMatchApplied(), markExclusionApplied(), getUnusedRules(), resetAppliedCounts()
+    - All exclusion methods now call markExclusionApplied()
+
+  - scripts/matching/entityGroupBuilder.js:
+    - Performance: isEntityAssigned() check moved before universalCompareTo()
+    - Performance: parentKeyToChildren index built at start, used in collectHouseholdRelatedKeys()
+    - Added reset and report calls for unused rules tracking
+    - Removed all Carbone diagnostic logging (CARBONE_DIAG_KEYS, isDiagKey, diagLog)
+
+  - scripts/unifiedDatabasePersistence.js:
+    - Removed all Carbone diagnostic logging
+
+  - scripts/entityGroupBrowser.js:
+    - Single-member groups in lastName report now use entity key and "SINGLE" GroupIndex
+    - Added 'member' to rowTypes that output GroupIndex in generateCSVRow()
+
+  DOCUMENTATION PRESERVED:
+  - reference_carboneDiagnostics.md: Historical record of Carbone debugging process
+
+  Version 103.0 - Session 26 Part 2 - Household Pulling Bug Fix:
+  NEW REPORT: Identifies potential matches between Bloomerang-only entity groups
+  and VisionAppraisal property owners based on last name matching.
+
+  Functions created:
+  - extractGroupLastNames(): Gets all last names from Bloomerang group members
+  - lastNameAppearsAsWord(): Word boundary check (prevents "FORD" in "CLIFFORD")
+  - findVAEntitiesByLastName(): Finds VA entities with matching last names
+  - exportBloomerangLastNameMatches(): Core export
+  - downloadBloomerangLastNameMatches(): Downloads CSV
+  - runBloomerangLastNameMatchExport(): One-click with auto-load
+
+  Word boundary logic:
+  - lastName must be preceded by: start of string, space, or punctuation
+  - lastName must be followed by: end of string, space, or punctuation
+  - Prevents false positives like "OFF" matching "OFFSHORE"
+
+  Also created (superseded by simpler lastName version):
+  - exportBloomerangOnlyMatchCandidates() - similarity-based matching
+  - Architecture review completed, refactoring deferred
+
+  Git commit: 305116b (pushed before Session 26 work)
+  STATUS: READY_FOR_TESTING
+
+  Version 101.0 - Session 25 Dual CSV Export:
+  - Added simplified 6-column CSV for mail merge labels
+  - Both full and simple CSVs generated in single pass
+
   Version 100.0 - Session 25 Mail Merge Enhancements:
   1. CONSENSUS_COLLAPSE FALLBACK: Multi-member groups that fail contactInfo threshold
      now collapse to single consensus row (Key="CONSENSUS_COLLAPSE") instead of

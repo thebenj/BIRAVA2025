@@ -1749,7 +1749,7 @@ function generateCSVRow(rowType, entity, key, groupIndex, includeAlternatives) {
 
     // Section 1: Identification & Mail Merge Core (columns 0-9)
     row[0] = rowType;                                    // RowType
-    row[1] = (rowType === 'consensus' || rowType === 'founding' || rowType === 'consolidated') ? String(groupIndex) : ''; // GroupIndex
+    row[1] = (rowType === 'consensus' || rowType === 'founding' || rowType === 'consolidated' || rowType === 'member') ? String(groupIndex) : ''; // GroupIndex
     row[2] = (rowType === 'consensus' || rowType === 'consolidated') ? '' : key;       // Key
     row[3] = assembleMailName(entity);                   // MailName
 
@@ -2014,10 +2014,13 @@ window.downloadCSVExport = downloadCSVExport;
 
 /**
  * Extract all names from an entity, including individual names from households.
+ * For AggregateHouseholds, uses individualKeys[] if entityDb is provided (preferred),
+ * otherwise falls back to individuals[] for legacy compatibility.
  * @param {Object} entity - Entity object
+ * @param {Object} [entityDb=null] - Unified entity database (optional, enables individualKeys navigation)
  * @returns {string[]} - Array of formatted name strings
  */
-function extractAllNamesFromEntity(entity) {
+function extractAllNamesFromEntity(entity, entityDb = null) {
     const names = [];
     if (!entity) return names;
 
@@ -2033,14 +2036,31 @@ function extractAllNamesFromEntity(entity) {
     // If it's a household (AggregateHousehold), also extract individual names
     // Check by type property (from loaded JSON) or constructor name
     const entityType = entity.type || entity.constructor?.name;
-    if (entityType === 'AggregateHousehold' && entity.individuals && Array.isArray(entity.individuals)) {
-        for (const individual of entity.individuals) {
-            let indivName = individual.name?.primaryAlias?.term || individual.name?.term || '';
-            if (typeof indivName === 'object' && indivName !== null) {
-                indivName = formatNameObject(indivName);
+    if (entityType === 'AggregateHousehold') {
+        // Prefer individualKeys (key-based navigation) if entityDb is available
+        if (entityDb && entity.individualKeys && Array.isArray(entity.individualKeys)) {
+            for (const individualKey of entity.individualKeys) {
+                const individual = entityDb.entities[individualKey];
+                if (!individual) continue;
+                let indivName = individual.name?.primaryAlias?.term || individual.name?.term || '';
+                if (typeof indivName === 'object' && indivName !== null) {
+                    indivName = formatNameObject(indivName);
+                }
+                if (indivName && !names.includes(indivName)) {
+                    names.push(indivName);
+                }
             }
-            if (indivName && !names.includes(indivName)) {
-                names.push(indivName);
+        }
+        // Fallback to individuals[] if entityDb not provided (legacy support)
+        else if (entity.individuals && Array.isArray(entity.individuals)) {
+            for (const individual of entity.individuals) {
+                let indivName = individual.name?.primaryAlias?.term || individual.name?.term || '';
+                if (typeof indivName === 'object' && indivName !== null) {
+                    indivName = formatNameObject(indivName);
+                }
+                if (indivName && !names.includes(indivName)) {
+                    names.push(indivName);
+                }
             }
         }
     }
@@ -2156,7 +2176,7 @@ function generateAssessmentValueReport(groupDatabase) {
             }
 
             // Extract all names from this entity (including individuals in households)
-            const entityNames = extractAllNamesFromEntity(entity);
+            const entityNames = extractAllNamesFromEntity(entity, entityDb);
             for (const name of entityNames) {
                 if (name && !allNames.includes(name)) {
                     allNames.push(name);
@@ -3425,15 +3445,92 @@ function isBloomerangOnlyGroup(group) {
 }
 
 /**
+ * Extract all last names from members of a Bloomerang-only group.
+ * @param {Object} group - EntityGroup object
+ * @param {Object} entityDb - Entity database with .entities property
+ * @returns {Set<string>} Set of last names (uppercase for case-insensitive matching)
+ */
+function extractGroupLastNames(group, entityDb) {
+    const lastNames = new Set();
+
+    for (const memberKey of group.memberKeys) {
+        const entity = entityDb.entities[memberKey];
+        if (!entity) continue;
+
+        // Get lastName from IndividualName if available
+        if (entity.name?.lastName) {
+            const lastName = entity.name.lastName.trim().toUpperCase();
+            if (lastName.length > 0) {
+                lastNames.add(lastName);
+            }
+        }
+
+        // For AggregateHousehold, check individual members via individualKeys
+        if (entity.individualKeys && Array.isArray(entity.individualKeys)) {
+            for (const individualKey of entity.individualKeys) {
+                const individual = entityDb.entities[individualKey];
+                if (individual?.name?.lastName) {
+                    const lastName = individual.name.lastName.trim().toUpperCase();
+                    if (lastName.length > 0) {
+                        lastNames.add(lastName);
+                    }
+                }
+            }
+        }
+    }
+
+    return lastNames;
+}
+
+/**
+ * Extract all first names from members of an entity group.
+ * Checks both direct entity names and embedded individuals in AggregateHouseholds.
+ * @param {EntityGroup} group - The entity group
+ * @param {Object} entityDb - The unified entity database
+ * @returns {Set<string>} Set of unique first names (uppercase)
+ */
+function extractGroupFirstNames(group, entityDb) {
+    const firstNames = new Set();
+
+    for (const memberKey of group.memberKeys) {
+        const entity = entityDb.entities[memberKey];
+        if (!entity) continue;
+
+        // Get firstName from IndividualName if available
+        if (entity.name?.firstName) {
+            const firstName = entity.name.firstName.trim().toUpperCase();
+            if (firstName.length > 0) {
+                firstNames.add(firstName);
+            }
+        }
+
+        // For AggregateHousehold, check individual members via individualKeys
+        if (entity.individualKeys && Array.isArray(entity.individualKeys)) {
+            for (const individualKey of entity.individualKeys) {
+                const individual = entityDb.entities[individualKey];
+                if (individual?.name?.firstName) {
+                    const firstName = individual.name.firstName.trim().toUpperCase();
+                    if (firstName.length > 0) {
+                        firstNames.add(firstName);
+                    }
+                }
+            }
+        }
+    }
+
+    return firstNames;
+}
+
+/**
  * Find top N VisionAppraisal entities by name similarity score for a given Bloomerang entity.
  * Uses universalCompareTo() to get the name component score.
  * @param {Object} bloomerangEntity - The Bloomerang entity to find matches for
  * @param {Object} visionAppraisalEntities - Object keyed by database key {key: entity, ...}
  * @param {number} topN - Number of top matches to return (default: 5)
- * @param {number} minScore - Minimum name similarity score threshold (default: 0.35)
+ * @param {number} minScore - Minimum name similarity score threshold (default: 0.70)
  * @returns {Array<{key: string, entity: Object, nameScore: number}>}
  */
-function findTopVAMatchesByName(bloomerangEntity, visionAppraisalEntities, topN = 5, minScore = 0.35) {
+function findTopVAMatchesByName(bloomerangEntity, visionAppraisalEntities, topN = 5, minScore = 0.70) {
     const results = [];
 
     for (const [vaKey, vaEntity] of Object.entries(visionAppraisalEntities)) {
@@ -3461,25 +3558,129 @@ function findTopVAMatchesByName(bloomerangEntity, visionAppraisalEntities, topN 
 }
 
 /**
+ * Check if a last name appears as a distinct word in a string.
+ *
+ * Before the lastName must be: start of string, space, or punctuation
+ * After the lastName must be: end of string, space, or punctuation
+ *
+ * This prevents matching "FORD" within "CLIFFORD" or "OFF" within "OFFSHORE".
+ *
+ * @param {string} text - The text to search in (uppercase)
+ * @param {string} lastName - The last name to find (uppercase)
+ * @returns {boolean} True if lastName appears as a distinct word
+ */
+function lastNameAppearsAsWord(text, lastName) {
+    // Check all occurrences
+    let searchStart = 0;
+    while (true) {
+        const pos = text.indexOf(lastName, searchStart);
+        if (pos === -1) return false;
+
+        // Check character BEFORE the match
+        let validBefore = false;
+        if (pos === 0) {
+            // At start of string
+            validBefore = true;
+        } else {
+            const charBefore = text[pos - 1];
+            // Space or punctuation (anything that's not a letter or digit)
+            validBefore = (charBefore === ' ' || /[^A-Z0-9]/.test(charBefore));
+        }
+
+        // Check character AFTER the match
+        let validAfter = false;
+        const endPos = pos + lastName.length;
+        if (endPos >= text.length) {
+            // At end of string
+            validAfter = true;
+        } else {
+            const charAfter = text[endPos];
+            // Space or punctuation (anything that's not a letter or digit)
+            validAfter = (charAfter === ' ' || /[^A-Z0-9]/.test(charAfter));
+        }
+
+        // Valid only if both before and after are valid word boundaries
+        if (validBefore && validAfter) {
+            return true;
+        }
+
+        // Move past this occurrence and keep searching
+        searchStart = pos + 1;
+    }
+}
+
+/**
+ * Find VisionAppraisal entities whose MailName contains any of the given last names as distinct words.
+ * Optionally also checks for first name matches.
+ * @param {Object} visionAppraisalEntities - Object keyed by database key {key: entity, ...}
+ * @param {Set<string>} lastNames - Set of last names to search for (uppercase)
+ * @param {Set<string>} [firstNames] - Optional set of first names to search for (uppercase)
+ * @returns {Array<{key: string, entity: Object, nameScore: number, matchedLastName: string, matchedFirstName: string|null, hasFirstNameMatch: boolean}>}
+ */
+function findVAEntitiesByLastName(visionAppraisalEntities, lastNames, firstNames = null) {
+    const results = [];
+
+    if (lastNames.size === 0) return results;
+
+    for (const [vaKey, vaEntity] of Object.entries(visionAppraisalEntities)) {
+        const mailName = assembleMailName(vaEntity).toUpperCase();
+
+        // Check if mailName contains any of the last names as a distinct word
+        for (const lastName of lastNames) {
+            if (lastNameAppearsAsWord(mailName, lastName)) {
+                // Check for first name match if firstNames provided
+                let matchedFirstName = null;
+                let hasFirstNameMatch = false;
+
+                if (firstNames && firstNames.size > 0) {
+                    for (const firstName of firstNames) {
+                        if (lastNameAppearsAsWord(mailName, firstName)) {
+                            matchedFirstName = firstName;
+                            hasFirstNameMatch = true;
+                            break;  // Only need one first name match
+                        }
+                    }
+                }
+
+                results.push({
+                    key: vaKey,
+                    entity: vaEntity,
+                    nameScore: 0,  // No similarity score - matched by last name
+                    matchedLastName: lastName,
+                    matchedFirstName: matchedFirstName,
+                    hasFirstNameMatch: hasFirstNameMatch
+                });
+                break;  // Only add once even if multiple last names match
+            }
+        }
+    }
+
+    return results;
+}
+
+/**
  * Export Bloomerang-Only Match Candidates Report
  *
  * This report identifies entity groups that contain ONLY Bloomerang entities (no VisionAppraisal
- * members), then for each group, finds the top VisionAppraisal entities with the highest name
- * similarity scores across all members of that group.
+ * members), then for each group, finds VisionAppraisal entities that are potential matches.
+ *
+ * Two criteria for including VA entities:
+ * 1. Name similarity score >= threshold (default 0.70) via universalCompareTo()
+ * 2. VA entity's MailName contains any last name from the Bloomerang group members
  *
  * Output structure for each Bloomerang-only group:
  * - Consensus row (first row of the set)
- * - VA candidate rows sorted by name score (deduplicated across all members, min 35% threshold)
+ * - VA candidate rows sorted by name score (deduplicated, combines both criteria)
  *
  * @param {Object} groupDatabase - EntityGroupDatabase
  * @param {Object} options - Export options
- * @param {number} options.candidatesPerMember - Number of VA candidates per member (default: 5)
- * @param {number} options.minNameScore - Minimum name similarity threshold (default: 0.35)
+ * @param {number} options.candidatesPerMember - Number of VA candidates per member for similarity (default: 5)
+ * @param {number} options.minNameScore - Minimum name similarity threshold (default: 0.70)
  * @returns {Object} {csv, stats}
  */
 function exportBloomerangOnlyMatchCandidates(groupDatabase, options = {}) {
     const candidatesPerMember = options.candidatesPerMember || 5;
-    const minNameScore = options.minNameScore || 0.35;
+    const minNameScore = options.minNameScore || 0.70;
 
     const entityDb = window.unifiedEntityDatabase;
     if (!entityDb || !entityDb.entities) {
@@ -3500,10 +3701,17 @@ function exportBloomerangOnlyMatchCandidates(groupDatabase, options = {}) {
     // Sort by group index for consistent output
     bloomerangOnlyGroups.sort((a, b) => a.index - b.index);
 
-    // Build CSV
-    const headerRow = CSV_HEADERS.map(h => csvEscape(h)).join(',');
+    // Build CSV with custom headers - insert NameScore column after Key (position 3)
+    // Standard headers: RowType(0), GroupIndex(1), Key(2), MailName(3)...
+    // New headers: RowType(0), GroupIndex(1), Key(2), NameScore(3), MailName(4)...
+    const customHeaders = [...CSV_HEADERS];
+    customHeaders.splice(3, 0, 'NameScore');  // Insert NameScore at position 3
+    const headerRow = customHeaders.map(h => csvEscape(h)).join(',');
+
     const rows = [];
     let totalCandidatesGenerated = 0;
+    let lastNameMatchCount = 0;
+    let similarityMatchCount = 0;
     let groupsProcessed = 0;
 
     for (const group of bloomerangOnlyGroups) {
@@ -3517,13 +3725,20 @@ function exportBloomerangOnlyMatchCandidates(groupDatabase, options = {}) {
         // 1. Consensus row (or founding member if no consensus)
         const consensusEntity = group.consensusEntity || entityDb.entities[group.foundingMemberKey];
         if (consensusEntity) {
-            rows.push(generateCSVRow('consensus', consensusEntity, '', group.index, true));
+            const consensusRow = generateCSVRow('consensus', consensusEntity, '', group.index, true);
+            // Insert empty NameScore at position 3 (consensus rows don't have a match score)
+            consensusRow.splice(3, 0, '');
+            rows.push(consensusRow);
         }
 
-        // 2. Collect candidates from all members, deduplicate, sort by score
-        const allCandidates = []; // {key, entity, nameScore}
+        // 2. Extract last names from all Bloomerang group members
+        const groupLastNames = extractGroupLastNames(group, entityDb);
+
+        // 3. Collect candidates from BOTH criteria, deduplicate
+        const allCandidates = []; // {key, entity, nameScore, matchReason}
         const seenVAKeys = new Set();
 
+        // Criteria 1: Name similarity matches from each member
         for (const memberKey of group.memberKeys) {
             const memberEntity = entityDb.entities[memberKey];
             if (!memberEntity) continue;
@@ -3535,19 +3750,47 @@ function exportBloomerangOnlyMatchCandidates(groupDatabase, options = {}) {
             for (const match of topMatches) {
                 if (!seenVAKeys.has(match.key)) {
                     seenVAKeys.add(match.key);
-                    allCandidates.push(match);
+                    allCandidates.push({
+                        ...match,
+                        matchReason: 'similarity'
+                    });
+                    similarityMatchCount++;
                 }
             }
         }
 
-        // Sort all candidates by nameScore descending
-        allCandidates.sort((a, b) => b.nameScore - a.nameScore);
+        // Criteria 2: Last name substring matches
+        const lastNameMatches = findVAEntitiesByLastName(vaEntities, groupLastNames);
+        for (const match of lastNameMatches) {
+            if (!seenVAKeys.has(match.key)) {
+                seenVAKeys.add(match.key);
+                allCandidates.push({
+                    ...match,
+                    matchReason: `lastName:${match.matchedLastName}`
+                });
+                lastNameMatchCount++;
+            }
+        }
+
+        // Sort: lastName matches first, then by nameScore descending
+        // lastName matches have matchReason starting with "lastName:", similarity matches have "similarity"
+        allCandidates.sort((a, b) => {
+            const aIsLastName = a.matchReason.startsWith('lastName:');
+            const bIsLastName = b.matchReason.startsWith('lastName:');
+
+            // lastName matches come first
+            if (aIsLastName && !bIsLastName) return -1;
+            if (!aIsLastName && bIsLastName) return 1;
+
+            // Within same category, sort by nameScore descending
+            return b.nameScore - a.nameScore;
+        });
 
         // Generate candidate rows
         for (const candidate of allCandidates) {
             const row = generateCSVRow('candidate', candidate.entity, candidate.key, '', false);
-            // Override RowType to include score
-            row[0] = `candidate (name:${candidate.nameScore.toFixed(4)})`;
+            // Insert NameScore at position 3
+            row.splice(3, 0, candidate.nameScore.toFixed(4));
             rows.push(row);
             totalCandidatesGenerated++;
         }
@@ -3566,6 +3809,8 @@ function exportBloomerangOnlyMatchCandidates(groupDatabase, options = {}) {
             candidatesPerMember,
             minNameScore,
             totalCandidatesGenerated,
+            similarityMatchCount,
+            lastNameMatchCount,
             rowCount: rows.length
         }
     };
@@ -3575,7 +3820,7 @@ function exportBloomerangOnlyMatchCandidates(groupDatabase, options = {}) {
  * Download Bloomerang-Only Match Candidates Report
  * @param {Object} options - Export options
  * @param {number} options.candidatesPerMember - Number of VA candidates per member (default: 5)
- * @param {number} options.minNameScore - Minimum name similarity threshold (default: 0.35)
+ * @param {number} options.minNameScore - Minimum name similarity threshold (default: 0.70)
  */
 async function downloadBloomerangOnlyMatchCandidates(options = {}) {
     const db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
@@ -3593,7 +3838,7 @@ async function downloadBloomerangOnlyMatchCandidates(options = {}) {
 
     try {
         const candidatesPerMember = options.candidatesPerMember || 5;
-        const minNameScore = options.minNameScore || 0.35;
+        const minNameScore = options.minNameScore || 0.70;
 
         console.log(`Generating Bloomerang-Only Match Candidates Report (${candidatesPerMember} candidates/member, min score: ${minNameScore})...`);
         showEntityGroupStatus(`Generating Bloomerang-Only Match Candidates Report...`, 'loading');
@@ -3613,7 +3858,7 @@ async function downloadBloomerangOnlyMatchCandidates(options = {}) {
         URL.revokeObjectURL(url);
 
         const statusMsg = `Bloomerang-Only Match Candidates: ${result.stats.bloomerangOnlyGroups} groups, ` +
-            `${result.stats.totalCandidatesGenerated} VA candidates generated, ` +
+            `${result.stats.totalCandidatesGenerated} VA candidates (${result.stats.similarityMatchCount} similarity, ${result.stats.lastNameMatchCount} lastName), ` +
             `${result.stats.rowCount} total rows`;
 
         console.log(statusMsg);
@@ -3672,6 +3917,244 @@ async function runBloomerangOnlyMatchCandidatesExport(options = {}) {
 window.exportBloomerangOnlyMatchCandidates = exportBloomerangOnlyMatchCandidates;
 window.downloadBloomerangOnlyMatchCandidates = downloadBloomerangOnlyMatchCandidates;
 window.runBloomerangOnlyMatchCandidatesExport = runBloomerangOnlyMatchCandidatesExport;
+
+// =============================================================================
+// BLOOMERANG-ONLY LAST NAME MATCH REPORT (SIMPLIFIED VERSION)
+// =============================================================================
+
+/**
+ * Export Bloomerang-Only Last Name Match Report (Simplified)
+ *
+ * For each Bloomerang-only entity group:
+ * - Output consensus row
+ * - Output VA entities whose MailName contains any last name from the Bloomerang group
+ *
+ * No similarity scoring - purely substring matching on last names.
+ *
+ * @param {Object} groupDatabase - EntityGroupDatabase
+ * @returns {Object} {csv, stats}
+ */
+function exportBloomerangLastNameMatches(groupDatabase) {
+    const entityDb = window.unifiedEntityDatabase;
+    if (!entityDb || !entityDb.entities) {
+        throw new Error('Unified Entity Database not loaded');
+    }
+
+    // Get VisionAppraisal entities
+    const vaEntities = getEntitiesBySource('visionAppraisal');
+    const vaEntityCount = Object.keys(vaEntities).length;
+    console.log(`[LASTNAME MATCH] Found ${vaEntityCount} VisionAppraisal entities`);
+
+    const allGroups = Object.values(groupDatabase.groups || {});
+
+    // Filter to Bloomerang-only groups
+    const bloomerangOnlyGroups = allGroups.filter(isBloomerangOnlyGroup);
+    console.log(`[LASTNAME MATCH] Found ${bloomerangOnlyGroups.length} Bloomerang-only groups`);
+
+    // Use standard CSV headers (no NameScore column needed)
+    const headerRow = CSV_HEADERS.map(h => csvEscape(h)).join(',');
+
+    // First pass: collect all groups with their matches and metadata
+    const groupsWithMatchData = [];
+    let totalMatches = 0;
+
+    for (const group of bloomerangOnlyGroups) {
+        // Extract last names and first names from group members
+        const groupLastNames = extractGroupLastNames(group, entityDb);
+        const groupFirstNames = extractGroupFirstNames(group, entityDb);
+
+        if (groupLastNames.size === 0) continue;
+
+        // Find VA entities with matching last names (also checking first names)
+        const matches = findVAEntitiesByLastName(vaEntities, groupLastNames, groupFirstNames);
+
+        if (matches.length === 0) continue;
+
+        // Sort matches: first+last name matches first, then last-name-only
+        matches.sort((a, b) => {
+            if (a.hasFirstNameMatch && !b.hasFirstNameMatch) return -1;
+            if (!a.hasFirstNameMatch && b.hasFirstNameMatch) return 1;
+            return 0;  // Maintain relative order otherwise
+        });
+
+        // Check if this group has any first+last matches
+        const hasAnyFirstNameMatch = matches.some(m => m.hasFirstNameMatch);
+
+        // Determine if this is a single-member group
+        const memberCount = (group.memberKeys || []).length;
+        const isSingleMember = memberCount === 1;
+
+        // For single-member groups, use the actual entity with its key
+        // For multi-member groups, use the consensus entity
+        let rowEntity;
+        let rowKey;
+        let rowType;
+
+        if (isSingleMember) {
+            // Single member: use the founding member entity and its key
+            rowKey = group.foundingMemberKey;
+            rowEntity = entityDb.entities[rowKey];
+            rowType = 'member';  // Use 'member' so the key is included in output
+        } else {
+            // Multi-member: use consensus entity (no key)
+            rowEntity = group.consensusEntity || entityDb.entities[group.foundingMemberKey];
+            rowKey = '';
+            rowType = 'consensus';
+        }
+
+        groupsWithMatchData.push({
+            group,
+            matches,
+            hasAnyFirstNameMatch,
+            isSingleMember,
+            rowEntity,
+            rowKey,
+            rowType
+        });
+
+        totalMatches += matches.length;
+    }
+
+    // Sort groups: those with first+last matches first, then by group index within each category
+    groupsWithMatchData.sort((a, b) => {
+        // First sort by hasAnyFirstNameMatch (true first)
+        if (a.hasAnyFirstNameMatch && !b.hasAnyFirstNameMatch) return -1;
+        if (!a.hasAnyFirstNameMatch && b.hasAnyFirstNameMatch) return 1;
+        // Within same category, sort by group index
+        return a.group.index - b.group.index;
+    });
+
+    // Second pass: generate rows in sorted order
+    const rows = [];
+    let groupsWithFirstNameMatches = 0;
+
+    for (const data of groupsWithMatchData) {
+        if (data.hasAnyFirstNameMatch) {
+            groupsWithFirstNameMatches++;
+        }
+
+        if (data.rowEntity) {
+            // For single-member groups, use "SINGLE" as the group index
+            const groupIndexValue = data.isSingleMember ? 'SINGLE' : data.group.index;
+            rows.push(generateCSVRow(data.rowType, data.rowEntity, data.rowKey, groupIndexValue, true));
+        }
+
+        // VA match rows (already sorted: first+last first, then last-only)
+        for (const match of data.matches) {
+            rows.push(generateCSVRow('candidate', match.entity, match.key, '', false));
+        }
+    }
+
+    // Build CSV
+    const dataRows = rows.map(row => row.map(v => csvEscape(v)).join(','));
+    const csv = [headerRow, ...dataRows].join('\n');
+
+    return {
+        csv,
+        stats: {
+            totalGroups: allGroups.length,
+            bloomerangOnlyGroups: bloomerangOnlyGroups.length,
+            groupsWithMatches: groupsWithMatchData.length,
+            groupsWithFirstNameMatches,
+            totalMatches,
+            rowCount: rows.length
+        }
+    };
+}
+
+/**
+ * Download Bloomerang Last Name Match Report
+ */
+async function downloadBloomerangLastNameMatches() {
+    const db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+    if (!db) {
+        console.error('Please load an EntityGroup database first');
+        showEntityGroupStatus('Please load an EntityGroup database first', 'error');
+        return;
+    }
+
+    if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+        console.error('Please load the Unified Entity Database first');
+        showEntityGroupStatus('Please load the Unified Entity Database first', 'error');
+        return;
+    }
+
+    try {
+        console.log('Generating Bloomerang Last Name Match Report...');
+        showEntityGroupStatus('Generating Bloomerang Last Name Match Report...', 'loading');
+
+        const result = exportBloomerangLastNameMatches(db);
+        const dateStr = new Date().toISOString().slice(0, 10);
+
+        // Download CSV
+        const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `bloomerang_lastname_matches_${dateStr}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        const statusMsg = `Bloomerang Name Matches: ${result.stats.groupsWithMatches} groups with matches ` +
+            `(${result.stats.groupsWithFirstNameMatches} with first+last), ` +
+            `${result.stats.totalMatches} VA matches, ${result.stats.rowCount} total rows`;
+
+        console.log(statusMsg);
+        console.log('Full stats:', result.stats);
+        showEntityGroupStatus(statusMsg, 'success');
+
+        return result.stats;
+
+    } catch (error) {
+        console.error('Bloomerang last name match export error:', error);
+        showEntityGroupStatus(`Export error: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Run Bloomerang Last Name Match Export - auto-loads databases if needed
+ */
+async function runBloomerangLastNameMatchExport() {
+    try {
+        // Load unified entity database if needed
+        if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+            showEntityGroupStatus('Loading Unified Entity Database...', 'loading');
+            await loadUnifiedDatabaseForEntityGroups();
+
+            if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+                showEntityGroupStatus('Failed to load Unified Entity Database', 'error');
+                return;
+            }
+        }
+
+        // Load EntityGroup database if needed
+        let db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+        if (!db) {
+            showEntityGroupStatus('Loading EntityGroup database...', 'loading');
+            await loadEntityGroupDatabase();
+
+            db = entityGroupBrowser.loadedDatabase || window.entityGroupDatabase;
+            if (!db) {
+                showEntityGroupStatus('Failed to load EntityGroup database', 'error');
+                return;
+            }
+        }
+
+        // Run export
+        await downloadBloomerangLastNameMatches();
+
+    } catch (error) {
+        console.error('Bloomerang last name match error:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Export for global access
+window.exportBloomerangLastNameMatches = exportBloomerangLastNameMatches;
+window.downloadBloomerangLastNameMatches = downloadBloomerangLastNameMatches;
+window.runBloomerangLastNameMatchExport = runBloomerangLastNameMatchExport;
 
 /**
  * Run Prospect Mail Merge Export - wrapper that loads EntityGroup database if needed

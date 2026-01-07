@@ -27,22 +27,71 @@ const ON_CONFLICT_OPTIONS = {
 };
 
 // ============================================================================
+// BASE OVERRIDE RULE CLASS
+// ============================================================================
+
+/**
+ * Base class for all override rules (FORCE_MATCH and FORCE_EXCLUDE).
+ * Contains shared properties and methods.
+ */
+class OverrideRule {
+    constructor(config, ruleType) {
+        this.ruleId = config.ruleId;
+        this.ruleType = ruleType;
+        this.reason = config.reason || '';
+        this.status = config.status || 'ACTIVE';
+        this.appliedCount = 0;  // Track how many times this rule was applied
+    }
+
+    /**
+     * Validate the rule. Subclasses should override and call super.validate().
+     * @returns {Object} { valid: boolean, errors: string[] }
+     */
+    validate() {
+        const errors = [];
+        if (!this.ruleId) errors.push('ruleId required');
+        return { valid: errors.length === 0, errors };
+    }
+
+    /**
+     * Check if this rule involves a specific entity key.
+     * Must be implemented by subclasses.
+     * @param {string} key - Entity key to check
+     * @returns {boolean}
+     */
+    involvesKey(key) {
+        throw new Error('involvesKey() must be implemented by subclass');
+    }
+
+    /**
+     * Get both keys involved in this rule.
+     * Must be implemented by subclasses.
+     * @returns {string[]} Array of two entity keys
+     */
+    getKeys() {
+        throw new Error('getKeys() must be implemented by subclass');
+    }
+
+    toString() {
+        return `${this.ruleType}[${this.ruleId}]`;
+    }
+}
+
+// ============================================================================
 // FORCE_MATCH RULE CLASS
 // ============================================================================
 
-class ForceMatchRule {
+class ForceMatchRule extends OverrideRule {
     constructor(config) {
-        this.ruleId = config.ruleId;
-        this.ruleType = 'FORCE_MATCH';
+        super(config, 'FORCE_MATCH');
         this.entityKey1 = config.entityKey1;
         this.entityKey2 = config.entityKey2;
         this.anchorOverride = config.anchorOverride || null;
-        this.reason = config.reason || '';
-        this.status = config.status || 'ACTIVE';
     }
 
     validate() {
-        const errors = [];
+        const baseValidation = super.validate();
+        const errors = [...baseValidation.errors];
         if (!this.entityKey1) errors.push('entityKey1 required');
         if (!this.entityKey2) errors.push('entityKey2 required');
         if (this.entityKey1 === this.entityKey2) errors.push('keys cannot be same');
@@ -51,6 +100,10 @@ class ForceMatchRule {
 
     involvesKey(key) {
         return this.entityKey1 === key || this.entityKey2 === key;
+    }
+
+    getKeys() {
+        return [this.entityKey1, this.entityKey2];
     }
 
     getPartnerKey(key) {
@@ -68,21 +121,19 @@ class ForceMatchRule {
 // FORCE_EXCLUDE RULE CLASS
 // ============================================================================
 
-class ForceExcludeRule {
+class ForceExcludeRule extends OverrideRule {
     static VALID_ON_CONFLICT = ['DEFECTIVE_YIELDS', 'OTHER_YIELDS', 'USE_SIMILARITY'];
 
     constructor(config) {
-        this.ruleId = config.ruleId;
-        this.ruleType = 'FORCE_EXCLUDE';
+        super(config, 'FORCE_EXCLUDE');
         this.defectiveKey = config.defectiveKey;
         this.otherKey = config.otherKey;
         this.onConflict = config.onConflict || 'DEFECTIVE_YIELDS';
-        this.reason = config.reason || '';
-        this.status = config.status || 'ACTIVE';
     }
 
     validate() {
-        const errors = [];
+        const baseValidation = super.validate();
+        const errors = [...baseValidation.errors];
         if (!this.defectiveKey) errors.push('defectiveKey required');
         if (!this.otherKey) errors.push('otherKey required');
         if (this.defectiveKey === this.otherKey) errors.push('keys cannot be same');
@@ -94,6 +145,10 @@ class ForceExcludeRule {
 
     involvesKey(key) {
         return this.defectiveKey === key || this.otherKey === key;
+    }
+
+    getKeys() {
+        return [this.defectiveKey, this.otherKey];
     }
 
     matchesPair(key1, key2) {
@@ -399,6 +454,105 @@ class MatchOverrideManager {
     }
 
     /**
+     * Mark a force-match rule as applied.
+     * Call this when a force-match rule actually results in entities being grouped together.
+     * @param {string} key1 - First entity key
+     * @param {string} key2 - Second entity key
+     */
+    markForceMatchApplied(key1, key2) {
+        // Check pairwise rules
+        const rules = this.forceMatchByKey.get(key1) || [];
+        for (const rule of rules) {
+            if (rule.getPartnerKey(key1) === key2) {
+                rule.appliedCount++;
+                return;
+            }
+        }
+        // Check MUTUAL sets - mark the set as applied
+        const setIndices = this.keyToMutualInclusionSetIndices.get(key1);
+        if (setIndices) {
+            for (const idx of setIndices) {
+                const mutualSet = this.mutualInclusionSets[idx];
+                if (mutualSet.keys.includes(key2)) {
+                    mutualSet.appliedCount = (mutualSet.appliedCount || 0) + 1;
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Mark an exclusion rule as applied.
+     * Call this when an exclusion rule actually prevents entities from being grouped.
+     * @param {string} key1 - First entity key
+     * @param {string} key2 - Second entity key
+     */
+    markExclusionApplied(key1, key2) {
+        // Check pairwise rules
+        for (const rule of this.forceExcludeRules) {
+            if (rule.matchesPair(key1, key2)) {
+                rule.appliedCount++;
+                return;
+            }
+        }
+        // Check MUTUAL exclusion sets
+        const setIndices1 = this.keyToMutualExclusionSetIndices.get(key1);
+        const setIndices2 = this.keyToMutualExclusionSetIndices.get(key2);
+        if (setIndices1 && setIndices2) {
+            for (const idx of setIndices1) {
+                if (setIndices2.includes(idx)) {
+                    const mutualSet = this.mutualExclusionSets[idx];
+                    mutualSet.appliedCount = (mutualSet.appliedCount || 0) + 1;
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * Get all rules that were never applied during the build process.
+     * @returns {Object} { unusedForceMatch: [], unusedForceExclude: [], unusedMutualInclusion: [], unusedMutualExclusion: [] }
+     */
+    getUnusedRules() {
+        const unusedForceMatch = this.forceMatchRules.filter(r =>
+            r.status === 'ACTIVE' && r.appliedCount === 0
+        );
+        const unusedForceExclude = this.forceExcludeRules.filter(r =>
+            r.status === 'ACTIVE' && r.appliedCount === 0
+        );
+        const unusedMutualInclusion = this.mutualInclusionSets.filter(s =>
+            !s.appliedCount || s.appliedCount === 0
+        );
+        const unusedMutualExclusion = this.mutualExclusionSets.filter(s =>
+            !s.appliedCount || s.appliedCount === 0
+        );
+        return {
+            unusedForceMatch,
+            unusedForceExclude,
+            unusedMutualInclusion,
+            unusedMutualExclusion
+        };
+    }
+
+    /**
+     * Reset all appliedCount values to 0 (call before a new build)
+     */
+    resetAppliedCounts() {
+        for (const rule of this.forceMatchRules) {
+            rule.appliedCount = 0;
+        }
+        for (const rule of this.forceExcludeRules) {
+            rule.appliedCount = 0;
+        }
+        for (const set of this.mutualInclusionSets) {
+            set.appliedCount = 0;
+        }
+        for (const set of this.mutualExclusionSets) {
+            set.appliedCount = 0;
+        }
+    }
+
+    /**
      * Check if two keys have an exclusion between them.
      * Checks both pairwise rules and MUTUAL exclusion sets.
      * @param {string} key1
@@ -553,6 +707,7 @@ class MatchOverrideManager {
 
                 toRemove.add(loser);
                 this.stats.exclusionsApplied++;
+                this.markExclusionApplied(key1, key2);
 
                 // Accumulate count per ruleId for summary
                 const count = exclusionCounts.get(ruleMeta.ruleId) || 0;
@@ -603,6 +758,7 @@ class MatchOverrideManager {
 
                 toRemove.add(loser);
                 this.stats.exclusionsApplied++;
+                this.markExclusionApplied(key1, key2);
                 console.log(`[OVERRIDE] OnConflict exclusion ${ruleMeta.ruleId}: ${loser} removed (${ruleMeta.onConflict})`);
             }
         }
@@ -627,6 +783,7 @@ class MatchOverrideManager {
                 if (ruleMeta) {
                     toRemove.add(entity.key);
                     this.stats.exclusionsApplied++;
+                    this.markExclusionApplied(entity.key, priorityKey);
                     console.log(`[OVERRIDE] Priority exclusion ${ruleMeta.ruleId}: ${entity.key} removed (priority ${priorityKey} wins)`);
                     break;
                 }
@@ -652,6 +809,7 @@ class MatchOverrideManager {
                 if (ruleMeta) {
                     toRemove.add(key);
                     this.stats.exclusionsApplied++;
+                    this.markExclusionApplied(key, priorityKey);
                     console.log(`[OVERRIDE] Priority exclusion ${ruleMeta.ruleId}: ${key} removed (priority ${priorityKey} wins)`);
                     break;
                 }
@@ -678,6 +836,7 @@ class MatchOverrideManager {
             if (ruleMeta) {
                 toRemove.add(entity.key);
                 this.stats.exclusionsApplied++;
+                this.markExclusionApplied(entity.key, founderKey);
                 // No log per spec - founder exclusions are silent
             }
         }
@@ -702,6 +861,7 @@ class MatchOverrideManager {
             if (ruleMeta) {
                 toRemove.add(key);
                 this.stats.exclusionsApplied++;
+                this.markExclusionApplied(key, founderKey);
                 // No log per spec - founder exclusions are silent
             }
         }
@@ -726,6 +886,7 @@ class MatchOverrideManager {
             if (ruleMeta) {
                 toRemove.add(key);
                 this.stats.exclusionsApplied++;
+                this.markExclusionApplied(key, founderKey);
                 console.warn(`[OVERRIDE] Contradiction: ${founderKey} has both FORCE_MATCH and FORCE_EXCLUDE with ${key}. Exclusion wins (${ruleMeta.ruleId}).`);
             }
         }

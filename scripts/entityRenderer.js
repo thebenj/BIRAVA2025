@@ -430,6 +430,24 @@ function getUniversalEntityStyles(sourceKey) {
             background: #1e7e34;
         }
 
+        .view-entity-btn {
+            background: #6f42c1;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            transition: background-color 0.2s ease;
+            white-space: nowrap;
+            margin-left: 10px;
+        }
+
+        .view-entity-btn:hover {
+            background: #5a32a3;
+        }
+
         .object-type-indicator {
             color: #6c757d;
             font-size: 0.8rem;
@@ -1258,7 +1276,33 @@ function findHouseholdMembers(householdWrapper) {
     const members = [];
     const household = householdWrapper.entity;
 
-    // FIRST: Check if the household has an individuals array (AggregateHousehold stores members directly)
+    // FIRST: Check if the household has individualKeys[] (Bloomerang households)
+    // This uses the canonical entity data from the database instead of embedded copies
+    if (household.individualKeys && Array.isArray(household.individualKeys) && household.individualKeys.length > 0) {
+        // Need database to be loaded to look up by key
+        if (typeof isEntityDatabaseLoaded === 'function' && isEntityDatabaseLoaded() && window.unifiedEntityDatabase) {
+            console.log('🏠 Using household.individualKeys array:', household.individualKeys.length, 'keys');
+            household.individualKeys.forEach((individualKey, index) => {
+                const individual = window.unifiedEntityDatabase.entities[individualKey];
+                if (individual) {
+                    members.push({
+                        source: householdWrapper.source,
+                        sourceKey: householdWrapper.sourceKey,
+                        entityType: 'Individual',
+                        index: `member_${index}`,
+                        key: individualKey,
+                        entity: individual
+                    });
+                } else {
+                    console.warn(`🏠 individualKey not found in database: ${individualKey}`);
+                }
+            });
+            console.log(`🏠 Found ${members.length} household members via individualKeys lookup`);
+            return { members: members, foundViaFallback: false };
+        }
+    }
+
+    // SECOND: Check if the household has an individuals array (VisionAppraisal, or fallback if DB not loaded)
     if (household.individuals && Array.isArray(household.individuals) && household.individuals.length > 0) {
         console.log('🏠 Using household.individuals array:', household.individuals.length, 'members');
         household.individuals.forEach((individual, index) => {
@@ -1757,6 +1801,30 @@ const EXPLORER_EXCLUDED_PROPERTIES = new Set([
     'comparisonCalculator'
 ]);
 
+// Properties that contain entity database keys (for clickable navigation)
+// Used by generatePropertyRow to add "View Entity" buttons
+const ENTITY_KEY_PROPERTIES = new Set([
+    'individualKeys',   // Household → Individuals (new key-based navigation)
+    'parentKey',        // Individual → Household
+    'siblingKeys',      // Individual → Siblings
+    'memberKeys',       // EntityGroup → Members
+    'foundingMemberKey', // EntityGroup → Founding member
+    'nearMissKeys'      // EntityGroup → Near misses
+]);
+
+/**
+ * Check if a string looks like an entity database key
+ * Entity keys follow patterns like:
+ *   visionAppraisal:FireNumber:1234
+ *   bloomerang:12345:SimpleIdentifiers:...:head
+ * @param {string} str - String to check
+ * @returns {boolean} True if it looks like an entity key
+ */
+function looksLikeEntityKey(str) {
+    if (typeof str !== 'string') return false;
+    return str.startsWith('visionAppraisal:') || str.startsWith('bloomerang:');
+}
+
 /**
  * Generate interactive explorer HTML for an object's properties
  * Shows one level with Expand buttons for nested objects/arrays
@@ -1887,6 +1955,20 @@ function generatePropertyRow(key, value, path) {
         const displayValue = typeof value === 'string' && value.length > 100
             ? value.substring(0, 100) + '...'
             : String(value);
+
+        // Check if this is a single entity key property (like parentKey or foundingMemberKey)
+        if (typeof value === 'string' && ENTITY_KEY_PROPERTIES.has(key) && looksLikeEntityKey(value)) {
+            return `
+            <div class="explorer-property">
+                <span class="explorer-property-name">${escapedKey}</span>
+                <span class="explorer-property-value primitive-value">${escapeHTML(displayValue)}</span>
+                <button class="view-entity-btn" onclick="navigateToEntityByKey('${escapeHTML(value)}')">
+                    View Entity
+                </button>
+            </div>
+        `;
+        }
+
         return `
             <div class="explorer-property">
                 <span class="explorer-property-name">${escapedKey}</span>
@@ -2219,6 +2301,20 @@ function getUniversalEntityScripts() {
                 const displayValue = typeof value === 'string' && value.length > 100
                     ? value.substring(0, 100) + '...'
                     : String(value);
+
+                // Check if this is an entity key that should have a "View Entity" button
+                // This applies when we're inside an entity key property (like individualKeys[0])
+                // and the value looks like an entity key
+                if (typeof value === 'string' && isEntityKeyProperty(path) && looksLikeEntityKey(value)) {
+                    return '<div class="explorer-property">' +
+                        '<span class="explorer-property-name">' + escapedKey + '</span>' +
+                        '<span class="explorer-property-value primitive-value">' + escapeHTMLInWindow(displayValue) + '</span>' +
+                        '<button class="view-entity-btn" onclick="navigateToEntityByKey(\\'' + escapeHTMLInWindow(value) + '\\')">' +
+                        'View Entity' +
+                        '</button>' +
+                        '</div>';
+                }
+
                 return '<div class="explorer-property">' +
                     '<span class="explorer-property-name">' + escapedKey + '</span>' +
                     '<span class="explorer-property-value primitive-value">' + escapeHTMLInWindow(displayValue) + '</span>' +
@@ -2290,6 +2386,81 @@ function getUniversalEntityScripts() {
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        }
+
+        /**
+         * Check if a string looks like an entity database key
+         * Entity keys follow patterns like:
+         *   visionAppraisal:FireNumber:1234
+         *   bloomerang:12345:SimpleIdentifiers:...:head
+         * @param {string} str - String to check
+         * @returns {boolean} True if it looks like an entity key
+         */
+        function looksLikeEntityKey(str) {
+            if (typeof str !== 'string') return false;
+            return str.startsWith('visionAppraisal:') || str.startsWith('bloomerang:');
+        }
+
+        /**
+         * Check if a property path represents an entity key property
+         * @param {string} path - Property path like "entity.individualKeys[0]"
+         * @returns {boolean} True if this is an entity key property
+         */
+        function isEntityKeyProperty(path) {
+            var keyProperties = ['individualKeys', 'parentKey', 'siblingKeys', 'memberKeys', 'foundingMemberKey', 'nearMissKeys'];
+            for (var i = 0; i < keyProperties.length; i++) {
+                if (path.indexOf('.' + keyProperties[i]) !== -1) return true;
+            }
+            return false;
+        }
+
+        /**
+         * Navigate to an entity by its database key
+         * Opens a new entity details window for the specified entity
+         * @param {string} entityKey - Database key like "bloomerang:12345:...:head"
+         */
+        function navigateToEntityByKey(entityKey) {
+            // Access the parent window's unified entity database
+            if (!window.opener) {
+                alert('Cannot navigate: parent window not available');
+                return;
+            }
+
+            var database = window.opener.unifiedEntityDatabase;
+            if (!database || !database.entities) {
+                alert('Cannot navigate: Unified Entity Database not loaded in parent window');
+                return;
+            }
+
+            var entity = database.entities[entityKey];
+            if (!entity) {
+                alert('Entity not found: ' + entityKey);
+                return;
+            }
+
+            // Determine source from key prefix
+            var isVisionAppraisal = entityKey.startsWith('visionAppraisal:');
+            var source = isVisionAppraisal ? 'VisionAppraisal' : 'Bloomerang';
+            var sourceKey = isVisionAppraisal ? 'visionappraisal' : 'bloomerang';
+
+            // Get entity type
+            var entityType = (entity.constructor && entity.constructor.name) || entity.type || 'Unknown';
+
+            // Build entity wrapper in the format expected by renderEntityDetailsWindow
+            var entityWrapper = {
+                entity: entity,
+                key: entityKey,
+                source: source,
+                sourceKey: sourceKey,
+                entityType: entityType
+            };
+
+            // Call renderEntityDetailsWindow in the parent window
+            if (window.opener.renderEntityDetailsWindow) {
+                window.opener.renderEntityDetailsWindow(entityWrapper);
+            } else {
+                alert('Entity renderer not available in parent window');
+            }
         }
 
         // Initialize any interactive elements
