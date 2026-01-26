@@ -42,6 +42,7 @@ const CLASS_REGISTRY = {
     'FireNumber': typeof FireNumber !== 'undefined' ? FireNumber : null,
     'PoBox': typeof PoBox !== 'undefined' ? PoBox : null,
     'PID': typeof PID !== 'undefined' ? PID : null,
+    'StreetName': typeof StreetName !== 'undefined' ? StreetName : null,
     'IndividualName': typeof IndividualName !== 'undefined' ? IndividualName : null,
     'HouseholdName': typeof HouseholdName !== 'undefined' ? HouseholdName : null,
     'NonHumanName': typeof NonHumanName !== 'undefined' ? NonHumanName : null,

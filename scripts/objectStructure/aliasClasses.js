@@ -279,19 +279,23 @@ class AttributedTerm {
 
 /**
  * Aliases class - manages alternative versions of identifiers
- * The primary function of this class is to support recognizing alternative versions of various
- * identifiers as being legitimate substitutes for that identifier. Any tested value will be
- * considered a legitimate substitute if it is found in the set of homonyms or the set of synonyms.
+ *
+ * Three categories with distinct verification status:
+ * - homonyms: Verified trivial variations (misspellings, case differences) - high similarity
+ * - synonyms: UNVERIFIED staging area for similarity-based matches - may be false positives
+ * - candidates: Verified alternatives despite possibly low similarity (contextual evidence)
+ *
+ * For matching: Use homonyms and candidates (verified). Exclude synonyms (unverified).
  */
 class Aliases {
     constructor() {
-        // Array of AttributedTerm objects representing homonyms
+        // Array of AttributedTerm objects representing homonyms (verified, high similarity)
         this.homonyms = [];
 
-        // Array of AttributedTerm objects representing synonyms
+        // Array of AttributedTerm objects representing synonyms (UNVERIFIED staging area)
         this.synonyms = [];
 
-        // Array of AttributedTerm objects representing candidates
+        // Array of AttributedTerm objects representing candidates (verified via context/review)
         this.candidates = [];
     }
 
@@ -888,6 +892,8 @@ class IndicativeData {
                 return PID.deserialize(identifierData);
             case 'PoBox':
                 return PoBox.deserialize(identifierData);
+            case 'StreetName':
+                return StreetName.deserialize(identifierData);
             case 'ComplexIdentifiers':
                 return ComplexIdentifiers.deserialize(identifierData);
             case 'IndividualName':
@@ -1030,6 +1036,151 @@ class PID extends SimpleIdentifiers {
         pid.alternatives = ensureDeserialized(data.alternatives, Aliases);
 
         return pid;
+    }
+}
+
+/**
+ * StreetName class - subclass of SimpleIdentifiers for Block Island street names
+ * Used to represent canonical street names with aliases for variations.
+ *
+ * The primaryAlias contains the canonical street name (e.g., "CORN NECK ROAD").
+ * The alternatives (inherited from Aliased via SimpleIdentifiers) can contain:
+ * - homonyms: Verified trivial variations (misspellings, case differences)
+ * - synonyms: UNVERIFIED staging area - similarity-based matches pending review
+ * - candidates: Verified alternatives (via context like phonebook, or human review)
+ *
+ * For address comparison, use primary/homonym/candidates (verified categories).
+ * Exclude synonyms - they are unverified and may be false positives.
+ *
+ * This class enables semantic street name matching for Block Island addresses,
+ * allowing "CORN NECK RD" to match "CORN NECK ROAD" during address comparison.
+ *
+ * @param {AttributedTerm} primaryAlias - AttributedTerm containing the canonical street name
+ */
+class StreetName extends SimpleIdentifiers {
+    constructor(primaryAlias) {
+        super(primaryAlias);
+    }
+
+    /**
+     * Compare this StreetName to another StreetName or a string.
+     * Returns an object with the highest Levenshtein similarity score
+     * for each category of alias.
+     *
+     * @param {StreetName|string} other - StreetName to compare, or string to look up
+     * @returns {Object} {
+     *   primary: number,    // similarity to primaryAlias (0-1)
+     *   homonym: number,    // highest similarity among homonyms (0-1, or -1 if none)
+     *   synonym: number,    // highest similarity among synonyms (0-1, or -1 if none)
+     *   candidate: number   // highest similarity among candidates (0-1, or -1 if none)
+     * }
+     */
+    compareTo(other) {
+        // Extract the term to compare
+        let termToCheck = null;
+
+        if (typeof other === 'string') {
+            termToCheck = other.toUpperCase().trim();
+        } else if (other instanceof StreetName) {
+            termToCheck = other.primaryAlias?.term?.toUpperCase()?.trim();
+        } else if (other?.primaryAlias?.term) {
+            // Duck typing for StreetName-like objects
+            termToCheck = other.primaryAlias.term.toUpperCase().trim();
+        }
+
+        // Default result for invalid input
+        if (!termToCheck) {
+            return { primary: 0, homonym: -1, synonym: -1, candidate: -1 };
+        }
+
+        // Helper to calculate similarity
+        // First normalizes street names to expand abbreviations and remove duplicate types
+        // (e.g., "ROAD Rd" → "ROAD"), then compares complete street names with Levenshtein
+        const calcSimilarity = (term1, term2) => {
+            if (!term1 || !term2) return 0;
+
+            // Normalize to handle duplicate street types (e.g., "ROAD Rd" → "ROAD")
+            // expandStreetName: expands "RD" → "ROAD", then removes "ROAD ROAD" → "ROAD"
+            let normalized1 = term1.toUpperCase();
+            let normalized2 = term2.toUpperCase();
+
+            if (typeof StreetTypeAbbreviationManager !== 'undefined' &&
+                StreetTypeAbbreviationManager.isLoaded) {
+                normalized1 = StreetTypeAbbreviationManager.expandStreetName(term1);
+                normalized2 = StreetTypeAbbreviationManager.expandStreetName(term2);
+            }
+
+            return levenshteinSimilarity(normalized1, normalized2);
+        };
+
+        // Calculate similarity to primary alias
+        const thisPrimary = this.primaryAlias?.term;
+        const primaryScore = calcSimilarity(thisPrimary, termToCheck);
+
+        // Calculate best similarity among homonyms
+        const homonyms = this.alternatives?.homonyms || [];
+        let homonymScore = homonyms.length === 0 ? -1 : 0;
+        for (const alt of homonyms) {
+            const score = calcSimilarity(alt?.term, termToCheck);
+            if (score > homonymScore) homonymScore = score;
+        }
+
+        // Calculate best similarity among synonyms
+        const synonyms = this.alternatives?.synonyms || [];
+        let synonymScore = synonyms.length === 0 ? -1 : 0;
+        for (const alt of synonyms) {
+            const score = calcSimilarity(alt?.term, termToCheck);
+            if (score > synonymScore) synonymScore = score;
+        }
+
+        // Calculate best similarity among candidates
+        const candidates = this.alternatives?.candidates || [];
+        let candidateScore = candidates.length === 0 ? -1 : 0;
+        for (const alt of candidates) {
+            const score = calcSimilarity(alt?.term, termToCheck);
+            if (score > candidateScore) candidateScore = score;
+        }
+
+        return {
+            primary: primaryScore,
+            homonym: homonymScore,
+            synonym: synonymScore,
+            candidate: candidateScore
+        };
+    }
+
+    /**
+     * Check if a string matches this StreetName (primary or any alternative).
+     * Convenience method that checks if any category has a perfect match.
+     *
+     * @param {string} streetString - Street name string to check
+     * @returns {boolean} True if the string matches this StreetName
+     */
+    matches(streetString) {
+        const scores = this.compareTo(streetString);
+        // Check if any category has a perfect match (1.0)
+        return scores.primary === 1.0 ||
+               scores.homonym === 1.0 ||
+               scores.synonym === 1.0 ||
+               scores.candidate === 1.0;
+    }
+
+    /**
+     * Deserialize StreetName from JSON object
+     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
+     * @param {Object} data - Serialized data
+     * @returns {StreetName} Reconstructed StreetName instance
+     */
+    static deserialize(data) {
+        if (data.type !== 'StreetName') {
+            throw new Error('Invalid StreetName serialization format');
+        }
+
+        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
+        const streetName = new StreetName(primaryAlias);
+        streetName.alternatives = ensureDeserialized(data.alternatives, Aliases);
+
+        return streetName;
     }
 }
 
@@ -1500,6 +1651,7 @@ class Address extends ComplexIdentifiers {
         // Block Island specific metadata
         this.isBlockIslandAddress = null; // AttributedTerm for boolean flag
         this.cityNormalized = null;    // AttributedTerm for normalization flag
+        this.biStreetName = null;      // StreetName object (only for BI addresses, Phase 4)
 
         // Processing metadata
         this.processingSource = null;   // AttributedTerm for "VisionAppraisal", "Bloomerang"
@@ -1714,6 +1866,63 @@ class Address extends ComplexIdentifiers {
             'city_normalized'
         );
 
+        // Phase 4: Look up StreetName object for Block Island addresses
+        // biStreetName links the parsed street to the canonical StreetName with alias awareness
+        // IMPORTANT: This does NOT change comparison logic - that's Phase 5
+        if (processedAddress.isBlockIslandAddress &&
+            window.blockIslandStreetDatabase &&
+            typeof window.blockIslandStreetDatabase.lookup === 'function') {
+
+            // Build street string to look up (combine street name + type if available)
+            let streetToLookup = processedAddress.street || '';
+            if (processedAddress.type) {
+                // Only append type if street doesn't already contain it (handles parse-address quirk)
+                // parse-address sometimes returns full word in street (e.g., "CENTER ROAD")
+                // and abbreviation in type (e.g., "RD"), causing duplication if we blindly append
+                const streetUpper = streetToLookup.toUpperCase();
+                const typeUpper = processedAddress.type.toUpperCase();
+
+                // Get the full form for this type (e.g., BCH → BEACH, RD → ROAD)
+                const fullForm = (typeof StreetTypeAbbreviationManager !== 'undefined' &&
+                                  StreetTypeAbbreviationManager.isLoaded)
+                    ? (StreetTypeAbbreviationManager.getFullForm(typeUpper) || typeUpper)
+                    : typeUpper;
+
+                // Split street on whitespace AND punctuation to get individual words
+                const streetWords = streetUpper.split(/[\s.,;:!?'"-]+/).filter(w => w.length > 0);
+
+                // Check if street already contains this type (as abbreviation or full form)
+                const alreadyHasType =
+                    streetWords.includes(typeUpper) ||      // Contains the abbreviation (e.g., "BCH")
+                    streetWords.includes(fullForm) ||       // Contains the full form (e.g., "BEACH")
+                    (typeof StreetTypeAbbreviationManager !== 'undefined' &&
+                     StreetTypeAbbreviationManager.isLoaded &&
+                     StreetTypeAbbreviationManager.endsWithStreetType(streetToLookup));  // Ends with any known type
+
+                if (!alreadyHasType) {
+                    streetToLookup = `${streetToLookup} ${processedAddress.type}`.trim();
+                }
+            }
+
+            if (streetToLookup) {
+                // Try lookup with full street + type first
+                let matchedStreetName = window.blockIslandStreetDatabase.lookup(streetToLookup);
+
+                // If no match, try just the street name without type
+                if (!matchedStreetName && processedAddress.street) {
+                    matchedStreetName = window.blockIslandStreetDatabase.lookup(processedAddress.street);
+                }
+
+                if (matchedStreetName) {
+                    address.biStreetName = matchedStreetName;
+                } else if (address.streetName) {
+                    // No match in BI database - create fallback StreetName using raw street name
+                    // This preserves pre-Phase 5 comparison behavior for unmatched streets
+                    address.biStreetName = new StreetName(address.streetName);
+                }
+            }
+        }
+
         // Processing metadata
         address.processingSource = new AttributedTerm(
             processedAddress.sourceType,
@@ -1734,7 +1943,8 @@ class Address extends ComplexIdentifiers {
 
     /**
      * Deserialize Address from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
+     * Uses dynamic property iteration (like Entity.deserialize) to automatically
+     * handle new properties without requiring manual updates to this method.
      * @param {Object} data - Serialized data
      * @returns {Address} Reconstructed Address instance
      */
@@ -1746,23 +1956,55 @@ class Address extends ComplexIdentifiers {
         const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
         const address = new Address(primaryAlias);
 
-        address.alternatives = ensureDeserialized(data.alternatives, Aliases);
+        // Type mappings for properties that need ensureDeserialized with specific types
+        const attributedTermProps = new Set([
+            'originalAddress', 'recipientDetails', 'streetNumber', 'streetName',
+            'streetType', 'city', 'state', 'zipCode', 'secUnitType', 'secUnitNum',
+            'isBlockIslandAddress', 'cityNormalized', 'processingSource', 'processingTimestamp'
+        ]);
 
-        // Deserialize all components - ensureDeserialized handles null/undefined
-        if (data.originalAddress) address.originalAddress = ensureDeserialized(data.originalAddress, AttributedTerm);
-        if (data.recipientDetails) address.recipientDetails = ensureDeserialized(data.recipientDetails, AttributedTerm);
-        if (data.streetNumber) address.streetNumber = ensureDeserialized(data.streetNumber, AttributedTerm);
-        if (data.streetName) address.streetName = ensureDeserialized(data.streetName, AttributedTerm);
-        if (data.streetType) address.streetType = ensureDeserialized(data.streetType, AttributedTerm);
-        if (data.city) address.city = ensureDeserialized(data.city, AttributedTerm);
-        if (data.state) address.state = ensureDeserialized(data.state, AttributedTerm);
-        if (data.zipCode) address.zipCode = ensureDeserialized(data.zipCode, AttributedTerm);
-        if (data.secUnitType) address.secUnitType = ensureDeserialized(data.secUnitType, AttributedTerm);
-        if (data.secUnitNum) address.secUnitNum = ensureDeserialized(data.secUnitNum, AttributedTerm);
-        if (data.isBlockIslandAddress) address.isBlockIslandAddress = ensureDeserialized(data.isBlockIslandAddress, AttributedTerm);
-        if (data.cityNormalized) address.cityNormalized = ensureDeserialized(data.cityNormalized, AttributedTerm);
-        if (data.processingSource) address.processingSource = ensureDeserialized(data.processingSource, AttributedTerm);
-        if (data.processingTimestamp) address.processingTimestamp = ensureDeserialized(data.processingTimestamp, AttributedTerm);
+        // Iterate over all properties in serialized data
+        Object.keys(data).forEach(key => {
+            // Skip type marker and constructor param (already handled)
+            if (key === 'type' || key === 'primaryAlias') {
+                return;
+            }
+            // Skip function references that cannot be serialized
+            if (key === 'comparisonCalculator') {
+                return;
+            }
+            // Handle null/undefined
+            if (data[key] === null || data[key] === undefined) {
+                address[key] = null;
+                return;
+            }
+
+            // Handle comparison calculator name - resolve to function
+            if (key === 'comparisonCalculatorName') {
+                address.comparisonCalculatorName = data[key];
+                address.comparisonCalculator = window.resolveComparisonCalculator(data[key]);
+            }
+            // Handle alternatives (Aliases type)
+            else if (key === 'alternatives') {
+                address.alternatives = ensureDeserialized(data[key], Aliases);
+            }
+            // Handle biStreetName (StreetName type)
+            else if (key === 'biStreetName') {
+                address.biStreetName = ensureDeserialized(data[key], StreetName);
+            }
+            // Handle AttributedTerm properties
+            else if (attributedTermProps.has(key)) {
+                address[key] = ensureDeserialized(data[key], AttributedTerm);
+            }
+            // Handle comparisonWeights (plain object)
+            else if (key === 'comparisonWeights') {
+                address.comparisonWeights = data[key];
+            }
+            // All other properties - direct assignment (future-proofing)
+            else {
+                address[key] = data[key];
+            }
+        });
 
         return address;
     }
@@ -1822,6 +2064,7 @@ if (typeof module !== 'undefined' && module.exports) {
         FireNumber,
         PoBox,
         PID,
+        StreetName,
         ComplexIdentifiers,
         IndividualName,
         HouseholdName,
@@ -1844,6 +2087,7 @@ if (typeof window !== 'undefined') {
     window.FireNumber = FireNumber;
     window.PoBox = PoBox;
     window.PID = PID;
+    window.StreetName = StreetName;
     window.ComplexIdentifiers = ComplexIdentifiers;
     window.IndividualName = IndividualName;
     window.HouseholdName = HouseholdName;

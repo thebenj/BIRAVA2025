@@ -7,6 +7,7 @@
  * Dependencies:
  * - parse-address library (parseAddress global)
  * - Address class from aliasClasses.js
+ * - StreetName class from aliasClasses.js
  * - Google Drive API (gapi.client) for Block Island streets loading
  *
  * Key Features:
@@ -14,7 +15,248 @@
  * - Enhanced Block Island address completion (dual logic rules)
  * - Street name preservation (prevents parse-address abbreviations)
  * - AttributedTerm integration for complete data lineage
+ * - StreetName Alias Database for street variation matching
  */
+
+// =============================================================================
+// STREET DATABASE CONFIGURATION
+// =============================================================================
+
+// StreetName Alias Database - contains StreetName objects with aliases
+const STREETNAME_ALIAS_DATABASE_ID = '1quMdB4qAcnR4oaepSbZEmVWUqYO5_nxK';
+
+// Legacy VA Processing Street File (kept for reference, no longer used for loading)
+// const VA_STREET_FILE_ID = '1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9';
+
+// =============================================================================
+// UNMATCHED STREET TRACKER
+// =============================================================================
+
+/**
+ * Tracks street names that fail to match in the StreetName database.
+ * Used to identify streets that should be added to the database.
+ *
+ * Google Drive Files:
+ * - JSON: 1VopBti05Fkmn6baW2lbvWml6kbzHgp_5 (persistent dataset)
+ * - CSV: 12TapBBfwNk0_4rvOlaO1LYVW2kXI5YZR (regenerated from JSON)
+ */
+window.unmatchedStreetTracker = {
+    // Google Drive file IDs
+    JSON_FILE_ID: '1VopBti05Fkmn6baW2lbvWml6kbzHgp_5',
+    CSV_FILE_ID: '12TapBBfwNk0_4rvOlaO1LYVW2kXI5YZR',
+
+    // Current dataset: Map from normalized street string to record object
+    dataset: new Map(),
+
+    // Mode: 'overwrite' or 'add'
+    mode: null,
+
+    // Whether tracking is active
+    isActive: false,
+
+    /**
+     * Initialize tracking - prompts user and loads JSON if needed
+     * @returns {Promise<boolean>} True if initialization successful
+     */
+    async initialize() {
+        // Prompt user for mode
+        const choice = confirm(
+            'Unmatched Street Tracking\n\n' +
+            'Click OK to ADD to existing unmatched streets file.\n' +
+            'Click Cancel to OVERWRITE with fresh data.\n\n' +
+            '(This tracks streets not found in the BI database)'
+        );
+
+        this.mode = choice ? 'add' : 'overwrite';
+        this.dataset = new Map();
+
+        if (this.mode === 'add') {
+            // Load existing JSON file
+            try {
+                console.log('[UNMATCHED STREETS] Loading existing dataset from Google Drive...');
+                const response = await gapi.client.drive.files.get({
+                    fileId: this.JSON_FILE_ID,
+                    alt: 'media'
+                });
+
+                const data = response.result;
+                if (data && data.records && Array.isArray(data.records)) {
+                    // Build map from records
+                    for (const record of data.records) {
+                        if (record.unmatchedStreet) {
+                            const normalized = record.unmatchedStreet.toUpperCase().trim();
+                            this.dataset.set(normalized, record);
+                        }
+                    }
+                    console.log(`[UNMATCHED STREETS] Loaded ${this.dataset.size} existing records (ADD mode)`);
+                } else {
+                    console.log('[UNMATCHED STREETS] No existing records found, starting fresh');
+                }
+            } catch (error) {
+                console.warn('[UNMATCHED STREETS] Could not load existing file, starting fresh:', error.message);
+            }
+        } else {
+            console.log('[UNMATCHED STREETS] Starting fresh dataset (OVERWRITE mode)');
+        }
+
+        this.isActive = true;
+        return true;
+    },
+
+    /**
+     * Record an unmatched street with best match information
+     * @param {string} streetName - The street name that wasn't found
+     * @param {StreetName|null} bestMatch - The best matching StreetName object (or null)
+     * @param {Object} bestScores - The compareTo output for best match
+     * @param {number} bestOverallScore - The highest score across categories
+     * @param {string} bestAlias - The alias that had the highest score
+     */
+    record(streetName, bestMatch, bestScores, bestOverallScore, bestAlias) {
+        if (!this.isActive) return;
+        if (!streetName) return;
+
+        const normalized = streetName.toUpperCase().trim();
+
+        // Skip if already in dataset
+        if (this.dataset.has(normalized)) return;
+
+        // Create record
+        const record = {
+            unmatchedStreet: normalized,
+            bestMatchPrimary: bestMatch?.primaryAlias?.term || '',
+            bestMatchAlias: bestAlias || '',
+            bestScore: bestOverallScore || 0,
+            primaryScore: bestScores?.primary || 0,
+            homonymScore: bestScores?.homonym || -1,
+            synonymScore: bestScores?.synonym || -1,
+            candidateScore: bestScores?.candidate || -1
+        };
+
+        this.dataset.set(normalized, record);
+    },
+
+    /**
+     * Save to Google Drive (both JSON and CSV)
+     * @returns {Promise<Object>} Result with JSON and CSV file IDs
+     */
+    async save() {
+        if (!this.isActive) {
+            console.log('[UNMATCHED STREETS] Tracker not active, skipping save');
+            return null;
+        }
+
+        const records = Array.from(this.dataset.values());
+        console.log(`[UNMATCHED STREETS] Saving ${records.length} unmatched street records...`);
+
+        // Sort records alphabetically by street name
+        records.sort((a, b) => a.unmatchedStreet.localeCompare(b.unmatchedStreet));
+
+        // Build JSON structure
+        const jsonData = {
+            __format: 'UnmatchedStreetDatabase',
+            __version: '1.0',
+            __lastUpdated: new Date().toISOString(),
+            __recordCount: records.length,
+            records: records
+        };
+
+        // Build CSV content
+        const csvHeaders = [
+            'unmatchedStreet',
+            'bestMatchPrimary',
+            'bestMatchAlias',
+            'bestScore',
+            'primaryScore',
+            'homonymScore',
+            'synonymScore',
+            'candidateScore'
+        ];
+
+        const csvRows = records.map(r => [
+            this._csvEscape(r.unmatchedStreet),
+            this._csvEscape(r.bestMatchPrimary),
+            this._csvEscape(r.bestMatchAlias),
+            r.bestScore,
+            r.primaryScore,
+            r.homonymScore,
+            r.synonymScore,
+            r.candidateScore
+        ].join(','));
+
+        const csvContent = [csvHeaders.join(','), ...csvRows].join('\n');
+
+        try {
+            // Upload JSON
+            console.log('[UNMATCHED STREETS] Uploading JSON...');
+            const jsonContent = JSON.stringify(jsonData, null, 2);
+            await fetch(
+                `https://www.googleapis.com/upload/drive/v3/files/${this.JSON_FILE_ID}?uploadType=media`,
+                {
+                    method: 'PATCH',
+                    headers: new Headers({
+                        'Authorization': `Bearer ${gapi.client.getToken().access_token}`,
+                        'Content-Type': 'application/json'
+                    }),
+                    body: jsonContent
+                }
+            );
+
+            // Upload CSV
+            console.log('[UNMATCHED STREETS] Uploading CSV...');
+            await fetch(
+                `https://www.googleapis.com/upload/drive/v3/files/${this.CSV_FILE_ID}?uploadType=media`,
+                {
+                    method: 'PATCH',
+                    headers: new Headers({
+                        'Authorization': `Bearer ${gapi.client.getToken().access_token}`,
+                        'Content-Type': 'text/csv'
+                    }),
+                    body: csvContent
+                }
+            );
+
+            console.log(`[UNMATCHED STREETS] ✅ Saved ${records.length} records to Google Drive`);
+            console.log(`[UNMATCHED STREETS]   JSON: ${this.JSON_FILE_ID}`);
+            console.log(`[UNMATCHED STREETS]   CSV: ${this.CSV_FILE_ID}`);
+
+            // Deactivate after save
+            this.isActive = false;
+
+            return {
+                jsonFileId: this.JSON_FILE_ID,
+                csvFileId: this.CSV_FILE_ID,
+                recordCount: records.length
+            };
+
+        } catch (error) {
+            console.error('[UNMATCHED STREETS] ❌ Error saving:', error);
+            throw error;
+        }
+    },
+
+    /**
+     * Helper to escape CSV values
+     */
+    _csvEscape(value) {
+        if (value === null || value === undefined) return '';
+        const str = String(value);
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return '"' + str.replace(/"/g, '""') + '"';
+        }
+        return str;
+    },
+
+    /**
+     * Get summary of current tracking state
+     */
+    getSummary() {
+        return {
+            isActive: this.isActive,
+            mode: this.mode,
+            recordCount: this.dataset.size
+        };
+    }
+};
 
 // City name normalization function for Block Island
 function normalizeBlockIslandCity(parsedAddress) {
@@ -141,6 +383,14 @@ function findBlockIslandStreetMatch(streetChecks) {
                 }
                 break; // Move to next biStreetName
             }
+        }
+    }
+
+    // BASELINE INSTRUMENTATION: Record street lookup if enabled
+    // Record each unique input string that was checked
+    if (typeof recordStreetLookup === 'function') {
+        for (const checkStreet of streetChecks) {
+            recordStreetLookup(checkStreet, !!storedMatch, storedMatch);
         }
     }
 
@@ -574,41 +824,295 @@ function processAddress(addressString, sourceType = 'unknown', fieldName = null)
 }
 
 /**
- * Load Block Island streets database from Google Drive
- * Uses proven Method 1 from wisdomOfFileAccess.md
- * @returns {Promise<Set>} Set of Block Island street names in uppercase
+ * Deserialize an AttributedTerm from the StreetName Alias Database format.
+ * Converts plain object sourceMap to Map instance.
+ * @param {Object} data - Serialized AttributedTerm data
+ * @returns {AttributedTerm} Reconstructed AttributedTerm instance
+ */
+function deserializeStreetAttributedTerm(data) {
+    if (!data || data.type !== 'AttributedTerm') {
+        throw new Error('Invalid AttributedTerm data');
+    }
+
+    // Convert sourceMap from plain object to Map
+    const sourceMap = new Map();
+    if (data.sourceMap && typeof data.sourceMap === 'object') {
+        for (const [key, value] of Object.entries(data.sourceMap)) {
+            sourceMap.set(key, value);
+        }
+    }
+
+    // Get first entry to create the AttributedTerm
+    const entries = Array.from(sourceMap.entries());
+    if (entries.length === 0) {
+        // Create with minimal data if no source entries
+        const at = new AttributedTerm(data.term, 'StreetDatabase', 0, 'street', data.fieldName || 'streetName');
+        return at;
+    }
+
+    const [source, sourceInfo] = entries[0];
+    const at = new AttributedTerm(
+        data.term,
+        source,
+        sourceInfo.index || 0,
+        sourceInfo.identifier || 'street',
+        data.fieldName || 'streetName'
+    );
+
+    // Add additional sources
+    for (let i = 1; i < entries.length; i++) {
+        const [addSource, addInfo] = entries[i];
+        at.addAdditionalSource(addSource, addInfo.index || 0, addInfo.identifier || 'street');
+    }
+
+    return at;
+}
+
+/**
+ * Deserialize an Aliases object from the StreetName Alias Database format.
+ * @param {Object} data - Serialized Aliases data
+ * @returns {Aliases} Reconstructed Aliases instance
+ */
+function deserializeStreetAliases(data) {
+    if (!data || data.type !== 'Aliases') {
+        throw new Error('Invalid Aliases data');
+    }
+
+    const aliases = new Aliases();
+    aliases.homonyms = (data.homonyms || []).map(deserializeStreetAttributedTerm);
+    aliases.synonyms = (data.synonyms || []).map(deserializeStreetAttributedTerm);
+    aliases.candidates = (data.candidates || []).map(deserializeStreetAttributedTerm);
+
+    return aliases;
+}
+
+/**
+ * Deserialize a StreetName object from the StreetName Alias Database format.
+ * @param {Object} data - Serialized StreetName data
+ * @returns {StreetName} Reconstructed StreetName instance
+ */
+function deserializeStreetNameObject(data) {
+    if (!data || data.type !== 'StreetName') {
+        throw new Error('Invalid StreetName data');
+    }
+
+    const primaryAlias = deserializeStreetAttributedTerm(data.primaryAlias);
+    const streetName = new StreetName(primaryAlias);
+    streetName.alternatives = deserializeStreetAliases(data.alternatives);
+
+    return streetName;
+}
+
+/**
+ * Load Block Island streets database from Google Drive (StreetName Alias Database)
+ * Phase 3: Loads StreetName objects and builds lookup structures
+ * @returns {Promise<Set>} Set of Block Island street names (for backward compatibility)
  */
 async function loadBlockIslandStreetsFromDrive() {
     try {
+        // Load street type abbreviation table first (needed for address processing)
+        if (typeof StreetTypeAbbreviationManager !== 'undefined' && !StreetTypeAbbreviationManager.isLoaded) {
+            console.log('[STREET DB] Loading StreetTypeAbbreviationManager...');
+            await StreetTypeAbbreviationManager.loadFromDrive();
+        }
+
+        console.log('[STREET DB] Loading StreetName Alias Database...');
+
         const response = await gapi.client.drive.files.get({
-            fileId: '1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9',
+            fileId: STREETNAME_ALIAS_DATABASE_ID,
             alt: 'media'
         });
 
         const content = response.body;
-        const streets = JSON.parse(content);
-        window.blockIslandStreets = new Set(streets.map(s => s.toUpperCase()));
+        const database = JSON.parse(content);
 
-        // Add trimmed versions for any streets with trailing spaces
-        let trailingSpaceCount = 0;
-        const originalStreets = Array.from(window.blockIslandStreets);
+        // Validate database format
+        if (database.__format !== 'StreetNameAliasDatabase') {
+            throw new Error(`Unexpected database format: ${database.__format}`);
+        }
 
-        for (const street of originalStreets) {
-            // Check if original raw street (before our trim) had trailing spaces
-            const rawStreet = streets.find(s => s.toUpperCase().trim() === street);
-            if (rawStreet && rawStreet !== rawStreet.trim()) {
-                const trimmedVersion = rawStreet.toUpperCase().trim();
-                if (!window.blockIslandStreets.has(trimmedVersion)) {
-                    window.blockIslandStreets.add(trimmedVersion);
-                    trailingSpaceCount++;
+        console.log(`[STREET DB] Database version: ${database.__version}, created: ${database.__created}`);
+        console.log(`[STREET DB] Street count: ${database.__streetCount}`);
+
+        // Deserialize StreetName objects
+        const streetNameObjects = database.streets.map(deserializeStreetNameObject);
+        console.log(`[STREET DB] Deserialized ${streetNameObjects.length} StreetName objects`);
+
+        // Build the street database object with lookup methods
+        const streetDatabase = {
+            // Array of all StreetName objects
+            streetNames: streetNameObjects,
+
+            // Map from any variation (uppercase, trimmed) to its StreetName object
+            variationToStreetName: new Map(),
+
+            // Metadata from the database file
+            version: database.__version,
+            created: database.__created,
+            sourceFileId: database.__sourceFileId,
+
+            /**
+             * Look up a StreetName object by any variation.
+             * Uses two-phase matching:
+             * 1. Fast path: exact match against indexed variations
+             * 2. Slow path: best-match using StreetName.compareTo() similarity
+             *
+             * @param {string} input - Street name variation to look up
+             * @param {number} threshold - Minimum similarity score for best-match (default 0.80)
+             * @returns {StreetName|null} The StreetName object, or null if not found
+             */
+            lookup: function(input, threshold = 0.80) {
+                if (!input || typeof input !== 'string') return null;
+                const normalized = input.toUpperCase().trim();
+
+                // Fast path: exact match against indexed variations
+                const exactMatch = this.variationToStreetName.get(normalized);
+                if (exactMatch) return exactMatch;
+
+                // Slow path: find best match using StreetName.compareTo()
+                let bestMatch = null;
+                let bestScore = 0;
+                let bestScores = null;
+                let bestAlias = '';
+
+                for (const streetName of this.streetNames) {
+                    const scores = streetName.compareTo(normalized);
+                    // Take the maximum score across primary, homonym, and candidate
+                    // (exclude synonym - unverified)
+                    const maxScore = Math.max(
+                        scores.primary,
+                        scores.homonym >= 0 ? scores.homonym : 0,
+                        scores.candidate >= 0 ? scores.candidate : 0
+                    );
+
+                    if (maxScore > bestScore) {
+                        bestScore = maxScore;
+                        bestMatch = streetName;
+                        bestScores = scores;
+
+                        // Determine which alias had the best score
+                        if (maxScore === scores.primary) {
+                            bestAlias = streetName.primaryAlias?.term || '';
+                        } else if (scores.homonym >= 0 && maxScore === scores.homonym) {
+                            // Find the homonym that matched best
+                            bestAlias = this._findBestAlias(streetName.alternatives?.homonyms, normalized) || '';
+                        } else if (scores.candidate >= 0 && maxScore === scores.candidate) {
+                            // Find the candidate that matched best
+                            bestAlias = this._findBestAlias(streetName.alternatives?.candidates, normalized) || '';
+                        }
+                    }
+                }
+
+                // If below threshold, record as unmatched street
+                if (bestScore < threshold) {
+                    if (window.unmatchedStreetTracker && window.unmatchedStreetTracker.isActive) {
+                        window.unmatchedStreetTracker.record(
+                            normalized,
+                            bestMatch,
+                            bestScores,
+                            bestScore,
+                            bestAlias
+                        );
+                    }
+                    return null;
+                }
+
+                return bestMatch;
+            },
+
+            /**
+             * Helper to find which alias in an array best matches the input
+             * @private
+             */
+            _findBestAlias: function(aliases, input) {
+                if (!aliases || !Array.isArray(aliases)) return null;
+                let best = null;
+                let bestSim = 0;
+                for (const alias of aliases) {
+                    const term = alias?.term;
+                    if (term) {
+                        const sim = typeof levenshteinSimilarity === 'function'
+                            ? levenshteinSimilarity(term.toUpperCase(), input.toUpperCase())
+                            : 0;
+                        if (sim > bestSim) {
+                            bestSim = sim;
+                            best = term;
+                        }
+                    }
+                }
+                return best;
+            },
+
+            /**
+             * Check if a street variation exists in the database
+             * @param {string} input - Street name variation to check
+             * @returns {boolean} True if the variation exists
+             */
+            has: function(input) {
+                if (!input || typeof input !== 'string') return false;
+                const normalized = input.toUpperCase().trim();
+                return this.variationToStreetName.has(normalized);
+            }
+        };
+
+        // Build the variationToStreetName index
+        // Each StreetName's primary alias AND all alternatives map to the same StreetName object
+        let totalVariations = 0;
+        for (const streetName of streetNameObjects) {
+            // Primary alias
+            const primaryTerm = streetName.primaryAlias?.term;
+            if (primaryTerm) {
+                const normalized = primaryTerm.toUpperCase().trim();
+                streetDatabase.variationToStreetName.set(normalized, streetName);
+                totalVariations++;
+            }
+
+            // All alternatives (homonyms, synonyms, candidates)
+            const alternatives = streetName.alternatives;
+            if (alternatives) {
+                for (const homonym of alternatives.homonyms || []) {
+                    const term = homonym.term;
+                    if (term) {
+                        const normalized = term.toUpperCase().trim();
+                        if (!streetDatabase.variationToStreetName.has(normalized)) {
+                            streetDatabase.variationToStreetName.set(normalized, streetName);
+                            totalVariations++;
+                        }
+                    }
+                }
+                for (const synonym of alternatives.synonyms || []) {
+                    const term = synonym.term;
+                    if (term) {
+                        const normalized = term.toUpperCase().trim();
+                        if (!streetDatabase.variationToStreetName.has(normalized)) {
+                            streetDatabase.variationToStreetName.set(normalized, streetName);
+                            totalVariations++;
+                        }
+                    }
+                }
+                for (const candidate of alternatives.candidates || []) {
+                    const term = candidate.term;
+                    if (term) {
+                        const normalized = term.toUpperCase().trim();
+                        if (!streetDatabase.variationToStreetName.has(normalized)) {
+                            streetDatabase.variationToStreetName.set(normalized, streetName);
+                            totalVariations++;
+                        }
+                    }
                 }
             }
         }
 
-        console.log(`✅ Loaded ${streets.length} Block Island streets from Google Drive`);
-        if (trailingSpaceCount > 0) {
-            console.log(`🔧 Added ${trailingSpaceCount} trimmed versions for streets with trailing spaces`);
-        }
+        // Store the database object globally
+        window.blockIslandStreetDatabase = streetDatabase;
+        console.log(`[STREET DB] Built variation index with ${totalVariations} entries`);
+
+        // Build backward-compatible Set from all variations
+        // This ensures code using window.blockIslandStreets.has() continues to work
+        window.blockIslandStreets = new Set(streetDatabase.variationToStreetName.keys());
+
+        console.log(`✅ Loaded ${streetNameObjects.length} Block Island streets with ${totalVariations} variations`);
+
         return window.blockIslandStreets;
 
     } catch (error) {

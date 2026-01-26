@@ -12,7 +12,8 @@ const accExt = {
     'css': 'text/css',
     'html': 'text/html',
     'js': 'application/javascript',
-    'md': 'text/plain'
+    'md': 'text/plain',
+    'json': 'application/json'
 }
 const excExt = ['ico']
 

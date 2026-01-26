@@ -582,6 +582,63 @@
             margin-top: 5px;
             font-style: italic;
         }
+
+        /* Street Name Browser Styles */
+        .streetname-result-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .streetname-result-item:hover {
+            background-color: #e0f2f1;
+        }
+
+        .streetname-result-item.streetname-selected {
+            background-color: #b2dfdb;
+            border-left: 4px solid #00897b;
+        }
+
+        .streetname-result-item:last-child {
+            border-bottom: none;
+        }
+
+        .streetname-primary {
+            font-weight: bold;
+            color: #00695c;
+            font-size: 14px;
+        }
+
+        .streetname-alias-count {
+            font-size: 11px;
+            color: #666;
+            margin-left: 10px;
+        }
+
+        .streetname-alias-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+
+        .streetname-alias-homonym {
+            background-color: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .streetname-alias-synonym {
+            background-color: #fff9c4;
+            color: #f57f17;
+        }
+
+        .streetname-alias-candidate {
+            background-color: #e1bee7;
+            color: #7b1fa2;
+        }
     </style>
 </head>
 <body>
@@ -687,6 +744,9 @@
                 <div class="step-box">
                     <div class="step-label">Step A5: Process Bloomerang Data</div>
                     <div class="step-description">First export "all data.csv" from the Bloomerang application, then click to process. Creates Individual and AggregateHousehold entities with household information.</div>
+                    <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 8px; margin: 8px 0; font-size: 11px; font-weight: bold;">
+                        PREPROCESSING: 1) GET RID OF TOTAL ROW 2) REPLACE \n WITH SPACE 3) CHANGE COMMAS IN ADDRESS COLUMNS TO ^#C#^
+                    </div>
                     <div class="step-buttons">
                         <button class="optBut" onclick="readBloomerangWithEntities(true)">Process Bloomerang CSV</button>
                     </div>
@@ -864,6 +924,7 @@
                         <button id="oneToONe" class="optBut" onclick="makeOneToOneFile()">Make One To One File</button>
                         <button id="test" class="optBut" onclick="test()">Test</button>
                         <button class="optBut" onclick="readPhonebook()">Process Phonebook Data</button>
+                        <button class="optBut" onclick="processPhonebookFile()" style="background-color: #6f42c1;">Parse Phonebook File</button>
                         <button id="readmeButton" class="optBut" onclick="showReadme()">📖 README</button>
                     </div>
                 </div>
@@ -1129,12 +1190,22 @@
                 </div>
 
                 <!-- Prospect Mail Merge Export -->
-                <div>
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #c8e6c9;">
                     <button id="prospectMailMergeBtn" onclick="runProspectMailMergeExport()" style="padding: 8px 14px; background: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
                         📬 Prospect Mail Merge
                     </button>
                     <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
                         One row per group for mail merge. Loads EntityGroup database if needed. Excludes Bloomerang donors and excluded addresses.
+                    </div>
+                </div>
+
+                <!-- Bloomerang Name Match Export -->
+                <div>
+                    <button id="bloomerangNameMatchBtn" onclick="runBloomerangLastNameMatchExport()" style="padding: 8px 14px; background: #7b1fa2; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                        🔍 Bloomerang Name Match
+                    </button>
+                    <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
+                        Find VA property owners matching Bloomerang-only group names. Shows * for VA entities already in groups.
                     </div>
                 </div>
             </div>
@@ -1155,6 +1226,234 @@
                 <div style="font-size: 11px; color: #6c757d; margin-top: 6px;">
                     Open browser DevTools (F12) to see comparison results
                 </div>
+            </div>
+
+            <!-- Override Rules Audit -->
+            <div style="margin-top: 15px; padding: 12px; background: #fff3e0; border: 1px solid #ffcc80; border-radius: 6px;">
+                <div style="font-weight: 600; margin-bottom: 8px; color: #e65100;">🔍 Override Rules Audit</div>
+                <button onclick="runOverrideRulesAudit()"
+                        style="padding: 8px 16px; background: #ff6f00; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                    Audit Override Rules
+                </button>
+                <div style="font-size: 11px; color: #bf360c; margin-top: 6px;">
+                    Verify FORCE_MATCH and FORCE_EXCLUDE rules were applied correctly to the EntityGroup database.
+                    Loads rules from Google Sheets if needed. Outputs summary to console and downloads CSV with details.
+                </div>
+            </div>
+        </div>
+
+        <!-- Street Name Browser Section -->
+        <div class="entity-browser-section" style="border-color: #00897b;">
+            <h3 style="color: #00897b;">Street Name Browser - Block Island Street Database Explorer</h3>
+
+            <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
+
+                <!-- File ID and Load Controls Row -->
+                <div class="control-row" style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 320px;">
+                        <label for="streetNameDatabaseFileId" style="font-weight: 600; margin-bottom: 5px; color: #495057;">Street Database File ID:</label>
+                        <input type="text" id="streetNameDatabaseFileId" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; font-family: 'Courier New', monospace;"
+                               value="1quMdB4qAcnR4oaepSbZEmVWUqYO5_nxK" placeholder="Enter file ID...">
+                    </div>
+                    <div class="control-group" style="display: flex; align-items: flex-end; gap: 10px;">
+                        <button id="streetNameLoadBtn" class="action-button" style="background-color: #00897b; padding: 10px 20px; font-weight: 600;">
+                            Load Street Database
+                        </button>
+                        <button id="streetNameSaveBtn" class="action-button" style="background-color: #ff9800; padding: 10px 20px; font-weight: 600;">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+
+                <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                    <strong>Street Name Browser:</strong> Browse, search, and test StreetName objects with alias awareness.
+                    Test how street name strings will match against the database using compareTo(). Add new aliases to existing streets or create new StreetName objects.
+                </div>
+            </div>
+
+            <!-- Search Section -->
+            <div class="search-section" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                <input type="text" id="streetNameSearchInput" class="search-input" placeholder="Search street names..." style="flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px;">
+                <button id="streetNameSearchBtn" class="search-button" style="padding: 8px 16px; background: #00897b; color: white; border: none; border-radius: 4px; cursor: pointer;">Search</button>
+                <button id="streetNameClearBtn" class="search-button" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                <button id="streetNameNewBtn" class="search-button" style="padding: 8px 16px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer;">+ New Street</button>
+            </div>
+
+            <!-- Status Message -->
+            <div id="streetNameStatusMessage" class="status-message" style="display: none;"></div>
+
+            <!-- Main Content: Two-Panel Layout -->
+            <div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
+
+                <!-- Left Panel: Street List -->
+                <div class="results-section" style="flex: 1; min-width: 350px;">
+                    <div class="results-header">
+                        <span id="streetNameResultsCount">Load street database to begin</span>
+                    </div>
+                    <div id="streetNameResultsList" class="results-list" style="max-height: 400px;">
+                        <div style="padding: 20px; text-align: center; color: #999;">
+                            <div style="font-size: 48px; margin-bottom: 15px;">&#127963;</div>
+                            <div style="font-weight: 600; margin-bottom: 10px;">Street Name Browser</div>
+                            <div>Load the street database to begin browsing</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Details and Testing -->
+                <div style="flex: 1; min-width: 400px;">
+
+                    <!-- Selected Street Details -->
+                    <div id="streetNameDetailsPanel" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #00897b;">Selected Street</h4>
+                        <div id="streetNameDetailsContent" style="color: #666;">
+                            Select a street from the list to view details
+                        </div>
+                    </div>
+
+                    <!-- compareTo Test Panel -->
+                    <div style="background: #e3f2fd; border: 1px solid #90caf9; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1976d2;">Test compareTo()</h4>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <input type="text" id="streetNameTestInput" placeholder="Enter street string to test..."
+                                   style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                            <button id="streetNameTestBtn" style="background: #1976d2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                Test
+                            </button>
+                        </div>
+                        <div id="streetNameTestResult" style="font-family: monospace; font-size: 12px; background: white; padding: 10px; border-radius: 4px; min-height: 60px;">
+                            Enter a string and press Enter or click Test to see compareTo() results
+                        </div>
+                    </div>
+
+                    <!-- Add Alias Panel -->
+                    <div style="background: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #ef6c00;">Add Alias to Selected Street</h4>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="streetNameAliasInput" placeholder="New alias string..."
+                                   style="flex: 1; min-width: 150px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                            <select id="streetNameAliasCategory" style="padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                                <option value="homonyms">Homonym</option>
+                                <option value="synonyms">Synonym</option>
+                                <option value="candidates">Candidate</option>
+                            </select>
+                        </div>
+                        <button id="streetNameAddAliasBtn" style="background: #ef6c00; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                            + Add Alias
+                        </button>
+                        <div style="font-size: 11px; color: #666; margin-top: 8px;">
+                            <strong>Homonym:</strong> Verified similar spelling |
+                            <strong>Synonym:</strong> Unverified match |
+                            <strong>Candidate:</strong> Verified contextual match
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button id="streetNameStatsBtn" class="action-button">Database Stats</button>
+                <button id="streetNameExportBtn" class="action-button">Export JSON</button>
+            </div>
+        </div>
+
+        <!-- Fire Number Collision Browser Section -->
+        <div class="entity-browser-section" style="border-color: #1565c0;">
+            <h3 style="color: #1565c0;">Fire Number Collision Browser - PID/Fire Number Collision Tracker</h3>
+
+            <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
+
+                <!-- File ID and Load Controls Row -->
+                <div class="control-row" style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 320px;">
+                        <label for="collisionDatabaseFileId" style="font-weight: 600; margin-bottom: 5px; color: #495057;">Collision Database File ID:</label>
+                        <input type="text" id="collisionDatabaseFileId" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; font-family: 'Courier New', monospace;"
+                               value="1exdeASVuntM6b_nyJUNUO0_EqRX8Jjz0" placeholder="Enter file ID...">
+                    </div>
+                    <div class="control-group" style="display: flex; align-items: flex-end; gap: 10px;">
+                        <button id="collisionLoadBtn" class="action-button" style="background-color: #1565c0; padding: 10px 20px; font-weight: 600;">
+                            Load Collision Database
+                        </button>
+                        <button id="collisionSaveBtn" class="action-button" style="background-color: #ff9800; padding: 10px 20px; font-weight: 600;">
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+
+                <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                    <strong>Fire Number Collision Browser:</strong> View and manage fire numbers where multiple PIDs exist at the same property.
+                    Search by fire number or entity key. Manually add or remove entity keys from collision records.
+                </div>
+            </div>
+
+            <!-- Search Section -->
+            <div class="search-section" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                <input type="text" id="collisionSearchInput" class="search-input" placeholder="Search by fire number or entity key..." style="flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px;">
+                <button id="collisionSearchBtn" class="search-button" style="padding: 8px 16px; background: #1565c0; color: white; border: none; border-radius: 4px; cursor: pointer;">Search</button>
+                <button id="collisionClearSearchBtn" class="search-button" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                <button id="collisionNewRecordBtn" class="search-button" style="padding: 8px 16px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer;">+ New Record</button>
+            </div>
+
+            <!-- Status Message -->
+            <div id="collisionStatusMessage" class="status-message" style="display: none;"></div>
+
+            <!-- Main Content: Two-Panel Layout -->
+            <div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
+
+                <!-- Left Panel: Collision List -->
+                <div class="results-section" style="flex: 1; min-width: 350px;">
+                    <div class="results-header">
+                        <span id="collisionResultsCount">Load collision database to begin</span>
+                    </div>
+                    <div id="collisionResultsList" class="results-list" style="max-height: 400px;">
+                        <div style="padding: 20px; text-align: center; color: #999;">
+                            <div style="font-size: 48px; margin-bottom: 15px;">&#128293;</div>
+                            <div style="font-weight: 600; margin-bottom: 10px;">Fire Number Collision Browser</div>
+                            <div>Load the collision database to begin browsing</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Details and Editing -->
+                <div style="flex: 1; min-width: 400px;">
+
+                    <!-- Selected Collision Details -->
+                    <div id="collisionDetailsPanel" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1565c0;">Selected Collision</h4>
+                        <div id="collisionDetailsContent" style="color: #666;">
+                            Select a record from the list to view details
+                        </div>
+                    </div>
+
+                    <!-- Edit Panel -->
+                    <div style="background: #e3f2fd; border: 1px solid #90caf9; border-radius: 8px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1565c0;">Edit Entity Keys</h4>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="collisionEntityKeyInput" placeholder="Entity key..."
+                                   style="flex: 2; min-width: 200px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-family: monospace; font-size: 11px;">
+                            <input type="text" id="collisionPidInput" placeholder="PID (optional)"
+                                   style="flex: 1; min-width: 80px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                        </div>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button id="collisionAddKeyBtn" style="background: #2e7d32; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                + Add Key
+                            </button>
+                            <button id="collisionRemoveKeyBtn" style="background: #c62828; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                - Remove Key
+                            </button>
+                            <button id="collisionDeleteRecordBtn" style="background: #757575; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                Delete Record
+                            </button>
+                        </div>
+                        <div style="font-size: 11px; color: #666; margin-top: 8px;">
+                            Enter an entity key (e.g., visionAppraisal:FireNumber:72A) to add or remove from the selected collision record.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button id="collisionStatsBtn" class="action-button">Database Stats</button>
             </div>
         </div>
     </div>
@@ -1187,6 +1486,7 @@
     <script type="text/javascript" src="./scripts/testing/addressTesting.js"></script>
     <script type="text/javascript" src="./scripts/postProcessing.js"></script>
     <script type="text/javascript" src="./scripts/phonebook.js"></script>
+    <script type="text/javascript" src="./scripts/phonebookParser.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/aliasClasses.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/contactInfo.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/householdInformation.js"></script>
@@ -1695,6 +1995,31 @@
     <!-- EntityGroup Browser -->
     <script src="./scripts/entityGroupBrowser.js"></script>
 
+    <!-- CSV Reports and Export Functions -->
+    <script src="./scripts/export/csvReports.js"></script>
+
+    <!-- Entity Comparison Diagnostic Tool -->
+    <script src="./scripts/diagnostics/entityComparison.js"></script>
+
+    <!-- Override Rules Audit Tool -->
+    <script src="./scripts/diagnostics/auditOverrideRules.js"></script>
+
+    <!-- Street Architecture Baseline Capture -->
+    <script src="./scripts/diagnostics/streetArchitectureBaseline.js"></script>
+
+    <!-- Street Type Abbreviation Manager -->
+    <script src="./scripts/streetTypeAbbreviations.js"></script>
+
+    <!-- StreetName Database Converter (Phase 2) -->
+    <script src="./scripts/streetNameDatabaseConverter.js"></script>
+
+    <!-- Street Name Browser -->
+    <script src="./scripts/streetNameBrowser.js"></script>
+
+    <!-- Fire Number Collision Database -->
+    <script src="./scripts/fireNumberCollisionDatabase.js"></script>
+    <script src="./scripts/fireNumberCollisionBrowser.js"></script>
+
     <!-- Lightweight EntityGroup Exporter (for Google Apps Script) -->
     <script src="./scripts/export/lightweightExporter.js"></script>
 
@@ -1731,6 +2056,11 @@
                 if (input) {
                     input.value = savedFileId;
                 }
+            }
+
+            // Initialize Fire Number Collision Browser
+            if (typeof initializeFireNumberCollisionBrowser === 'function') {
+                initializeFireNumberCollisionBrowser();
             }
         });
 

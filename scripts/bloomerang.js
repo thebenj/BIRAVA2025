@@ -239,6 +239,24 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
             });
             const fields = fixedLine.split(',').map(field => field.replace(/\^#C#\^/g, ',').trim());
 
+            // Pad 4-digit ZIP codes with leading zero (columns 12, 16, 20, 24)
+            const zipColumns = [12, 16, 20, 24];
+            for (const col of zipColumns) {
+                if (fields[col] && /^\d{4}$/.test(fields[col])) {
+                    fields[col] = '0' + fields[col];
+                }
+            }
+
+            // [DIAG] Log rows that will trigger "no household name" error
+            const isInHousehold = fields[8];
+            const householdName = fields[28];
+            if (isInHousehold && isInHousehold.toLowerCase() === 'true' && !householdName) {
+                console.log(`[DIAG] Row ${index + 2}: Field count=${fields.length}, isInHH='${isInHousehold}', hhName='${householdName}'`);
+                console.log(`[DIAG] Row ${index + 2} original line: ${line.substring(0, 150)}...`);
+                console.log(`[DIAG] Row ${index + 2} fixed line: ${fixedLine.substring(0, 150)}...`);
+                console.log(`[DIAG] Row ${index + 2} fields[6]='${fields[6]}', fields[27]='${fields[27]}', fields[28]='${fields[28]}', fields[29]='${fields[29]}'`);
+            }
+
             return {
                 rowIndex: index + 1, // 1-based indexing for data rows
                 fields: fields,
@@ -247,6 +265,24 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
         });
 
         console.log(`Parsed ${rows.length} data rows`);
+
+        // Load Block Island streets database for address processing (biStreetName population)
+        console.log('\n🗺️ Loading Block Island streets database...');
+        if (typeof loadBlockIslandStreetsFromDrive !== 'undefined') {
+            try {
+                const streets = await loadBlockIslandStreetsFromDrive();
+                console.log(`✅ Loaded ${streets.size} Block Island streets for address processing`);
+            } catch (error) {
+                console.warn(`⚠️ Failed to load Block Island streets: ${error.message}`);
+            }
+        } else {
+            console.warn('⚠️ loadBlockIslandStreetsFromDrive function not available');
+        }
+
+        // Initialize unmatched street tracker (prompts user for overwrite/add mode)
+        if (window.unmatchedStreetTracker) {
+            await window.unmatchedStreetTracker.initialize();
+        }
 
         // Step 3: Initialize processing containers
         const entities = [];              // All created entities
@@ -390,6 +426,18 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
             await saveBloomerangEntityBrowserConfig(uploadResults, batchId);
         }
 
+        // Save unmatched street tracking data
+        if (window.unmatchedStreetTracker && window.unmatchedStreetTracker.isActive) {
+            try {
+                const trackingResult = await window.unmatchedStreetTracker.save();
+                if (trackingResult) {
+                    console.log(`[Bloomerang] Saved ${trackingResult.recordCount} unmatched street records`);
+                }
+            } catch (trackingError) {
+                console.warn('[Bloomerang] Could not save unmatched street data:', trackingError.message);
+            }
+        }
+
         // Step 7: Return results
         return {
             entities: entities,
@@ -472,6 +520,21 @@ async function readBloomerangWithEntitiesQuiet(saveToGoogleDrive = false, batchI
         });
 
         console.log(`✅ Loaded ${rows.length} Bloomerang records`);
+
+        // Load Block Island streets database for address processing (biStreetName population)
+        if (typeof loadBlockIslandStreetsFromDrive !== 'undefined') {
+            try {
+                const streets = await loadBlockIslandStreetsFromDrive();
+                console.log(`🗺️ Loaded ${streets.size} Block Island streets`);
+            } catch (error) {
+                console.warn(`⚠️ Failed to load Block Island streets: ${error.message}`);
+            }
+        }
+
+        // Initialize unmatched street tracker (prompts user for overwrite/add mode)
+        if (window.unmatchedStreetTracker) {
+            await window.unmatchedStreetTracker.initialize();
+        }
 
         // Step 3: Initialize processing containers (EXACT COPY)
         const entities = [];              // All created entities
@@ -602,6 +665,18 @@ async function readBloomerangWithEntitiesQuiet(saveToGoogleDrive = false, batchI
         Object.entries(entityCounts).forEach(([type, count]) => {
             console.log(`${type}: ${count} (${(count/entities.length*100).toFixed(1)}%)`);
         });
+
+        // Save unmatched street tracking data
+        if (window.unmatchedStreetTracker && window.unmatchedStreetTracker.isActive) {
+            try {
+                const trackingResult = await window.unmatchedStreetTracker.save();
+                if (trackingResult) {
+                    console.log(`[Bloomerang Quiet] Saved ${trackingResult.recordCount} unmatched street records`);
+                }
+            } catch (trackingError) {
+                console.warn('[Bloomerang Quiet] Could not save unmatched street data:', trackingError.message);
+            }
+        }
 
         // Step 7: Return results (EXACT COPY)
         return {

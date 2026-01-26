@@ -707,7 +707,6 @@ class MatchOverrideManager {
 
                 toRemove.add(loser);
                 this.stats.exclusionsApplied++;
-                this.markExclusionApplied(key1, key2);
 
                 // Accumulate count per ruleId for summary
                 const count = exclusionCounts.get(ruleMeta.ruleId) || 0;
@@ -758,7 +757,6 @@ class MatchOverrideManager {
 
                 toRemove.add(loser);
                 this.stats.exclusionsApplied++;
-                this.markExclusionApplied(key1, key2);
                 console.log(`[OVERRIDE] OnConflict exclusion ${ruleMeta.ruleId}: ${loser} removed (${ruleMeta.onConflict})`);
             }
         }
@@ -783,7 +781,6 @@ class MatchOverrideManager {
                 if (ruleMeta) {
                     toRemove.add(entity.key);
                     this.stats.exclusionsApplied++;
-                    this.markExclusionApplied(entity.key, priorityKey);
                     console.log(`[OVERRIDE] Priority exclusion ${ruleMeta.ruleId}: ${entity.key} removed (priority ${priorityKey} wins)`);
                     break;
                 }
@@ -809,7 +806,6 @@ class MatchOverrideManager {
                 if (ruleMeta) {
                     toRemove.add(key);
                     this.stats.exclusionsApplied++;
-                    this.markExclusionApplied(key, priorityKey);
                     console.log(`[OVERRIDE] Priority exclusion ${ruleMeta.ruleId}: ${key} removed (priority ${priorityKey} wins)`);
                     break;
                 }
@@ -836,7 +832,6 @@ class MatchOverrideManager {
             if (ruleMeta) {
                 toRemove.add(entity.key);
                 this.stats.exclusionsApplied++;
-                this.markExclusionApplied(entity.key, founderKey);
                 // No log per spec - founder exclusions are silent
             }
         }
@@ -861,7 +856,6 @@ class MatchOverrideManager {
             if (ruleMeta) {
                 toRemove.add(key);
                 this.stats.exclusionsApplied++;
-                this.markExclusionApplied(key, founderKey);
                 // No log per spec - founder exclusions are silent
             }
         }
@@ -886,7 +880,6 @@ class MatchOverrideManager {
             if (ruleMeta) {
                 toRemove.add(key);
                 this.stats.exclusionsApplied++;
-                this.markExclusionApplied(key, founderKey);
                 console.warn(`[OVERRIDE] Contradiction: ${founderKey} has both FORCE_MATCH and FORCE_EXCLUDE with ${key}. Exclusion wins (${ruleMeta.ruleId}).`);
             }
         }

@@ -64,9 +64,15 @@ async function buildEntityGroupDatabase(options = {}) {
         return null;
     }
 
+    // DIAGNOSTIC: Log the source of the entity data
+    console.log('🔍 DIAGNOSTIC: buildEntityGroupDatabase() using window.unifiedEntityDatabase');
+    console.log('🔍 DIAGNOSTIC: unifiedEntityDatabase.metadata.createdAt:', window.unifiedEntityDatabase.metadata?.createdAt);
+    console.log('🔍 DIAGNOSTIC: unifiedEntityDatabase.metadata.sources:', JSON.stringify(window.unifiedEntityDatabase.metadata?.sources));
+
     const fullEntityDb = window.unifiedEntityDatabase.entities;
     const totalEntities = Object.keys(fullEntityDb).length;
     log(`Total entities in full database: ${totalEntities}`);
+    console.log('🔍 DIAGNOSTIC: Entity count being used:', totalEntities);
 
     // Create sample if sampleSize is specified
     let entityDb;
@@ -86,11 +92,6 @@ async function buildEntityGroupDatabase(options = {}) {
     // NOTE: parentKeyToChildren Map construction was removed in Session 29 migration.
     // Household member lookup now uses entity.individualKeys[] (persisted on Bloomerang households)
     // instead of runtime Map. This eliminates O(N) scan at startup.
-
-    // Reset override rule applied counts before build
-    if (window.matchOverrideManager) {
-        window.matchOverrideManager.resetAppliedCounts();
-    }
 
     // Record sample mode info if applicable
     if (config.sampleSize && config.sampleSize < totalEntities) {
@@ -137,39 +138,6 @@ async function buildEntityGroupDatabase(options = {}) {
 
     log('\n=== ENTITY GROUP CONSTRUCTION COMPLETE ===');
     log(groupDb.getSummary());
-
-    // Report unused override rules (concise format)
-    if (window.matchOverrideManager) {
-        const unused = window.matchOverrideManager.getUnusedRules();
-        const totalUnused = unused.unusedForceMatch.length + unused.unusedForceExclude.length +
-                           unused.unusedMutualInclusion.length + unused.unusedMutualExclusion.length;
-
-        if (totalUnused > 0) {
-            log('\n--- UNUSED OVERRIDE RULES ---');
-
-            if (unused.unusedForceMatch.length > 0) {
-                const ruleIds = unused.unusedForceMatch.map(r => r.ruleId).join(', ');
-                log(`  FORCE_MATCH (${unused.unusedForceMatch.length}): ${ruleIds}`);
-            }
-
-            if (unused.unusedForceExclude.length > 0) {
-                const ruleIds = unused.unusedForceExclude.map(r => r.ruleId).join(', ');
-                log(`  FORCE_EXCLUDE (${unused.unusedForceExclude.length}): ${ruleIds}`);
-            }
-
-            if (unused.unusedMutualInclusion.length > 0) {
-                const ruleIds = unused.unusedMutualInclusion.map(s => s.ruleId).join(', ');
-                log(`  MUTUAL_INCLUDE (${unused.unusedMutualInclusion.length}): ${ruleIds}`);
-            }
-
-            if (unused.unusedMutualExclusion.length > 0) {
-                const ruleIds = unused.unusedMutualExclusion.map(s => s.ruleId).join(', ');
-                log(`  MUTUAL_EXCLUDE (${unused.unusedMutualExclusion.length}): ${ruleIds}`);
-            }
-        } else {
-            log('\n--- All override rules were applied at least once ---');
-        }
-    }
 
     // Save to Google Drive if requested - always creates NEW files
     if (config.saveToGoogleDrive) {
@@ -812,6 +780,21 @@ function findMatchesForEntity(baseKey, baseEntity, groupDb, entityDb) {
         const isAssigned = groupDb.isEntityAssigned(targetKey);
         if (isAssigned) continue;
 
+        // COLLISION CASE D: Skip VA entities at same collision fire number
+        // These were already assessed during VA processing (fireNumberCollisionHandler)
+        // If they exist as separate entities now, they are DIFFERENT OWNERS and should NOT be grouped
+        if (typeof detectCollisionCase === 'function' &&
+            window.fireNumberCollisionDatabase?.metadata?.loaded) {
+            const baseAddr = baseEntity?.contactInfo?.primaryAddress;
+            const targetAddr = targetEntity?.contactInfo?.primaryAddress;
+            if (baseAddr && targetAddr) {
+                const collisionCase = detectCollisionCase(baseAddr, targetAddr, baseEntity, targetEntity, baseKey, targetKey);
+                if (collisionCase === 'd') {
+                    continue; // Skip - different owners at same collision fire number
+                }
+            }
+        }
+
         // Perform comparison (only for unassigned entities)
         const comparison = universalCompareTo(baseEntity, targetEntity);
         const overallScore = comparison.score;
@@ -827,6 +810,18 @@ function findMatchesForEntity(baseKey, baseEntity, groupDb, entityDb) {
             if (comparison.details.components.contactInfo) {
                 contactInfoScore = comparison.details.components.contactInfo.similarity;
             }
+        }
+
+        // BASELINE INSTRUMENTATION: Record entity comparison if enabled
+        if (typeof recordEntityComparison === 'function') {
+            recordEntityComparison(
+                overallScore,
+                nameScore,
+                contactInfoScore,
+                baseEntity.constructor.name,
+                targetEntity.constructor.name,
+                comparison.comparisonType
+            );
         }
 
         // Check if true match
@@ -1088,21 +1083,6 @@ function buildGroupForFounder(founderKey, founderEntity, groupDb, entityDb) {
 
     // Step 8: Resolve exclusions among forced-from-naturals
     forcedFromNaturals = overrideManager.resolveExclusionsOnConflict(forcedFromNaturals);
-
-    // Mark force-match rules as applied for entities that made it into final lists
-    for (const key of founderForced) {
-        overrideManager.markForceMatchApplied(founderKey, key);
-    }
-    for (const match of naturalMatches) {
-        // Mark force matches that brought in forcedFromNaturals
-        for (const forcedKey of forcedFromNaturals) {
-            // Check if this natural match was responsible for pulling in forcedKey
-            const forcedByMatch = overrideManager.getForceMatchesFor(match.key);
-            if (forcedByMatch.includes(forcedKey)) {
-                overrideManager.markForceMatchApplied(match.key, forcedKey);
-            }
-        }
-    }
 
     // Step 9: Collect household-related keys from all members
     // When any member is added to the group, pull in their parent household and siblings

@@ -493,6 +493,32 @@ function handleFireNumberCollision(newEntity, fireNumber) {
 
     // Collision detected - compare against ALL existing entities for this fire number
     const existingEntities = getAllEntitiesForFireNumber(baseFireNumber);
+
+    // >>> CAPTURE COLLISION TO DATABASE <<<
+    // Register this collision so it can be used later to prevent false groupings
+    if (typeof registerFireNumberCollision === 'function' &&
+        typeof fireNumberCollisionDatabase !== 'undefined' &&
+        fireNumberCollisionDatabase.metadata?.loaded) {
+
+        // Build entity keys for all entities at this fire number
+        const existingKeys = existingEntities.map(record => {
+            const fn = record.fireNumber || baseFireNumber;
+            return `visionAppraisal:FireNumber:${fn}`;
+        });
+
+        // Key for the new entity (will get suffix later if different owner)
+        const newKey = `visionAppraisal:FireNumber:${fireNumber}`;
+
+        // Extract PIDs
+        const existingPids = existingEntities.map(record => extractPidFromEntity(record.entity)).filter(p => p);
+        const newPid = extractPidFromEntity(newEntity);
+
+        const allKeys = [...existingKeys, newKey];
+        const allPids = newPid ? [...existingPids, newPid] : existingPids;
+
+        registerFireNumberCollision(baseFireNumber, allKeys, allPids);
+    }
+
     const matchResult = findBestMatchingEntity(newEntity, existingEntities);
 
     if (matchResult.found) {

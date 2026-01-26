@@ -863,34 +863,49 @@ function addressWeightedComparison(otherObject, detailed = false) {
     const thisIsPOBox = isPOBoxAddress(thisAddr);
     const otherIsPOBox = isPOBoxAddress(otherAddr);
 
+    let result;
+    let comparisonType;
+
     // If one is PO Box and one is NOT, compare only city/state/zip
     // (A PO Box and a street address are different location types - can't compare specifics)
     // Create stripped copies with only location data and pass to general comparison
     if (thisIsPOBox !== otherIsPOBox) {
         const strippedThis = { city: thisAddr.city, state: thisAddr.state, zipCode: thisAddr.zipCode };
         const strippedOther = { city: otherAddr.city, state: otherAddr.state, zipCode: otherAddr.zipCode };
-        return compareGeneralStreetAddresses(strippedThis, strippedOther, detailed);
+        result = compareGeneralStreetAddresses(strippedThis, strippedOther, detailed);
+        comparisonType = 'POBox-vs-Street';
     }
-
     // If BOTH are PO Box, use PO Box comparison
-    if (thisIsPOBox && otherIsPOBox) {
-        return comparePOBoxAddresses(thisAddr, otherAddr, detailed);
+    else if (thisIsPOBox && otherIsPOBox) {
+        result = comparePOBoxAddresses(thisAddr, otherAddr, detailed);
+        comparisonType = 'POBox';
+    }
+    else {
+        // Check for Block Island addresses
+        // CRITICAL: Only use Block Island comparison when BOTH addresses are Block Island
+        // Otherwise a BI address with street number "8" would match any address with "8" at 90%+
+        const thisIsBI = isBlockIslandZip(thisAddr.zipCode) ||
+                         (isBlockIslandStreet(thisAddr.streetName) && isBlockIslandCity(thisAddr.city));
+        const otherIsBI = isBlockIslandZip(otherAddr.zipCode) ||
+                          (isBlockIslandStreet(otherAddr.streetName) && isBlockIslandCity(otherAddr.city));
+
+        if (thisIsBI && otherIsBI) {
+            result = compareBlockIslandAddresses(thisAddr, otherAddr, detailed);
+            comparisonType = 'BlockIsland';
+        } else {
+            // General street address comparison
+            result = compareGeneralStreetAddresses(thisAddr, otherAddr, detailed);
+            comparisonType = 'General';
+        }
     }
 
-    // Check for Block Island addresses
-    // CRITICAL: Only use Block Island comparison when BOTH addresses are Block Island
-    // Otherwise a BI address with street number "8" would match any address with "8" at 90%+
-    const thisIsBI = isBlockIslandZip(thisAddr.zipCode) ||
-                     (isBlockIslandStreet(thisAddr.streetName) && isBlockIslandCity(thisAddr.city));
-    const otherIsBI = isBlockIslandZip(otherAddr.zipCode) ||
-                      (isBlockIslandStreet(otherAddr.streetName) && isBlockIslandCity(otherAddr.city));
-
-    if (thisIsBI && otherIsBI) {
-        return compareBlockIslandAddresses(thisAddr, otherAddr, detailed);
+    // BASELINE INSTRUMENTATION: Record address comparison if enabled
+    if (typeof recordAddressComparison === 'function') {
+        const score = (typeof result === 'number') ? result : (result.similarity || result.score || 0);
+        recordAddressComparison(score, thisAddr, otherAddr, comparisonType);
     }
 
-    // General street address comparison
-    return compareGeneralStreetAddresses(thisAddr, otherAddr, detailed);
+    return result;
 }
 
 /**
@@ -1017,30 +1032,85 @@ function compareBlockIslandAddresses(addr1, addr2, detailed = false) {
     const hasZip02807 = isBlockIslandZip(addr1.zipCode) || isBlockIslandZip(addr2.zipCode);
     let result, components = {}, method = 'BlockIsland';
 
+    // CASE E CHECK: Both addresses at same collision fire number
+    // Per spec: "Compare addresses as if fire numbers were blank"
+    // This means fire number similarity = 0, so only street name contributes
+    let collisionCaseE = false;
+    if (typeof isFireNumberCollisionAddress === 'function' &&
+        window.fireNumberCollisionDatabase?.metadata?.loaded) {
+        const isCollision1 = isFireNumberCollisionAddress(addr1);
+        const isCollision2 = isFireNumberCollisionAddress(addr2);
+
+        if (isCollision1 && isCollision2) {
+            const fn1 = typeof getAddressFireNumber === 'function' ? getAddressFireNumber(addr1) : null;
+            const fn2 = typeof getAddressFireNumber === 'function' ? getAddressFireNumber(addr2) : null;
+
+            if (fn1 && fn2 && fn1 === fn2) {
+                collisionCaseE = true;
+            }
+        }
+    }
+
     if (hasZip02807) {
         // Weights: streetNumber 0.85, streetName 0.15
         // Street number uses exact match (fire numbers must match exactly)
-        const streetNumSim = getExactStreetNumberMatch(addr1.streetNumber, addr2.streetNumber);
-        const streetNameSim = getComponentSimilarity(addr1.streetName, addr2.streetName);
+        // CASE E: Treat fire number as blank (similarity = 0)
+        const streetNumSim = collisionCaseE ? 0 : getExactStreetNumberMatch(addr1.streetNumber, addr2.streetNumber);
+
+        // Street name comparison using biStreetName objects (alias-aware)
+        let streetNameSim;
+        let streetNameMethod;
+        if (addr1.biStreetName && addr2.biStreetName) {
+            if (addr1.biStreetName === addr2.biStreetName) {
+                // Same StreetName object = perfect match
+                streetNameSim = 1.0;
+                streetNameMethod = 'biStreetName_sameObject';
+            } else {
+                // Different objects - compare using compareTo
+                const scores = addr1.biStreetName.compareTo(addr2.biStreetName);
+                // Use verified categories only: primary, homonym, candidates
+                // Exclude synonyms (unverified, may be false positives)
+                streetNameSim = Math.max(
+                    scores.primary,
+                    scores.homonym >= 0 ? scores.homonym : 0,
+                    scores.candidate >= 0 ? scores.candidate : 0
+                );
+                streetNameMethod = 'biStreetName_compareTo';
+            }
+        } else {
+            // Fall back to string comparison when biStreetName not available
+            // (e.g., mailing addresses not in the official BI street database)
+            // Build combined street strings (streetName + streetType) to match what biStreetName lookup uses
+            const getFullStreetName = (addr) => {
+                const namePart = addr.streetName?.term || '';
+                const typePart = addr.streetType?.term || '';
+                return typePart ? `${namePart} ${typePart}`.trim() : namePart;
+            };
+            const fullStreet1 = getFullStreetName(addr1);
+            const fullStreet2 = getFullStreetName(addr2);
+            streetNameSim = levenshteinSimilarity(fullStreet1, fullStreet2);
+            streetNameMethod = 'stringFallback_fullStreet';
+        }
 
         result = round10(0.85 * streetNumSim + 0.15 * streetNameSim);
         if (detailed) {
             components = {
-                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 0.85, contribution: round10(0.85 * streetNumSim), method: 'exactMatch' },
-                streetName: { baseValue: addr1.streetName || '', targetValue: addr2.streetName || '', similarity: round10(streetNameSim), weight: 0.15, contribution: round10(0.15 * streetNameSim), method: 'levenshtein' }
+                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 0.85, contribution: round10(0.85 * streetNumSim), method: collisionCaseE ? 'collisionCaseE_blank' : 'exactMatch' },
+                streetName: { baseValue: addr1.streetName || '', targetValue: addr2.streetName || '', similarity: round10(streetNameSim), weight: 0.15, contribution: round10(0.15 * streetNameSim), method: streetNameMethod }
             };
-            method = 'BlockIsland_withZip';
+            method = collisionCaseE ? 'BlockIsland_collisionCaseE' : 'BlockIsland_withZip';
         }
     } else {
         // No zip but confirmed BI via street database + city
         // Only compare street number (exact match for fire numbers)
-        const streetNumSim = getExactStreetNumberMatch(addr1.streetNumber, addr2.streetNumber);
+        // CASE E: Treat fire number as blank (similarity = 0)
+        const streetNumSim = collisionCaseE ? 0 : getExactStreetNumberMatch(addr1.streetNumber, addr2.streetNumber);
         result = round10(streetNumSim);
         if (detailed) {
             components = {
-                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 1.0, contribution: round10(streetNumSim), method: 'exactMatch' }
+                streetNumber: { baseValue: addr1.streetNumber || '', targetValue: addr2.streetNumber || '', similarity: round10(streetNumSim), weight: 1.0, contribution: round10(streetNumSim), method: collisionCaseE ? 'collisionCaseE_blank' : 'exactMatch' }
             };
-            method = 'BlockIsland_noZip';
+            method = collisionCaseE ? 'BlockIsland_collisionCaseE_noZip' : 'BlockIsland_noZip';
         }
     }
 
@@ -1530,6 +1600,12 @@ function entityWeightedComparison(otherObject, detailed = false) {
     // fire numbers with the same base (e.g., 72J vs 72W), they are different owners
     // at the same physical property. Primary address comparison would be meaningless.
     const isSameLocation = areSameLocationEntities(thisEntity, otherEntity);
+
+    // DIAGNOSTIC: Log when isSameLocation triggers for cross-source comparisons
+    const source1 = thisEntity.sourceDatabase || 'unknown';
+    const source2 = otherEntity.sourceDatabase || 'unknown';
+    const isCrossSource = source1 !== source2;
+    // Diagnostic removed - was too verbose
 
     if (hasContactInfoData) {
         if (isSameLocation) {
@@ -2525,13 +2601,19 @@ function areSameLocationEntities(entity1, entity2) {
     if (fn1 === fn2) return false;
 
     // At least one must have a suffix (collision-resolved)
-    if (!hasFireNumberSuffix(fn1) && !hasFireNumberSuffix(fn2)) return false;
+    const hasSuffix1 = hasFireNumberSuffix(fn1);
+    const hasSuffix2 = hasFireNumberSuffix(fn2);
+    if (!hasSuffix1 && !hasSuffix2) return false;
 
     // Base fire numbers must match
     const base1 = getBaseFireNumber(fn1);
     const base2 = getBaseFireNumber(fn2);
 
-    return base1 === base2;
+    const result = base1 === base2;
+
+    // Diagnostic removed - was too verbose
+
+    return result;
 }
 
 /**

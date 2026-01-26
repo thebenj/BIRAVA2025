@@ -163,6 +163,12 @@ function compareIndividualToEntityDirect(individual, entity) {
                 : false;
 
             if (isSameLocation) {
+                // DIAGNOSTIC: Log when same-location triggers in compareIndividualToEntityDirect
+                const src1 = individual.sourceDatabase || 'unknown';
+                const src2 = entity.sourceDatabase || 'unknown';
+                if (src1 !== src2) {
+                    console.log(`[DIAGNOSTIC] compareIndividualToEntityDirect: isSameLocation=TRUE cross-source ${src1} vs ${src2}`);
+                }
                 // Same location: use secondary addresses only
                 contactInfoScore = (typeof compareSecondaryAddressesOnly === 'function')
                     ? compareSecondaryAddressesOnly(individual.contactInfo, entity.contactInfo)
@@ -383,6 +389,12 @@ function universalCompareTo(entity1, entity2) {
 
     // If same-location, use specialized comparison that excludes primary address
     if (isSameLocation) {
+        // DIAGNOSTIC: Log when same-location triggers in universalCompareTo
+        const src1 = entity1.sourceDatabase || 'unknown';
+        const src2 = entity2.sourceDatabase || 'unknown';
+        if (src1 !== src2) {
+            console.log(`[DIAGNOSTIC] universalCompareTo: isSameLocation=TRUE cross-source ${src1} vs ${src2}`);
+        }
         const result = compareSameLocationEntities(entity1, entity2);
         return {
             ...result,

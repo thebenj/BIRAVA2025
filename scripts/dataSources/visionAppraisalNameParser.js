@@ -1481,6 +1481,11 @@ const VisionAppraisalNameParser = {
                 console.warn('Address processing will continue without Block Island street database');
             }
 
+            // Step 1.6: Initialize unmatched street tracker (prompts user for overwrite/add mode)
+            if (window.unmatchedStreetTracker) {
+                await window.unmatchedStreetTracker.initialize();
+            }
+
             // Step 2: Process all records through configurable entity conversion
             console.log('Step 2: Converting records to entity objects using configurable parser...');
             const entities = [];
@@ -1595,6 +1600,18 @@ const VisionAppraisalNameParser = {
 
             console.log(`✅ Successfully processed ${processingStats.successful} entities using configurable parser`);
 
+            // Save unmatched street tracking data
+            if (window.unmatchedStreetTracker && window.unmatchedStreetTracker.isActive) {
+                try {
+                    const trackingResult = await window.unmatchedStreetTracker.save();
+                    if (trackingResult) {
+                        console.log(`[VA Parser] Saved ${trackingResult.recordCount} unmatched street records`);
+                    }
+                } catch (trackingError) {
+                    console.warn('[VA Parser] Could not save unmatched street data:', trackingError.message);
+                }
+            }
+
             return {
                 success: true,
                 stats: processingStats,
@@ -1659,6 +1676,11 @@ const VisionAppraisalNameParserWithQuiet = {
                 }
             } catch (error) {
                 console.warn(`⚠️ Failed to load Block Island streets: ${error.message}`);
+            }
+
+            // Step 1.6: Initialize unmatched street tracker (prompts user for overwrite/add mode)
+            if (window.unmatchedStreetTracker) {
+                await window.unmatchedStreetTracker.initialize();
             }
 
             // Step 2: Process all records through configurable entity conversion (same logic as original)
@@ -1780,6 +1802,18 @@ const VisionAppraisalNameParserWithQuiet = {
                 processingStats.errors.slice(0, 5).forEach(error => {
                     console.log(`  ${error}`);
                 });
+            }
+
+            // Save unmatched street tracking data
+            if (window.unmatchedStreetTracker && window.unmatchedStreetTracker.isActive) {
+                try {
+                    const trackingResult = await window.unmatchedStreetTracker.save();
+                    if (trackingResult) {
+                        console.log(`[VA Parser Quiet] Saved ${trackingResult.recordCount} unmatched street records`);
+                    }
+                } catch (trackingError) {
+                    console.warn('[VA Parser Quiet] Could not save unmatched street data:', trackingError.message);
+                }
             }
 
             return {

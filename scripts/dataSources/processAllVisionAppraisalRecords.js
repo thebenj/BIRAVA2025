@@ -77,12 +77,28 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
             console.warn('⚠️ loadBlockIslandStreetsFromDrive function not available');
         }
 
+        // Initialize unmatched street tracker (prompts user for overwrite/add mode)
+        if (window.unmatchedStreetTracker) {
+            await window.unmatchedStreetTracker.initialize();
+        }
+
         // Initialize fire number collision registry
         if (typeof initializeRegistry !== 'undefined') {
             initializeRegistry();
             console.log('✅ Fire number collision registry initialized');
         } else {
             console.warn('⚠️ Fire number collision handler not loaded - skipping collision detection');
+        }
+
+        // Initialize fire number collision DATABASE (for Google Drive persistence)
+        if (typeof promptFireNumberCollisionDatabaseMode === 'function' &&
+            typeof initializeFireNumberCollisionDatabase === 'function') {
+            console.log('\n📋 Fire Number Collision Database setup...');
+            const mode = await promptFireNumberCollisionDatabaseMode();
+            await initializeFireNumberCollisionDatabase(mode);
+            console.log(`✅ Fire number collision database initialized (mode: ${mode})`);
+        } else {
+            console.warn('⚠️ Fire number collision database not loaded - collisions will not be persisted');
         }
 
         // Track cases and their entities
@@ -421,6 +437,30 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
         } catch (error) {
             console.warn(`⚠️ Google Drive save failed: ${error.message}`);
             console.log('📊 Results available in memory for analysis');
+        }
+
+        // Save unmatched street tracking data
+        if (window.unmatchedStreetTracker && window.unmatchedStreetTracker.isActive) {
+            try {
+                const trackingResult = await window.unmatchedStreetTracker.save();
+                if (trackingResult) {
+                    console.log(`[VisionAppraisal] Saved ${trackingResult.recordCount} unmatched street records`);
+                }
+            } catch (trackingError) {
+                console.warn('[VisionAppraisal] Could not save unmatched street data:', trackingError.message);
+            }
+        }
+
+        // Save fire number collision database to Google Drive
+        if (typeof saveFireNumberCollisionDatabaseToFile === 'function' &&
+            fireNumberCollisionDatabase?.metadata?.hasUnsavedChanges) {
+            try {
+                console.log('\n💾 Saving fire number collision database to Google Drive...');
+                await saveFireNumberCollisionDatabaseToFile();
+                console.log(`✅ Fire number collision database saved (${fireNumberCollisionDatabase.byFireNumber.size} records)`);
+            } catch (collisionSaveError) {
+                console.warn('[VisionAppraisal] Could not save fire number collision database:', collisionSaveError.message);
+            }
         }
 
         // Final summary
