@@ -2,18 +2,18 @@
 
 **Document Purpose**: Plan for converting Block Island street names from simple strings to aliased objects with synonym support.
 
-**Document Status**: IMPLEMENTATION IN PROGRESS - Phases 0-4 Complete, Phase 5 Ready, Browser Tool Created
+**Document Status**: PHASES 0-5 COMPLETE - Moving to 3-Task Expansion Roadmap
 
 **Created**: January 9, 2026
-**Last Updated**: January 23, 2026 (v2.2 - Street Name Browser tool added, Session 50)
+**Last Updated**: January 26, 2026 (v3.0 - Phases 0-5 complete, 3-task roadmap defined)
 
 ---
 
-## QUICK START - WHERE WE ARE (January 18, 2026)
+## QUICK START - WHERE WE ARE (January 26, 2026)
 
 ### The Big Picture (Plain English)
 
-We're upgrading how Block Island street names are stored. Instead of a simple list like:
+We've upgraded how Block Island street names are stored. Instead of a simple list like:
 ```
 ["CORN NECK ROAD", "CORN NECK RD", "CORN NECK", ...]
 ```
@@ -28,17 +28,28 @@ StreetName {
 
 This helps the system recognize the same street even when spelled differently in different data sources (VisionAppraisal, Bloomerang, Phonebook).
 
-### Implementation Progress
+### Completed Phases (0-5)
 
 | Phase | Description | Status |
 |-------|-------------|--------|
-| 0 | Baseline Capture | USER_VERIFIED_WORKING |
-| 1 | Create StreetName Class | USER_VERIFIED_WORKING |
-| 2 | Convert Street Database | USER_VERIFIED_WORKING |
-| 3 | Update Loading | USER_VERIFIED_WORKING |
-| 4 | Integrate with Address | USER_VERIFIED_WORKING |
-| **>>> CURRENT** | **Phase 5: Update Comparison Logic** | **READY FOR IMPLEMENTATION** |
-| 6+ | Phonebook/Full Rebuild | PROVISIONAL |
+| 0 | Baseline Capture | USER_VERIFIED_COMPLETE |
+| 1 | Create StreetName Class | USER_VERIFIED_COMPLETE |
+| 2 | Convert Street Database | USER_VERIFIED_COMPLETE |
+| 3 | Update Loading | USER_VERIFIED_COMPLETE |
+| 4 | Integrate with Address | USER_VERIFIED_COMPLETE |
+| 5 | Update Comparison Logic | USER_VERIFIED_COMPLETE |
+
+**Current System State**: 1,869 EntityGroups, 4,104 entities, 116 StreetName objects
+
+### Upcoming Tasks (3-Task Roadmap)
+
+| Task | Description | Status |
+|------|-------------|--------|
+| 1 | Database Maintenance Box in Browser | AWAITING_SPEC |
+| 2 | Aliased Term Database Wrapper | AWAITING_SPEC |
+| 3 | Phonebook Integration & Generalization | PLANNED |
+
+See **SECTION 14: UPCOMING TASKS** for details.
 
 ### Phase 5 Design (Session 42)
 
@@ -948,46 +959,9 @@ Alias-aware matching should produce higher scores for street variations that pre
 
 Session 41 attempted a mode-parameter approach that caused an infinite loop. That approach was abandoned in favor of the cleaner four-score object design documented in reference_phase5_streetNameComparison.md.
 
-### Phase 6: Phonebook Synonym Pipeline (PROVISIONAL)
+### Phases 6-8: Superseded by 3-Task Roadmap
 
-**Status**: To be detailed after Phase 5
-
-Tasks (preliminary):
-1. Modify phonebook parsing to look up StreetName objects in the alias database
-2. Collect new variations as candidates (phonebook AUGMENTS, does not create new streets)
-3. Handle unrecognized phonebook streets as "unresolved" entries for human review
-4. Create mechanism to review and promote candidates to synonyms
-5. Save updated database back to Google Drive
-
-### Phase 7: Rebuild and Validate (PROVISIONAL)
-
-**Status**: To be detailed after Phase 6
-
-Tasks (preliminary):
-1. Rebuild unified entity database with new street architecture
-2. Full regression testing against baseline
-3. Document any intentional behavioral improvements
-
-### Phase 8: VA Post-Process Button (DEFERRED)
-
-**Status**: To be implemented at end of project (isolated task)
-
-**Location**: Add button next to Fourth Button in Step A1 of index.html
-
-**Purpose**: After a VA download completes, update the StreetName Alias Database to reflect any changes in VA's street data.
-
-**Why this is deferred**: This button's implementation can be isolated from the rest of the project. The core alias architecture (Phases 2-5) can be developed and tested using the CURRENT VA street data. The post-process button is only needed when VA data is re-downloaded, which is infrequent.
-
-Tasks (preliminary):
-1. Add UI button next to Fourth Button
-2. Compare newly downloaded VA streets against StreetName Alias Database
-3. Add any NEW streets from VA (creates new StreetName objects with auto-generated synonyms)
-4. Flag any streets REMOVED from VA for human review
-5. Maintain the invariant: every VA entity's street exists in the alias database
-
-**Trigger condition**: Run after Fourth Button completes (or after "Go Again" completes all retries)
-
-**Dependencies**: Phases 2-5 complete (alias database structure must be finalized)
+**Note**: The original Phases 6-8 have been reorganized into a 3-Task roadmap. See **SECTION 14: UPCOMING TASKS** for the current plan.
 
 ---
 
@@ -1370,13 +1344,157 @@ User ran `previewSimilarStreets()` and reviewed results. Confirmed "no disturbin
 
 ---
 
+## SECTION 14: UPCOMING TASKS (3-Task Roadmap)
+
+This section describes the next phase of development after Phases 0-5 are complete. The original Phases 6-8 have been reorganized into this 3-task structure.
+
+### Task 1: Create Database Maintenance Box in Browser
+
+**Status**: AWAITING_USER_SPECIFICATION
+
+**Description**: (User to provide details)
+
+**Purpose**: TBD
+
+**Implementation**: TBD
+
+---
+
+### Task 2: Create Aliased Term Database Wrapper
+
+**Status**: AWAITING_USER_SPECIFICATION
+
+**Description**: (User to provide details)
+
+**Purpose**: TBD
+
+**Implementation**: TBD
+
+---
+
+### Task 3: Integrate Phonebook Data and Generalize Model
+
+**Status**: PLANNED
+
+**Description**: Incorporate phonebook variations into the StreetName database, then generalize the pattern for other aliased term types.
+
+#### Key Principle: Phonebook Augments, VA Is Primary
+
+**VisionAppraisal is the PRIMARY and AUTHORITATIVE source for street names.** If a street is not in VA, it does not exist on Block Island (from our data model's perspective).
+
+The phonebook's role is to:
+- Add **candidate variations** for streets that already exist in the VA-based database
+- Identify potential data quality issues when phonebook streets don't match any VA street
+
+The phonebook does NOT add new canonical streets - it only adds alternative spellings for existing ones.
+
+#### Current Phonebook Street Handling
+
+The phonebook parser in `phonebookParser.js` currently:
+
+1. Extracts street names from phone book entries
+2. Normalizes and looks up in `window.blockIslandStreets`
+3. Reports unvalidated streets (streets not found in database)
+4. Stores `streetNormalized` if a match is found
+
+#### Proposed Phonebook Integration
+
+After Task 3 implementation:
+
+1. Phonebook parser looks up extracted street in StreetName database
+2. If exact match found: Use canonical StreetName
+3. If similar match found: Add extracted string as new **candidate** to the EXISTING StreetName
+   - Phonebook context provides the circumstantial evidence that validates the variation
+   - This bypasses the synonym staging area because phonebook presence IS verification
+4. If no match found: Add as "unresolved" entry for human review
+
+#### Why Phonebook Entries Become Candidates (Not Synonyms)
+
+Phonebook variations have **circumstantial verification**:
+- The phonebook is a trusted source (real addresses used by real residents)
+- If a variation appears in the phonebook, someone actually used that spelling for mail delivery
+- This contextual evidence promotes the variation directly to candidate status
+
+Synonyms are for **similarity-based captures** that need verification. Phonebook entries already have verification through their source.
+
+#### Handling Unrecognized Phonebook Streets
+
+When a phonebook street doesn't match any VA street, it could be:
+- A variation/misspelling of an existing street (most common)
+- A data entry error in the phonebook
+- A real street that VA doesn't have (rare, but possible if VA data is incomplete)
+
+The system will:
+1. Store unrecognized streets as "unresolved" or "conditional" entries
+2. Flag them for human review
+3. Allow manual resolution: assign to existing street as candidate, or mark as error
+
+This provides flexibility without violating the principle that VA is authoritative.
+
+#### Candidate Feedback Pipeline
+
+```
+Phonebook Entry: "Corn Neck Rd."
+    ↓
+Lookup in StreetName database (VA-based)
+    ↓
+Similar match found: "CORN NECK ROAD" (canonical from VA)
+    ↓
+Add "Corn Neck Rd." as CANDIDATE to that existing StreetName
+(phonebook context provides verification)
+    ↓
+Save updated database to Google Drive
+```
+
+#### Human Review for Unrecognized Streets
+
+Some phonebook entries may be:
+- Misspellings that should NOT be added to any street
+- Legitimate variations that SHOULD become candidates for an existing street
+- Completely unrecognized streets that need investigation
+
+Unrecognized streets (no similar match) require human review. Once resolved, they can be added as candidates to the appropriate street.
+
+#### Subtasks (preliminary)
+
+1. Modify phonebook parsing to look up StreetName objects in the alias database
+2. Collect new variations as candidates (phonebook AUGMENTS, does not create new streets)
+3. Handle unrecognized phonebook streets as "unresolved" entries for human review
+4. Create mechanism to review and promote candidates to synonyms
+5. Save updated database back to Google Drive
+6. Rebuild unified entity database with updated street architecture
+7. Full regression testing
+8. Generalize pattern for other aliased term types
+
+#### VA Post-Process Button (Deferred Component)
+
+**Note**: This was originally Phase 8, now a deferred component of Task 3.
+
+**Location**: Add button next to Fourth Button in Step A1 of index.html
+
+**Purpose**: After a VA download completes, update the StreetName Alias Database to reflect any changes in VA's street data.
+
+**Why this is deferred**: This button's implementation can be isolated from the rest of the project. The core alias architecture can be developed and tested using the CURRENT VA street data. The post-process button is only needed when VA data is re-downloaded, which is infrequent.
+
+Tasks (preliminary):
+1. Add UI button next to Fourth Button
+2. Compare newly downloaded VA streets against StreetName Alias Database
+3. Add any NEW streets from VA (creates new StreetName objects with auto-generated synonyms)
+4. Flag any streets REMOVED from VA for human review
+5. Maintain the invariant: every VA entity's street exists in the alias database
+
+**Trigger condition**: Run after Fourth Button completes (or after "Go Again" completes all retries)
+
+---
+
 ## DOCUMENT END
 
-**Document Version**: 2.0
+**Document Version**: 3.0
 
-**Last Updated**: January 17, 2026
+**Last Updated**: January 26, 2026
 
 **Update History**:
+- 3.0 (2026-01-26): **PHASES 0-5 COMPLETE, 3-TASK ROADMAP** - Marked all phases 0-5 as USER_VERIFIED_COMPLETE. Reorganized Phases 6-8 into new 3-task roadmap (Task 1: Database Maintenance Box, Task 2: Aliased Term Database Wrapper, Task 3: Phonebook Integration & Generalization). Added SECTION 14 for upcoming tasks. Current system state: 1,869 groups.
 - 2.0 (2026-01-17): **PHASES 0-4 USER_VERIFIED_WORKING** - Updated QUICK START to show Phase 5 ready. Phase 3 invariant test: 1,974/1,976 groups identical (1 acceptable merge of FireNumber:259 entities). Phase 4 invariant test: identical to Phase 3 (biStreetName populated but not used). Updated all phase statuses in Section 8. Added Phase 5 key questions to QUICK START.
 - 1.8 (2026-01-11): **BUG FIX VERIFIED - READY FOR INVARIANT TESTING** - Re-ran conversion after bug fix. Results: 116 StreetName objects, 208 variations indexed, 18 collision merges, **0 missing streets** (verified against original 207). Additional fix: removed duplicate `const STREETNAME_ALIAS_DATABASE_ID` declaration from streetNameDatabaseConverter.js (was also in addressProcessing.js, causing "Identifier already declared" error). Added QUICK START section at top of document for easier session resumption.
 - 1.7 (2026-01-10): **PHASE 3 IMPLEMENTATION + BUG FIX** - Implemented Phase 3 loading. **CRITICAL BUG DISCOVERED**: 18 streets missing due to normalization collisions. Bug fix: collision detection now merges by adding new original as homonym alias.

@@ -61,6 +61,10 @@ const CLASS_REGISTRY = {
     'ParticipantDescription': typeof ParticipantDescription !== 'undefined' ? ParticipantDescription : null,
     'ComparisonParticipants': typeof ComparisonParticipants !== 'undefined' ? ComparisonParticipants : null,
 
+    // Database Classes
+    'AliasedTermDatabase': typeof AliasedTermDatabase !== 'undefined' ? AliasedTermDatabase : null,
+    'StreetNameDatabase': typeof StreetNameDatabase !== 'undefined' ? StreetNameDatabase : null,
+
     // Built-in Classes
     'Map': Map,
     'Set': Set,

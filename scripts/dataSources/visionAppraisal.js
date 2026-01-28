@@ -53,14 +53,6 @@ const VisionAppraisal = {
             // Format: "csvData",googleFileId where csvData ends with $XXX,XXX,$YYY,YYY
             const fields = this.parseCSVWithCurrencyValues(record);
 
-            // Debug first few records
-            if (index < 3) {
-                console.log(`Raw record ${index}:`, record);
-                console.log(`  Parsed fields length: ${fields.length}`);
-                console.log(`  PID field[9]: "${fields[9]}", GoogleFileId field[10]: "${fields[10]}"`);
-                console.log(`  Assessment field[11]: "${fields[11]}", Appraisal field[12]: "${fields[12]}"`);
-            }
-
             // Extract raw fields with correct mapping
             const ownerName = (fields[0] || '').trim().replace(/^["']|["']$/g, '');          // Field[0]: Owner Name (clean quotes)
             const ownerName2 = fields[1] || '';         // Field[1]: Owner Name 2 (with tags)

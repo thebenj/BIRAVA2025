@@ -64,15 +64,9 @@ async function buildEntityGroupDatabase(options = {}) {
         return null;
     }
 
-    // DIAGNOSTIC: Log the source of the entity data
-    console.log('🔍 DIAGNOSTIC: buildEntityGroupDatabase() using window.unifiedEntityDatabase');
-    console.log('🔍 DIAGNOSTIC: unifiedEntityDatabase.metadata.createdAt:', window.unifiedEntityDatabase.metadata?.createdAt);
-    console.log('🔍 DIAGNOSTIC: unifiedEntityDatabase.metadata.sources:', JSON.stringify(window.unifiedEntityDatabase.metadata?.sources));
-
     const fullEntityDb = window.unifiedEntityDatabase.entities;
     const totalEntities = Object.keys(fullEntityDb).length;
     log(`Total entities in full database: ${totalEntities}`);
-    console.log('🔍 DIAGNOSTIC: Entity count being used:', totalEntities);
 
     // Create sample if sampleSize is specified
     let entityDb;

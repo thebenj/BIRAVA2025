@@ -19,7 +19,6 @@ window.workingLoadedEntities = {
 async function loadVisionAppraisalEntitiesWorking() {
     console.log('📊 Loading VisionAppraisal entities (working version)...');
     const VA_FILE_ID = '19cgccMYNBboL07CmMP-5hNNGwEUBXgCI';
-    console.log('🔍 DIAGNOSTIC: Loading VisionAppraisal from file ID:', VA_FILE_ID);
 
     try {
         const response = await gapi.client.drive.files.get({
@@ -254,7 +253,6 @@ async function runWorkingEntityTest() {
  */
 async function loadBloomerangCollectionsWorking(configFileId = null) {
     console.log('👥 Loading Bloomerang collections...');
-    console.log('🔍 DIAGNOSTIC: loadBloomerangCollectionsWorking received configFileId:', configFileId);
 
     try {
         let config;
@@ -270,8 +268,6 @@ async function loadBloomerangCollectionsWorking(configFileId = null) {
             });
             config = JSON.parse(configResponse.body);
             console.log('📄 Config loaded:', config.metadata?.description || 'Config file');
-            console.log('🔍 DIAGNOSTIC: Config timestamp:', config.timestamp);
-            console.log('🔍 DIAGNOSTIC: Config batchId:', config.batchId);
 
         } else {
             // Fall back to original folder search method
@@ -287,12 +283,9 @@ async function loadBloomerangCollectionsWorking(configFileId = null) {
 
             const configFile = configResponse.result.files[0];
             console.log('📄 Using config:', configFile.name);
-            console.log('🔍 DIAGNOSTIC: Config file found via folder search, ID:', configFile.id, 'modified:', configFile.modifiedTime);
 
             const configData = await gapi.client.drive.files.get({fileId: configFile.id, alt: 'media'});
             config = JSON.parse(configData.body);
-            console.log('🔍 DIAGNOSTIC: Config timestamp:', config.timestamp);
-            console.log('🔍 DIAGNOSTIC: Config batchId:', config.batchId);
         }
 
         // Process config data to load collections
@@ -301,11 +294,6 @@ async function loadBloomerangCollectionsWorking(configFileId = null) {
             households: config.fileIds.households,
             nonhuman: config.fileIds.nonhuman
         };
-        console.log('🔍 DIAGNOSTIC: Bloomerang entity file IDs from config:');
-        console.log('🔍   individuals:', fileIds.individuals);
-        console.log('🔍   households:', fileIds.households);
-        console.log('🔍   nonhuman:', fileIds.nonhuman);
-        console.log('🔍 DIAGNOSTIC: Config source was:', configSource);
 
         workingLoadedEntities.bloomerang = {};
 

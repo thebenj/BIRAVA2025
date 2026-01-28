@@ -19,6 +19,12 @@
 // testGetFilesList() - Test function to verify getFilesList works with Google Drive API
 
 // =============================================================================
+// DATA QUALITY WARNING TRACKING
+// Track warnings that have already been logged to avoid repetitive output
+// =============================================================================
+const _loggedPOBoxWarnings = new Set();
+
+// =============================================================================
 // STRING MATCHING UTILITIES
 // Future Enhancement Placeholder: Replace simple string matching with sophisticated algorithms
 // =============================================================================
@@ -939,14 +945,15 @@ function comparePOBoxAddresses(addr1, addr2, detailed = false) {
 
                 // ERROR REPORT: Both addresses are PO Box with identical zip but both have undefined secUnitNum
                 // This indicates bad data - PO Box number was not parsed correctly
+                // Log once per unique address pair to avoid flooding the console
                 if (!addr1.secUnitNum && !addr2.secUnitNum) {
                     const addr1Term = addr1.primaryAlias?.term || addr1.originalAddress?.term || 'unknown';
                     const addr2Term = addr2.primaryAlias?.term || addr2.originalAddress?.term || 'unknown';
-                    console.error('[comparePOBoxAddresses] DATA QUALITY ERROR: Both addresses identified as PO Box but neither has parsed secUnitNum (PO Box number).');
-                    console.error('  Address 1:', addr1Term);
-                    console.error('  Address 2:', addr2Term);
-                    console.error('  This results in comparison score of 0 even if addresses are identical.');
-                    console.error('  Likely cause: PO Box number was absorbed into streetName during parsing.');
+                    const warningKey = `${addr1Term}|||${addr2Term}`;
+                    if (!_loggedPOBoxWarnings.has(warningKey)) {
+                        _loggedPOBoxWarnings.add(warningKey);
+                        console.warn(`[comparePOBoxAddresses] DATA QUALITY: PO Box without parsed secUnitNum - "${addr1Term}" vs "${addr2Term}"`);
+                    }
                 }
 
                 if (detailed) {

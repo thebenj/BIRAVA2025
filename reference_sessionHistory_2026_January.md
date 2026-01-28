@@ -10,6 +10,164 @@ This document contains detailed session-by-session work logs offloaded from CLAU
 
 ---
 
+## Session 64 - Unmatched Street Tracker Bug Fix (January 27, 2026)
+
+### Status: USER_VERIFIED_COMPLETE
+
+**Session Goal:** Fix broken unmatched street tracker that stopped writing to Google Drive files
+
+### Problem Description
+
+The `window.unmatchedStreetTracker` feature, which records streets that don't match the BI street database during processing, stopped writing data to its JSON and CSV files on Google Drive. The user noticed that running VisionAppraisal and Bloomerang processing resulted in "Saved 0 unmatched street records" despite expecting matches.
+
+### Root Causes Identified
+
+Two separate issues were discovered:
+
+1. **Missing `record()` call**: The `unmatchedStreetTracker.record()` method was defined but never called anywhere in the codebase. The call had been removed at some point (likely during popup feature addition or error fixing).
+
+2. **Database API change**: When the StreetNameDatabase was migrated to the new `AliasedTermDatabase` architecture (Task 2), the property structure changed from `.streets` (array) to `.getAllObjects()` (method). The condition checking `window.streetNameDatabase.streets` was always `undefined`, preventing recording even if the `record()` call had been present.
+
+### Investigation Process
+
+1. Explored documentation and code to understand the feature's intended behavior
+2. Found that `initialize()` and `save()` were being called correctly by workflows
+3. Confirmed `record()` was never called via grep search
+4. User provided example of previously working JSON output (44 records from Jan 23, 2026)
+5. Added diagnostic logging to trace execution flow
+6. Discovered the `.streets` vs `.getAllObjects()` API mismatch
+
+### Fixes Applied
+
+**File: `scripts/objectStructure/aliasClasses.js` (lines 1907-1966)**
+
+1. Added best-match search logic that iterates through all StreetName objects
+2. Added `window.unmatchedStreetTracker.record()` call with proper parameters
+3. Changed condition from `.streets` to `typeof .getAllObjects === 'function'`
+4. Changed iteration to use `getAllObjects()` method
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `scripts/objectStructure/aliasClasses.js` | Restored unmatched street recording logic |
+
+### Result
+
+- Bloomerang: 12 unmatched street records saved
+- VisionAppraisal: 3 unmatched street records saved
+- Feature working as designed
+
+### Technical Note
+
+The `unmatchedStreetTracker` is defined in `scripts/address/addressProcessing.js` (lines 43-258) and writes to:
+- JSON file: `1VopBti05Fkmn6baW2lbvWml6kbzHgp_5`
+- CSV file: `12TapBBfwNk0_4rvOlaO1LYVW2kXI5YZR`
+
+---
+
+## Session 63 - Code Quality Task CQ-1 (January 27, 2026)
+
+### Status: USER_VERIFIED_COMPLETE
+
+**Session Goal:** Extract inline script handlers from index.html to external file
+
+### Summary
+
+Extracted 4 workflow button handlers and helper functions from inline `<script>` blocks in index.html to new external file `scripts/ui/workflowHandlers.js`. Used incremental migration approach with parallel operation period for safety.
+
+### Implementation Approach
+
+1. **Phase 0:** Documented baseline behavior of all 4 buttons
+2. **Phase 1:** Created external file with duplicate `_ext` functions
+3. **Phase 2:** Verified external functions worked identically
+4. **Phase 3:** Migrated one function at a time with testing after each
+5. **Phase 4:** Cleanup - removed diagnostic logs, updated comments
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `scripts/ui/workflowHandlers.js` | **NEW** - Contains migrated handlers |
+| `index.html` | Removed inline functions, added script tag |
+| `reference_codeQualityRoadmap.md` | Updated to mark CQ-1 complete |
+
+### Migrated Functions
+
+- `UNIFIED_DB_FILE_ID_KEY` (constant)
+- `saveUnifiedDatabaseFileId()` (helper)
+- `getUnifiedDatabaseFileId()` (helper)
+- `processAndSaveVisionAppraisal()` (Step A4a)
+- `runEntityProcessing()` (Step A4b)
+- `recordUnifiedDatabase()` (Step A6)
+- `loadUnifiedDatabaseFromDrive()` (Step B1)
+
+### Result
+
+All 4 workflow buttons work correctly. Code searches now find these functions in `.js` files.
+
+---
+
+## Session 59 - AliasedTermDatabase Implementation (January 26, 2026)
+
+### Status: IN_PROGRESS - Phase 5 UI needs debugging
+
+**Session Goal:** Implement Task 2 (AliasedTermDatabase) from reference_aliasedTermDatabasePlan.md
+
+### Phases Completed
+
+**Phase 1: AliasedTermDatabase Base Class** ✅
+- Created `scripts/databases/aliasedTermDatabase.js` (~620 lines)
+- Implemented all core methods: loadFromDrive, save, saveObject, lookup, has, get, add, remove, changePrimaryAlias
+- Implemented internal methods: _buildVariationCache, _normalizeKey, _createObjectFile, _updateObjectFile, _moveToDeleted, _saveIndex
+- Added to CLASS_REGISTRY in classSerializationUtils.js
+- Added script tag to index.html
+
+**Phase 2: StreetNameDatabase Class** ✅
+- Created `scripts/databases/streetNameDatabase.js` (~730 lines)
+- Extended AliasedTermDatabase with StreetName-specific configuration
+- Pre-configured Google Drive IDs:
+  - Index File: `1QXYBgemrQuFy_wyX1hb_4eLhb7B66J1S`
+  - Object Folder: `1rHhgyxbiPOSw314kpo2MsFgSRQg5zQkC`
+  - Deleted Folder: `1J7YFTy9zUW_SP1hbOeenTM2LhNmbgOUj`
+  - Legacy DB: `1quMdB4qAcnR4oaepSbZEmVWUqYO5_nxK`
+- Added street-specific methods: lookupStreet, findByPattern, getAllStreetNames, isKnownStreet
+- Created global instance `window.streetNameDatabase`
+
+**Phase 3: Migration Tool** ✅
+- Created `previewStreetNameMigration()`, `migrateStreetNameDatabase()`, `verifyStreetNameMigration()`
+- User ran migration: **122 streets migrated, 0 failed**
+
+**Phase 4: Parallel Operation** ✅
+- Added `enableParallelOperation()`, `disableParallelOperation()`
+- Added `parallelLookup()`, `runFullParallelComparison()`
+- Added `getParallelOperationReport()`, `clearParallelStats()`
+- User ran full parallel comparison: **225 lookups, 225 matches, 0 discrepancies, 100% match rate**
+
+**Phase 5: Change Primary Alias UI** 🔧 NEEDS DEBUGGING
+- Added dropdown code to `displayStreetNameBrowserDetails()` (streetNameBrowser.js lines 438-459)
+- Added `changeStreetNamePrimaryAlias()` handler function (lines 655-738)
+- Added `updateLegacyDatabasePrimaryAlias()` helper function (lines 743-796)
+- Added window export for onclick handler
+- **ISSUE:** User reports dropdown not appearing even after reloading app twice
+- **Next step:** Add diagnostic console.log to trace execution
+
+### Files Created
+- `scripts/databases/aliasedTermDatabase.js` (NEW - ~620 lines)
+- `scripts/databases/streetNameDatabase.js` (NEW - ~730 lines)
+
+### Files Modified
+- `scripts/streetNameBrowser.js` - Added Change Primary Alias UI code
+- `scripts/utils/classSerializationUtils.js` - Added AliasedTermDatabase and StreetNameDatabase to CLASS_REGISTRY
+- `index.html` - Added script tags for new database files
+
+### Next Session Action
+1. Add diagnostic logging to `displayStreetNameBrowserDetails()` to understand why dropdown not appearing
+2. Possible causes: file not reloaded, street selected has no alternatives, JavaScript error
+3. After Phase 5 working, proceed to Phase 6 (Full Migration)
+
+---
+
 ## Session 56 - Collision Integration User Verification (January 25, 2026)
 
 ### Status: USER_VERIFIED_WORKING

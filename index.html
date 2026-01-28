@@ -93,6 +93,12 @@
         .phase-section.extra-tools {
             border-color: #7f8c8d;
         }
+        .phase-section.db-maintenance {
+            border-color: #00897b;
+        }
+        .phase-section.entity-browsers {
+            border-color: #7b1fa2;
+        }
         .phase-header {
             padding: 12px 15px;
             cursor: pointer;
@@ -109,6 +115,12 @@
         }
         .phase-section.extra-tools .phase-header {
             background-color: #ebedef;
+        }
+        .phase-section.db-maintenance .phase-header {
+            background-color: #e0f2f1;
+        }
+        .phase-section.entity-browsers .phase-header {
+            background-color: #f3e5f5;
         }
         .phase-header:hover {
             filter: brightness(0.95);
@@ -931,9 +943,20 @@
             </div>
         </div>
 
-        <!-- Unified Entity Browser Section -->
-        <div class="entity-browser-section" style="border-color: #28a745;">
-            <h3 style="color: #28a745;">🌐 Unified Entity Browser - Multi-Source Data Explorer</h3>
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <!-- ENTITY BROWSERS: Unified Entity and EntityGroup Browsers                   -->
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <div class="phase-section entity-browsers collapsed" id="entityBrowsers">
+            <div class="phase-header" onclick="togglePhase('entityBrowsers')">
+                <span class="phase-toggle">▼</span>
+                <span class="phase-title">ENTITY BROWSERS: Unified Entity and EntityGroup Browsers</span>
+                <span class="phase-subtitle">Browse entities and matched groups</span>
+            </div>
+            <div class="phase-content">
+
+                <!-- Unified Entity Browser Section -->
+                <div class="entity-browser-section" style="border-color: #28a745;">
+                    <h3 style="color: #28a745;">🌐 Unified Entity Browser - Multi-Source Data Explorer</h3>
 
             <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
                 <div class="control-row" style="display: flex; gap: 20px; align-items: center; margin-bottom: 15px; flex-wrap: wrap;">
@@ -1242,32 +1265,38 @@
             </div>
         </div>
 
-        <!-- Street Name Browser Section -->
-        <div class="entity-browser-section" style="border-color: #00897b;">
-            <h3 style="color: #00897b;">Street Name Browser - Block Island Street Database Explorer</h3>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <!-- DATABASE MAINTENANCE: Street Names and Fire Number Collisions              -->
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <div class="phase-section db-maintenance collapsed" id="dbMaintenance">
+            <div class="phase-header" onclick="togglePhase('dbMaintenance')">
+                <span class="phase-toggle">▼</span>
+                <span class="phase-title">DATABASE MAINTENANCE: Alias and Collision Browsers</span>
+                <span class="phase-subtitle">Street Name aliases, Fire Number collision tracking</span>
+            </div>
+            <div class="phase-content">
+
+                <!-- Street Name Browser Section -->
+                <div class="entity-browser-section" style="border-color: #00897b;">
+                    <h3 style="color: #00897b;">Street Name Browser - Block Island Street Database Explorer</h3>
 
             <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
 
-                <!-- File ID and Load Controls Row -->
+                <!-- Load Controls Row -->
                 <div class="control-row" style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
-                    <div class="control-group" style="display: flex; flex-direction: column; min-width: 320px;">
-                        <label for="streetNameDatabaseFileId" style="font-weight: 600; margin-bottom: 5px; color: #495057;">Street Database File ID:</label>
-                        <input type="text" id="streetNameDatabaseFileId" style="padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px; font-size: 13px; font-family: 'Courier New', monospace;"
-                               value="1quMdB4qAcnR4oaepSbZEmVWUqYO5_nxK" placeholder="Enter file ID...">
-                    </div>
                     <div class="control-group" style="display: flex; align-items: flex-end; gap: 10px;">
                         <button id="streetNameLoadBtn" class="action-button" style="background-color: #00897b; padding: 10px 20px; font-weight: 600;">
                             Load Street Database
-                        </button>
-                        <button id="streetNameSaveBtn" class="action-button" style="background-color: #ff9800; padding: 10px 20px; font-weight: 600;">
-                            Save Changes
                         </button>
                     </div>
                 </div>
 
                 <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
-                    <strong>Street Name Browser:</strong> Browse, search, and test StreetName objects with alias awareness.
-                    Test how street name strings will match against the database using compareTo(). Add new aliases to existing streets or create new StreetName objects.
+                    <strong>Street Name Browser:</strong> Browse, search, and manage Block Island street names.
+                    Changes are saved automatically to Google Drive.
                 </div>
             </div>
 
@@ -1356,9 +1385,9 @@
             </div>
         </div>
 
-        <!-- Fire Number Collision Browser Section -->
-        <div class="entity-browser-section" style="border-color: #1565c0;">
-            <h3 style="color: #1565c0;">Fire Number Collision Browser - PID/Fire Number Collision Tracker</h3>
+                <!-- Fire Number Collision Browser Section -->
+                <div class="entity-browser-section" style="border-color: #1565c0;">
+                    <h3 style="color: #1565c0;">Fire Number Collision Browser - PID/Fire Number Collision Tracker</h3>
 
             <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
 
@@ -1451,9 +1480,12 @@
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="action-buttons">
-                <button id="collisionStatsBtn" class="action-button">Database Stats</button>
+                <!-- Action Buttons -->
+                <div class="action-buttons">
+                    <button id="collisionStatsBtn" class="action-button">Database Stats</button>
+                </div>
+            </div>
+
             </div>
         </div>
     </div>
@@ -1493,6 +1525,8 @@
     <script type="text/javascript" src="./scripts/objectStructure/entityClasses.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/entityGroup.js"></script>
     <script type="text/javascript" src="./scripts/utils/classSerializationUtils.js"></script>
+    <script type="text/javascript" src="./scripts/databases/aliasedTermDatabase.js"></script>
+    <script type="text/javascript" src="./scripts/databases/streetNameDatabase.js"></script>
     <script type="text/javascript" src="./scripts/visionAppraisalParser.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/visionAppraisal.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/processAllVisionAppraisalRecords.js"></script>
@@ -1592,111 +1626,9 @@
                 .replace(/\n/g, '<br>');
         }
 
-        // VisionAppraisal data processing function
-        async function processAndSaveVisionAppraisal() {
-            const btn = document.getElementById('visionProcessBtn');
-            const originalText = btn.innerHTML;
+        // processAndSaveVisionAppraisal() moved to scripts/ui/workflowHandlers.js
 
-            try {
-                // Update button to show processing
-                btn.innerHTML = '⏳ Processing VisionAppraisal Data...';
-                btn.disabled = true;
-
-                console.log("=== STARTING VISIONAPPRAISAL DATA PROCESSING ===");
-
-                // Call the VisionAppraisal processing function
-                const result = await VisionAppraisal.processAndSaveToGoogleDrive();
-
-                if (result.success) {
-                    console.log("✅ VisionAppraisal processing completed successfully!");
-                    console.log(`Records processed: ${result.recordCount}`);
-                    console.log(`Google Drive File ID: ${result.fileId}`);
-
-                    btn.innerHTML = '✅ Processing Complete!';
-
-                    // Show success message
-                    alert(`VisionAppraisal data processing completed successfully!\n\n` +
-                          `• Records processed: ${result.recordCount}\n` +
-                          `• File saved to Google Drive\n` +
-                          `• File ID: ${result.fileId}\n` +
-                          `• Enhanced fields: processedOwnerName, parsed addresses, MBLU components\n\n` +
-                          `The processed data is now ready for enhanced name matching!`);
-
-                    // Reset button after 3 seconds
-                    setTimeout(() => {
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                    }, 3000);
-
-                } else {
-                    throw new Error(result.error || 'Processing failed');
-                }
-
-            } catch (error) {
-                console.error("❌ VisionAppraisal processing failed:", error);
-
-                btn.innerHTML = '❌ Processing Failed';
-
-                alert(`VisionAppraisal data processing failed:\n\n${error.message}\n\nCheck console for details.`);
-
-                // Reset button after 3 seconds
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }, 3000);
-            }
-        }
-
-        // VisionAppraisal entity processing function
-        async function runEntityProcessing() {
-            const btn = document.getElementById('entityProcessBtn');
-            const originalText = btn.innerHTML;
-
-            try {
-                // Get parameters from form inputs
-                const showDetailedResults = document.getElementById('showDetailedResults').value === 'true';
-                const quietMode = document.getElementById('quietMode').value === 'true';
-
-                // Update button to show processing
-                btn.innerHTML = '⏳ Creating Entities...';
-                btn.disabled = true;
-
-                console.log("=== STARTING VISIONAPPRAISAL ENTITY CREATION ===");
-                console.log(`Parameters: showDetailedResults=${showDetailedResults}, quietMode=${quietMode}`);
-
-                // Call the entity creation function with parameters
-                const result = await processAllVisionAppraisalRecordsWithAddresses(showDetailedResults, quietMode);
-
-                console.log("✅ VisionAppraisal entity creation completed successfully!");
-                btn.innerHTML = '✅ Entity Creation Complete!';
-
-                // Show success message
-                alert(`VisionAppraisal entity creation completed successfully!\n\n` +
-                      `• Entities created from processed data\n` +
-                      `• Saved to Google Drive (File ID: 19cgccMYNBboL07CmMP-5hNNGwEUBXgCI)\n` +
-                      `• Parameters: Detailed Results = ${showDetailedResults}, Quiet Mode = ${quietMode}\n\n` +
-                      `Entities are now ready for analysis and matching!`);
-
-                // Reset button after 3 seconds
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }, 3000);
-
-            } catch (error) {
-                console.error("❌ VisionAppraisal entity creation failed:", error);
-
-                btn.innerHTML = '❌ Entity Creation Failed';
-
-                alert(`VisionAppraisal entity creation failed:\n\n${error.message}\n\nCheck console for details.`);
-
-                // Reset button after 3 seconds
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }, 3000);
-            }
-        }
+        // runEntityProcessing() moved to scripts/ui/workflowHandlers.js
 
         // Close modal when clicking outside of it
         window.onclick = function(event) {
@@ -2027,27 +1959,8 @@
     <script src="./verification.js"></script>
 
     <!-- Unified Database Button Handlers -->
+    <!-- Helper functions (UNIFIED_DB_FILE_ID_KEY, saveUnifiedDatabaseFileId, getUnifiedDatabaseFileId) moved to scripts/ui/workflowHandlers.js -->
     <script>
-        // Storage key for unified database file ID
-        const UNIFIED_DB_FILE_ID_KEY = 'birava_unifiedDatabaseFileId';
-
-        // Save file ID to localStorage
-        function saveUnifiedDatabaseFileId(fileId) {
-            if (fileId && fileId.trim()) {
-                localStorage.setItem(UNIFIED_DB_FILE_ID_KEY, fileId.trim());
-                console.log('Unified database file ID saved:', fileId.trim());
-            }
-        }
-
-        // Get file ID from localStorage or input
-        function getUnifiedDatabaseFileId() {
-            const input = document.getElementById('unifiedDatabaseFileId');
-            if (input && input.value.trim()) {
-                return input.value.trim();
-            }
-            return localStorage.getItem(UNIFIED_DB_FILE_ID_KEY);
-        }
-
         // Load saved file ID on page load
         document.addEventListener('DOMContentLoaded', function() {
             const savedFileId = localStorage.getItem(UNIFIED_DB_FILE_ID_KEY);
@@ -2064,35 +1977,7 @@
             }
         });
 
-        // Record Unified Database button handler
-        async function recordUnifiedDatabase() {
-            const fileId = getUnifiedDatabaseFileId();
-            if (!fileId) {
-                alert('Please enter a Google Drive file ID for the unified database.');
-                return;
-            }
-
-            if (!window.workingLoadedEntities || workingLoadedEntities.status !== 'loaded') {
-                alert('Entities not loaded!\n\nPlease click "Load All Entities Into Memory" first.');
-                return;
-            }
-
-            const btn = document.getElementById('recordUnifiedBtn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '⏳ Saving...';
-            btn.disabled = true;
-
-            try {
-                const result = await saveUnifiedDatabase(fileId);
-                alert(`Unified database saved successfully!\n\nEntities: ${result.metadata.totalEntities}\nFile: ${result.fileName}`);
-            } catch (error) {
-                console.error('Error recording unified database:', error);
-                alert('Error saving unified database: ' + error.message);
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
+        // recordUnifiedDatabase() moved to scripts/ui/workflowHandlers.js
 
         // Load & Record Entities button handler
         async function loadAndRecordEntities() {
@@ -2119,45 +2004,7 @@
             }
         }
 
-        // Load Unified Database from Google Drive (no regeneration)
-        async function loadUnifiedDatabaseFromDrive() {
-            const fileId = getUnifiedDatabaseFileId();
-            if (!fileId) {
-                alert('Please enter a Google Drive file ID for the unified database.');
-                return;
-            }
-
-            const btn = document.getElementById('loadUnifiedBtn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '⏳ Loading...';
-            btn.disabled = true;
-
-            try {
-                // Clear any cached database from workingLoadedEntities path
-                if (typeof clearEntityDatabaseCache === 'function') {
-                    clearEntityDatabaseCache();
-                }
-
-                const result = await loadUnifiedDatabase(fileId);
-
-                // Auto-populate the unified browser with loaded data
-                if (typeof showAllEntities === 'function') {
-                    showAllEntities();
-                }
-
-                const classStatus = result.classesRestored ? '✅ Class types restored' : '⚠️ Class restoration issue';
-                alert(`Unified database loaded from Google Drive!\n\n` +
-                      `Entities: ${result.entityCount}\n` +
-                      `Created: ${result.metadata.createdAt}\n` +
-                      `${classStatus}`);
-            } catch (error) {
-                console.error('Error loading unified database:', error);
-                alert('Error loading unified database: ' + error.message);
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }
-        }
+        // loadUnifiedDatabaseFromDrive() moved to scripts/ui/workflowHandlers.js
 
         // Split unified database into 3 files for Google Apps Script (50MB limit)
         async function splitDatabaseForAppsScript() {
@@ -2209,6 +2056,9 @@
             }
         }
     </script>
+
+    <!-- External workflow handlers (extracted from inline scripts) -->
+    <script src="scripts/ui/workflowHandlers.js"></script>
 
 </body>
 </html>

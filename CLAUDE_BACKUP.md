@@ -5,8 +5,8 @@
 read_order: [ROOT_CAUSE_DEBUGGING_RULE, COMPLETION_VERIFICATION_RULE, CURRENT_WORK_CONTEXT, TERMINOLOGY, MANDATORY_COMPARETO_ARCHITECTURE]
 focus_section: ROOT_CAUSE_DEBUGGING_RULE_then_COMPLETION_VERIFICATION_RULE_then_CURRENT_WORK_CONTEXT
 processing_directive: ignore_visual_formatting_process_semantic_content_only
-last_updated: 2026-01-25
-version: 143.0_SESSION56_COLLISION_USER_VERIFIED
+last_updated: 2026-01-27
+version: 153.0_SESSION64_UNMATCHED_STREET_TRACKER_FIX
 ```
 
 ---
@@ -105,26 +105,38 @@ CLAUDE_MD_UPDATE_PROTECTION:
 ```yaml
 # QUICK START - READ THIS FIRST
 #
-# WHAT WE'RE DOING: Fire number collision integration - USER VERIFIED WORKING
+# WHAT WE'RE DOING: Three-task roadmap for alias system expansion + code quality
 #
 # WHERE WE ARE:
-#   - All 6 steps USER VERIFIED WORKING
-#   - Fire# 72 collision cases now correctly excluded (verified via baseline comparison)
-#   - Diagnostic code still needs removal
+#   - Task 1 (Database Maintenance Box): USER VERIFIED COMPLETE
+#   - Task 2 (AliasedTermDatabase): USER VERIFIED COMPLETE
+#   - Code Quality CQ-1: USER VERIFIED COMPLETE (inline scripts extracted)
 #
-# NEXT ACTION: Remove diagnostic code, then move to next task
+# NEXT ACTION: Task 3 (Phonebook Integration)
 
-immediate_status: COLLISION_INTEGRATION_USER_VERIFIED_CLEANUP_PENDING
-current_focus: Remove diagnostic code, identify next priority
+immediate_status: CODE_QUALITY_CQ1_COMPLETE_READY_FOR_TASK_3
+current_focus: Task 3 (Phonebook Integration) is next
 
-next_action: |
-  1. Remove diagnostic code from entityGroup.js (~lines 787, 817) and entityGroupBuilder.js (~line 1099)
-  2. Consider wiring up override rules tracking (markExclusionApplied/markForceMatchApplied not called)
-  3. Review FORCE_EXCLUDE rules for obsolete entries
+tasks:
+  task_1:
+    name: Create Database Maintenance Box in Browser
+    status: USER_VERIFIED_COMPLETE
+    description: Collapsible boxes for Entity Browsers and Database Maintenance browsers
 
-key_files:
-  IMPLEMENTATION_PLAN: reference_fireNumberCollisionArchitecture.md
-  DIAGNOSTIC_CODE_TO_REMOVE: entityGroup.js (createGroup, addMemberToGroup), entityGroupBuilder.js (~line 1099)
+  task_2:
+    name: AliasedTermDatabase Class Architecture
+    status: USER_VERIFIED_COMPLETE
+    reference: reference_aliasedTermDatabasePlan.md (includes phase details and implementation summary)
+
+  task_3:
+    name: Integrate Phonebook Data and Generalize Model
+    status: PLANNED
+    reference: reference_streetNameAliasArchitecture.md Section 14 "Task 3"
+
+key_references:
+  collision_architecture: reference_fireNumberCollisionArchitecture.md
+  streetname_architecture: reference_streetNameAliasArchitecture.md (Section 2: Two-File Architecture)
+  aliasedterm_database_plan: reference_aliasedTermDatabasePlan.md
 ```
 
 ---
@@ -161,6 +173,15 @@ FIRE_NUMBER_COLLISION_DATABASE:
   google_drive_file_id: '1exdeASVuntM6b_nyJUNUO0_EqRX8Jjz0'
   reference_doc: reference_fireNumberCollisionArchitecture.md
   status: USER_VERIFIED_WORKING
+
+UNMATCHED_STREET_TRACKER:
+  description: Records streets not found in BI street database during processing
+  location: window.unmatchedStreetTracker in scripts/address/addressProcessing.js
+  google_drive_files:
+    json: '1VopBti05Fkmn6baW2lbvWml6kbzHgp_5'
+    csv: '12TapBBfwNk0_4rvOlaO1LYVW2kXI5YZR'
+  api: initialize() at workflow start, record() for each unmatched, save() at end
+  recording_location: aliasClasses.js Address.fromProcessedAddress() unmatched branch
 ```
 
 ---
@@ -219,13 +240,17 @@ DEBUGGING_PROTOCOL:
 ## REFERENCE_NAVIGATION
 ```yaml
 PRIMARY_DOCUMENTATION:
-  reference_systemDocumentation.md: Consolidated system guide (8 sections) - THE authoritative source
-  reference_streetNameAliasArchitecture.md: StreetName implementation plan (Phases 0-7)
-  reference_phase5_streetNameComparison.md: Phase 5 comparison design
-  reference_phase5_entityRebuildPlan.md: Entity rebuild plan with testing steps (SESSION 44)
-  reference_phase5_regression_investigation.md: Phase 5 regression analysis (Sessions 52-53)
-  reference_fireNumberCollisionDatabase.md: Fire number collision database design and implementation
-  reference_fireNumberCollisionArchitecture.md: Complete collision system architecture (detection, recording, matching)
+  reference_systemDocumentation.md: MISSION CRITICAL - Authoritative system guide (8 sections). READ ONLY WHEN INSTRUCTED due to length.
+  reference_streetNameAliasArchitecture.md: StreetName architecture (Phases 0-5 COMPLETE, 3-Task Roadmap)
+  reference_fireNumberCollisionArchitecture.md: Fire number collision system (COMPLETE)
+  reference_aliasedTermDatabasePlan.md: AliasedTermDatabase class architecture (Phases 1-6 READY_FOR_TESTING)
+  reference_codeQualityRoadmap.md: Code improvements (CQ-1 COMPLETE, see doc for future tasks)
+
+HISTORICAL_DOCUMENTATION:
+  reference_phase5_streetNameComparison.md: Phase 5 comparison design (historical)
+  reference_phase5_entityRebuildPlan.md: Entity rebuild plan (historical)
+  reference_phase5_regression_investigation.md: Phase 5 regression analysis (historical - resolved)
+  reference_fireNumberCollisionDatabase.md: Collision database design (historical)
 
 SESSION_HISTORY:
   BIRAVA2025/reference_sessionHistory_2026_January.md: Sessions 21-40 detailed logs
@@ -250,42 +275,29 @@ CORE_CODE_LOCATIONS:
 
 ## CURRENT_STATUS_TRACKER
 ```yaml
-active_project:
-  name: Fire Number Collision Database Matching Integration
-  status: USER_VERIFIED_WORKING_CLEANUP_PENDING
-  reference: reference_fireNumberCollisionArchitecture.md
+completed_projects:
+  - Fire Number Collision Integration: reference_fireNumberCollisionArchitecture.md
+  - StreetName Alias Architecture (Phases 0-5): reference_streetNameAliasArchitecture.md
+  - Database Maintenance Collapsible Box: (no reference doc)
+  - Code Quality CQ-1 (Extract Inline Scripts): reference_codeQualityRoadmap.md
+  - Unmatched Street Tracker Fix: session 64 in reference_sessionHistory_2026_January.md
 
-  implementation_steps:
-    step1_isFireNumberCollisionAddress: USER_VERIFIED_WORKING
-    step2_getAddressFireNumber: USER_VERIFIED_WORKING
-    step3_detectCollisionCase: USER_VERIFIED_WORKING
-    step4_case_d_exclusion: USER_VERIFIED_WORKING
-    step5_case_e_address_comparison: USER_VERIFIED_WORKING
-    step6_integration_testing: USER_VERIFIED_WORKING (baseline comparison: 72 cases eliminated)
+active_roadmap:
+  name: Alias System Expansion (3 Tasks)
+  task_1: Database Maintenance Box - USER_VERIFIED_COMPLETE
+  task_2: AliasedTermDatabase Class - USER_VERIFIED_COMPLETE (Phases 1-6 all complete)
+  task_3: Phonebook Integration & Generalization - PLANNED (includes VA reconciliation workflow)
+  code_quality: CQ-1 COMPLETE (inline handlers extracted to workflowHandlers.js)
 
-parallel_project:
-  name: StreetName Alias Architecture (Phase 5 Regression)
-  status: ON_HOLD_PENDING_COLLISION_INTEGRATION
-  reference: reference_streetNameAliasArchitecture.md
-  note: Collision integration may address some regression issues
+current_system_state:
+  entity_groups: 1869
+  entities: 4104
 
-phases_complete:
-  phase0_baseline: USER_VERIFIED_WORKING (1976 groups, 4104 entities)
-  phase1_class: USER_VERIFIED_WORKING (StreetName class in aliasClasses.js)
-  phase2_converter: USER_VERIFIED_WORKING (116 objects, 208 variations)
-  phase3_loading: USER_VERIFIED_WORKING (blockIslandStreetDatabase populated)
-  phase3_invariant: PASSED (1,974/1,976 identical - 1 acceptable merge)
-  phase4_integration: USER_VERIFIED_WORKING (biStreetName property on Address)
-  phase4_invariant: PASSED (identical to Phase 3)
-  phase5_step1: TESTED_WORKING (compareTo returns four-score object)
-  phase5_step2: REGRESSION_UNDER_INVESTIGATION (see below)
-
-phase5_regression_status:
-  current_groups: 1851
-  baseline_groups: 1975
-  delta: -124
-  status: ON_HOLD_PENDING_COLLISION_INTEGRATION
-  details: See reference_phase5_regression_investigation.md
+new_infrastructure:
+  aliasedTermDatabase_class: scripts/databases/aliasedTermDatabase.js
+  streetNameDatabase_class: scripts/databases/streetNameDatabase.js
+  workflowHandlers: scripts/ui/workflowHandlers.js
+  google_drive_ids: See reference_aliasedTermDatabasePlan.md Section 12
 ```
 
 ---
@@ -388,15 +400,17 @@ MANDATORY_BACKUP:
 
 ## SESSION_METADATA
 ```yaml
-last_updated: January_25_2026
-document_version: 143.0_SESSION56_COLLISION_USER_VERIFIED
-previous_version: 142.1_SESSION55_STEP6_INITIAL_TEST_PASSED
+last_updated: January_27_2026
+document_version: 153.0_SESSION64_UNMATCHED_STREET_TRACKER_FIX
+previous_version: 152.0_SESSION63_CODE_QUALITY_CQ1_COMPLETE
 
 version_notes: |
-  Version 143.0 - Fire number collision integration USER VERIFIED WORKING
-  Baseline comparison confirmed: 72 collision cases eliminated (798→725 merges)
-  Diagnostic code cleanup pending in entityGroup.js and entityGroupBuilder.js
-  See reference_fireNumberCollisionArchitecture.md Section 11 for verification results
+  Version 153.0 - Unmatched Street Tracker Bug Fix USER_VERIFIED_COMPLETE
+  - Fixed window.unmatchedStreetTracker not writing to Google Drive files
+  - Root cause 1: record() call was missing from aliasClasses.js
+  - Root cause 2: Database API changed from .streets to .getAllObjects() during Task 2
+  - Added best-match search and record() call to Address.fromProcessedAddress()
+  - Result: Bloomerang 12 records, VA 3 records now being saved
 
 working_directory: /home/robert-benjamin/RPBprojects/VisionAppraisal/BIRAVA2025
 platform: linux

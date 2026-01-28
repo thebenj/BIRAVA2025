@@ -385,19 +385,13 @@ function buildUnifiedEntityDatabase() {
  */
 async function saveUnifiedDatabase(fileId = UNIFIED_DATABASE_FILE_ID) {
     console.log('=== Saving Unified Database to Google Drive ===');
-    console.log('🔍 DIAGNOSTIC: saveUnifiedDatabase() called at', new Date().toISOString());
-    console.log('🔍 DIAGNOSTIC: Target file ID:', fileId);
-    console.log('🔍 DIAGNOSTIC: NOTE - This function REBUILDS from workingLoadedEntities, does NOT use window.unifiedEntityDatabase');
 
     if (!fileId) {
         throw new Error('No file ID provided. Please set UNIFIED_DATABASE_FILE_ID or pass a fileId parameter.');
     }
 
-    // Build the unified database
-    console.log('🔍 DIAGNOSTIC: Calling buildUnifiedEntityDatabase() to rebuild from workingLoadedEntities...');
+    // Build the unified database (rebuilds from workingLoadedEntities)
     const database = buildUnifiedEntityDatabase();
-    console.log('🔍 DIAGNOSTIC: Database rebuilt. Entity count:', Object.keys(database.entities).length);
-    console.log('🔍 DIAGNOSTIC: Database createdAt timestamp:', database.metadata.createdAt);
 
     // Serialize with type preservation
     console.log('Serializing database with type preservation...');
@@ -466,13 +460,6 @@ async function saveUnifiedDatabase(fileId = UNIFIED_DATABASE_FILE_ID) {
  */
 async function loadUnifiedDatabase(fileId = UNIFIED_DATABASE_FILE_ID) {
     console.log('=== Loading Unified Database from Google Drive ===');
-    console.log('🔍 DIAGNOSTIC: loadUnifiedDatabase() called at', new Date().toISOString());
-    console.log('🔍 DIAGNOSTIC: Source file ID:', fileId);
-    console.log('🔍 DIAGNOSTIC: Previous unifiedEntityDatabase existed:', window.unifiedEntityDatabase !== null);
-    if (window.unifiedEntityDatabase) {
-        console.log('🔍 DIAGNOSTIC: Previous database createdAt:', window.unifiedEntityDatabase.metadata?.createdAt);
-        console.log('🔍 DIAGNOSTIC: Previous entity count:', Object.keys(window.unifiedEntityDatabase.entities || {}).length);
-    }
 
     if (!fileId) {
         throw new Error('No file ID provided. Please set UNIFIED_DATABASE_FILE_ID or pass a fileId parameter.');
@@ -497,10 +484,6 @@ async function loadUnifiedDatabase(fileId = UNIFIED_DATABASE_FILE_ID) {
         if (!database.entities || !database.metadata) {
             throw new Error('Invalid database structure - missing entities or metadata');
         }
-
-        console.log('🔍 DIAGNOSTIC: Loaded database createdAt:', database.metadata.createdAt);
-        console.log('🔍 DIAGNOSTIC: Loaded entity count:', Object.keys(database.entities).length);
-        console.log('🔍 DIAGNOSTIC: OVERWRITING window.unifiedEntityDatabase with loaded data');
 
         // Store in global
         window.unifiedEntityDatabase = database;

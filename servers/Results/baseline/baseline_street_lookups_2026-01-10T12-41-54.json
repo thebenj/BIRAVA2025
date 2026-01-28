@@ -1,0 +1,13 @@
+{
+  "captureTimestamp": "2026-01-10T12:41:54.162Z",
+  "captureMethod": "entity_address_scan",
+  "totalLookups": 0,
+  "matchCount": 0,
+  "failureCount": 0,
+  "matchRate": "N/A",
+  "uniqueFailedInputs": 0,
+  "uniqueMatchedCanonicals": 0,
+  "lookupLog": [],
+  "failedInputsList": [],
+  "matchedCanonicalsList": []
+}

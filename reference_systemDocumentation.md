@@ -101,9 +101,11 @@ All entities inherit from a common Entity base class.
 ```
 Entity (base)
   ├── Individual
+  ├── CompositeHousehold
   ├── AggregateHousehold
-  ├── Business
-  └── LegalConstruct
+  └── NonHuman
+        ├── Business
+        └── LegalConstruct
 ```
 
 ### Entity Base Properties
@@ -129,7 +131,12 @@ Entity (base)
 ### AggregateHousehold Special Properties
 
 - `individuals`: Array of Individual entities belonging to household
+- `individualKeys`: Array of database key strings for household members (Bloomerang only, added Jan 2026)
 - Household members have `householdInformation` linking back to parent
+- Household members have `parentKey` pointing to household's database key
+- Household members have `siblingKeys` array pointing to other members
+
+**Note**: Bloomerang households have BOTH `individuals[]` (object copies) and `individualKeys[]` (key-based navigation). Use `individualKeys[]` for database lookups to ensure current data. VisionAppraisal households only have `individuals[]`.
 
 ## 2.2 Info Class Hierarchy
 
@@ -139,8 +146,7 @@ Information classes extend a common Info base class.
 Info (base)
   ├── ContactInfo
   ├── OtherInfo
-  │     ├── HouseholdOtherInfo
-  │     └── IndividualOtherInfo
+  │     └── HouseholdOtherInfo
   └── LegacyInfo
 ```
 
@@ -178,13 +184,34 @@ Aliased (base)
   ├── SimpleIdentifiers
   │     ├── PID
   │     ├── FireNumber
-  │     └── POBox
+  │     ├── POBox
+  │     └── StreetName        ← Added January 2026
   └── ComplexIdentifiers
         ├── IndividualName
         ├── HouseholdName
         ├── NonHumanName
         └── Address
 ```
+
+### StreetName Class
+
+Block Island street names are managed as `StreetName` objects (extending `SimpleIdentifiers`) rather than simple strings. This enables alias-aware matching across different spellings (e.g., "CORN NECK ROAD" vs "CORN NECK RD").
+
+**Location**: `scripts/objectStructure/aliasClasses.js` (line 1060)
+
+**Key Methods**:
+- `compareTo(otherStreet)` - Returns four-score object: `{ primary, homonym, synonym, candidate }`
+
+### Address.biStreetName Property
+
+The `Address` class has a `biStreetName` property that links parsed street names to canonical `StreetName` objects for Block Island addresses.
+
+**Location**: `scripts/objectStructure/aliasClasses.js` (Address class, line 1631)
+
+**Behavior**:
+- Populated during address processing for Block Island addresses
+- Used by `compareBlockIslandAddresses()` for alias-aware street matching
+- Falls back to string comparison when `biStreetName` is null
 
 ### AttributedTerm
 
@@ -225,6 +252,9 @@ CLASS_REGISTRY = {
     'IndividualName': IndividualName,
     'HouseholdName': HouseholdName,
     'NonHumanName': NonHumanName,
+    'StreetName': StreetName,                    // Added January 2026
+    'AliasedTermDatabase': AliasedTermDatabase,  // Added January 2026
+    'StreetNameDatabase': StreetNameDatabase,    // Added January 2026
     // ... additional classes
 }
 ```
@@ -403,6 +433,62 @@ EntityGroup = {
 }
 ```
 
+### AliasedTermDatabase (Added January 2026)
+
+General-purpose database for managing collections of `Aliased` objects with individual-file-per-object storage on Google Drive.
+
+**Location**: `scripts/databases/aliasedTermDatabase.js`
+
+```javascript
+AliasedTermDatabase = {
+    entries: Map<string, {object, fileId}>,  // primaryAlias → {object, fileId}
+    folderFileId: string,                    // Google Drive folder for object files
+    databaseFileId: string,                  // Google Drive index file
+    objectType: string,                      // e.g., "StreetName"
+    _variationCache: Map<string, string>     // variation → primaryKey (built on load)
+}
+```
+
+**Key Methods**: `loadFromDrive()`, `lookup(term)`, `add(object)`, `remove(primaryKey)`, `changePrimaryAlias()`
+
+### StreetNameDatabase (Added January 2026)
+
+Extends `AliasedTermDatabase` for Block Island street names.
+
+**Location**: `scripts/databases/streetNameDatabase.js`
+
+**Google Drive IDs**:
+- Index File: `1QXYBgemrQuFy_wyX1hb_4eLhb7B66J1S`
+- Object Folder: `1rHhgyxbiPOSw314kpo2MsFgSRQg5zQkC`
+- Deleted Folder: `1J7YFTy9zUW_SP1hbOeenTM2LhNmbgOUj`
+
+**Global Access**: `window.streetNameDatabase`
+
+### Fire Number Collision Database (Added January 2026)
+
+Tracks VisionAppraisal entities where multiple PIDs share the same fire number.
+
+**Location**: `scripts/fireNumberCollisionDatabase.js`
+
+**Google Drive File ID**: `1exdeASVuntM6b_nyJUNUO0_EqRX8Jjz0`
+
+```javascript
+fireNumberCollisionDatabase = {
+    byFireNumber: Map<fireNumber, {
+        fireNumber: string,
+        entityKeys: string[],
+        pids: string[],
+        lastUpdated: string
+    }>,
+    byEntityKey: Map<entityKey, fireNumber>,  // reverse lookup
+    metadata: { loaded, hasUnsavedChanges, initializationMode }
+}
+```
+
+**Key Functions**: `isFireNumberCollisionAddress()`, `detectCollisionCase()`, `getCollisionByFireNumber()`
+
+**Global Access**: `window.fireNumberCollisionDatabase`
+
 ---
 
 # 3. Core Algorithms
@@ -511,6 +597,7 @@ Entity comparisons flow through TWO separate code paths:
 | addressWeightedComparison | Address comparison |
 | contactInfoWeightedComparison | ContactInfo comparison |
 | entityWeightedComparison | Full entity comparison |
+| householdInformationWeightedComparison | HouseholdInformation comparison |
 
 ### Same-Location Entity Handling
 
@@ -526,6 +613,30 @@ Entity comparisons flow through TWO separate code paths:
 - Fire numbers share the same base but have different full values (e.g., 72J vs 72W)
 
 **Impact**: Entities at same location must match by name AND secondary addresses, not just primary address
+
+### Fire Number Collision Database Integration (Added January 2026)
+
+The collision database enhances matching accuracy for fire numbers with multiple owners.
+
+**Collision Cases** (defined in `detectCollisionCase()`):
+
+| Case | Condition | Action |
+|------|-----------|--------|
+| a | Neither address is a collision address | Normal comparison |
+| b | One is collision, other is not | Normal comparison |
+| c | Both collision, different fire numbers | Normal comparison |
+| d | Both VA entities, both primary addresses at SAME collision fire number | **EXCLUDED** - do not group |
+| e | Both collision addresses with SAME fire number (other cases) | Compare with fire number similarity = 0 |
+
+**Case d Rationale**: Two VA entities at the same collision fire number were already assessed during VA processing. If they exist as separate entities (with suffixes like 72A, 72B), they are confirmed different owners.
+
+**Case e Rationale**: For Bloomerang-vs-VA or secondary address comparisons at collision fire numbers, the fire number alone shouldn't drive matching.
+
+**Integration Points**:
+- `entityGroupBuilder.js` (line ~780): Checks case d for exclusion
+- `utils.js` `compareBlockIslandAddresses()` (line ~1046): Implements case e
+
+**Location**: `scripts/fireNumberCollisionDatabase.js`
 
 ## 3.5 Name Matching
 
@@ -564,7 +675,24 @@ If source is VisionAppraisal and city/state missing → auto-complete with Block
 **Rule 2 - Street Name Matching**:
 If city missing but street name matches Block Island streets database → auto-complete
 
-**Street Database**: 217 Block Island streets (Google Drive ID: `1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9`)
+### Two-File Street Architecture (Updated January 2026)
+
+| File | Purpose | Google Drive ID |
+|------|---------|-----------------|
+| VA Processing Street File | Chunking for VA download (simple JSON array) | `1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9` |
+| StreetName Alias Database | Entity recognition with alias support | Individual files in folder `1rHhgyxbiPOSw314kpo2MsFgSRQg5zQkC` |
+
+**Rule**: The VA Processing Street File is NEVER modified by the alias system.
+
+### StreetName Alias System (Added January 2026)
+
+Street names are stored as `StreetName` objects with alias support, enabling matching across variations:
+- "CORN NECK ROAD" matches "CORN NECK RD" (abbreviation)
+- "CORN NECK ROAD" matches "CORN NECK" (type omitted)
+
+**Loading**: `loadBlockIslandStreetsFromDrive()` in `addressProcessing.js` loads the individual-file database into `window.streetNameDatabase`.
+
+**Integration**: During address processing, Block Island addresses get their `biStreetName` property populated with the matching `StreetName` object. This enables alias-aware comparison in `compareBlockIslandAddresses()`.
 
 ### Address Class Properties
 
@@ -578,6 +706,7 @@ If city missing but street name matches Block Island streets database → auto-c
 | state | State |
 | zipCode | ZIP code |
 | isBlockIslandAddress | Boolean flag |
+| biStreetName | StreetName object for BI addresses (added Jan 2026) |
 
 **Location**: `scripts/address/addressProcessing.js`
 
@@ -661,7 +790,22 @@ Self-contained JSON with embedded entity data for Google Apps Script consumption
 | File | ID |
 |------|-----|
 | PID Files Folder | `1qgnE1FW3F6UG7YS4vfGBm9KzX8TDuBCl` |
-| Block Island Streets | `1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9` |
+| Block Island Streets (VA Processing) | `1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9` |
+
+### StreetName Database (Added January 2026)
+
+| File | ID |
+|------|-----|
+| StreetName Index File | `1QXYBgemrQuFy_wyX1hb_4eLhb7B66J1S` |
+| StreetName Object Folder | `1rHhgyxbiPOSw314kpo2MsFgSRQg5zQkC` |
+| StreetName Deleted Folder | `1J7YFTy9zUW_SP1hbOeenTM2LhNmbgOUj` |
+| StreetName Legacy DB (deprecated) | `1quMdB4qAcnR4oaepSbZEmVWUqYO5_nxK` |
+
+### Fire Number Collision Database (Added January 2026)
+
+| File | ID |
+|------|-----|
+| Collision Database | `1exdeASVuntM6b_nyJUNUO0_EqRX8Jjz0` |
 
 ---
 
@@ -951,7 +1095,7 @@ Breaking these = No Entity Processing
 |------|---------|
 | `scripts/objectStructure/entityClasses.js` | Entity, Individual, AggregateHousehold, Business, LegalConstruct |
 | `scripts/objectStructure/contactInfo.js` | ContactInfo, Address classes |
-| `scripts/objectStructure/aliasClasses.js` | IndividualName, AttributedTerm |
+| `scripts/objectStructure/aliasClasses.js` | IndividualName, AttributedTerm, StreetName (added Jan 2026) |
 | `scripts/objectStructure/householdInformation.js` | HouseholdInformation class |
 | `scripts/objectStructure/entityGroup.js` | EntityGroup, EntityGroupDatabase |
 | `scripts/utils/classSerializationUtils.js` | Serialization/deserialization |
@@ -965,8 +1109,9 @@ Breaking these = Can't Process Source Data
 | `scripts/dataSources/visionAppraisal.js` | VA data loading |
 | `scripts/dataSources/processAllVisionAppraisalRecords.js` | Entity creation from VA |
 | `scripts/dataSources/visionAppraisalNameParser.js` | Name parsing |
-| `scripts/bloomerang.js` | Bloomerang CSV processing |
-| `verification.js` | `generateFreshEveryThingWithPid()` |
+| `scripts/dataSources/fireNumberCollisionHandler.js` | Fire number collision detection (added Jan 2026) |
+| `scripts/bloomerang.js` | Bloomerang CSV processing (includes quoted currency fix) |
+| `verification.js` (root folder) | `generateFreshEveryThingWithPid()` |
 
 ## 8.4 Tier 4: Matching & Grouping
 
@@ -978,6 +1123,7 @@ Breaking these = Can't Build EntityGroups
 | `scripts/matching/matchOverrideManager.js` | Override rules from Google Sheets |
 | `scripts/matching/universalEntityMatcher.js` | Entity comparison |
 | `scripts/utils.js` | Comparison calculators |
+| `scripts/fireNumberCollisionDatabase.js` | Collision tracking, case d/e handling (added Jan 2026) |
 
 ## 8.5 Tier 5: Browsers & Export
 
@@ -989,7 +1135,19 @@ Breaking these = Can't View/Export Data
 | `scripts/entityGroupBrowser.js` | EntityGroup Browser + CSV Reports |
 | `scripts/entityRenderer.js` | Entity details popup windows |
 | `scripts/export/lightweightExporter.js` | Lightweight JSON export |
-| `scripts/dataSourceManager.js` | Data source management |
+| `scripts/streetNameBrowser.js` | StreetName alias management (added Jan 2026) |
+| `scripts/fireNumberCollisionBrowser.js` | Collision data browser (added Jan 2026) |
+
+## 8.6 Tier 6: Alias Database Infrastructure (Added January 2026)
+
+Breaking these = Can't Use Alias-Aware Features
+
+| File | Purpose |
+|------|---------|
+| `scripts/databases/aliasedTermDatabase.js` | Parent class for aliased object databases |
+| `scripts/databases/streetNameDatabase.js` | StreetName individual-file database |
+| `scripts/streetTypeAbbreviations.js` | Street type abbreviation management |
+| `scripts/streetNameDatabaseConverter.js` | Migration tool (legacy → individual files) |
 
 ---
 
@@ -1000,7 +1158,7 @@ Breaking these = Can't View/Export Data
 | File | Purpose |
 |------|---------|
 | `scripts/objectStructure/entityClasses.js` | Entity class definitions |
-| `scripts/objectStructure/aliasClasses.js` | Identifier classes |
+| `scripts/objectStructure/aliasClasses.js` | Identifier classes, StreetName |
 | `scripts/objectStructure/contactInfo.js` | ContactInfo, OtherInfo, LegacyInfo |
 | `scripts/objectStructure/entityGroup.js` | EntityGroup, EntityGroupDatabase |
 | `scripts/matching/entityGroupBuilder.js` | 6-phase construction |
@@ -1010,6 +1168,9 @@ Breaking these = Can't View/Export Data
 | `scripts/address/addressProcessing.js` | Address parsing |
 | `scripts/entityGroupBrowser.js` | Browser UI + exports |
 | `scripts/unifiedEntityBrowser.js` | Entity browser |
+| `scripts/databases/aliasedTermDatabase.js` | Aliased object database parent class |
+| `scripts/databases/streetNameDatabase.js` | StreetName database |
+| `scripts/fireNumberCollisionDatabase.js` | Fire number collision tracking |
 
 ## Configuration
 
@@ -1027,5 +1188,24 @@ Breaking these = Can't View/Export Data
 
 ---
 
-**Document Version**: 1.0
+**Document Version**: 2.1
 **Created**: December 26, 2025
+**Last Updated**: January 27, 2026
+
+**Version 2.1 Changes (January 27, 2026)**:
+- Fixed Entity Class Hierarchy: Added CompositeHousehold and NonHuman classes (Section 2.1)
+- Fixed Info Class Hierarchy: Removed non-existent IndividualOtherInfo (Section 2.2)
+- Fixed Address class line number from 1654 to 1631 (Section 2.3)
+- Added householdInformationWeightedComparison to calculator registry (Section 3.4)
+- Fixed verification.js path notation (root folder, not scripts/) (Section 8.3)
+- Removed archived dataSourceManager.js from Critical Files (Section 8.5)
+
+**Version 2.0 Changes (January 2026)**:
+- Added StreetName class and biStreetName property documentation (Section 2.3)
+- Added AliasedTermDatabase, StreetNameDatabase, and FireNumberCollisionDatabase (Section 2.6)
+- Added fire number collision matching integration with case d/e handling (Section 3.4)
+- Added StreetName alias system and two-file architecture (Section 3.6)
+- Added new Google Drive file IDs for street and collision databases (Section 4.4)
+- Added new files to Critical Files Reference including Tier 6 (Section 8)
+- Added individualKeys[] property for Bloomerang households (Section 2.1)
+- Updated CLASS_REGISTRY with new classes (Section 2.4)

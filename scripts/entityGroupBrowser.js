@@ -297,7 +297,6 @@ async function loadEntityGroupDatabase() {
  * Uses the file ID from the existing unifiedDatabaseFileId input box
  */
 async function loadUnifiedDatabaseForEntityGroups() {
-    console.log('🔍 DIAGNOSTIC: loadUnifiedDatabaseForEntityGroups() called at', new Date().toISOString());
     const loadBtn = document.getElementById('entityGroupLoadUnifiedDbBtn');
     const originalText = loadBtn ? loadBtn.innerHTML : '';
 
@@ -312,22 +311,13 @@ async function loadUnifiedDatabaseForEntityGroups() {
         let fileId = null;
         if (typeof getUnifiedDatabaseFileId === 'function') {
             fileId = getUnifiedDatabaseFileId();
-            console.log('🔍 DIAGNOSTIC: getUnifiedDatabaseFileId() returned:', fileId);
         } else {
             // Fallback: directly read from the input
             const input = document.getElementById('unifiedDatabaseFileId');
             if (input && input.value.trim()) {
                 fileId = input.value.trim();
-                console.log('🔍 DIAGNOSTIC: Read directly from input box:', fileId);
             }
         }
-
-        // DIAGNOSTIC: Also log the Phase B input box value for comparison
-        const inputA = document.getElementById('unifiedDatabaseFileId');
-        const inputB = document.getElementById('unifiedDatabaseFileIdB');
-        console.log('🔍 DIAGNOSTIC: unifiedDatabaseFileId (Phase A) input value:', inputA?.value);
-        console.log('🔍 DIAGNOSTIC: unifiedDatabaseFileIdB (Phase B) input value:', inputB?.value);
-        console.log('🔍 DIAGNOSTIC: localStorage birava_unifiedDatabaseFileId:', localStorage.getItem('birava_unifiedDatabaseFileId'));
 
         if (!fileId) {
             showEntityGroupStatus('Please enter a Unified Database File ID in the "Entity Reconstruction" section above.', 'error');
@@ -340,7 +330,6 @@ async function loadUnifiedDatabaseForEntityGroups() {
             loadBtn.disabled = true;
         }
 
-        console.log('🔍 DIAGNOSTIC: Calling loadUnifiedDatabase() with fileId:', fileId);
         // Call the existing loadUnifiedDatabase function with the file ID
         await loadUnifiedDatabase(fileId);
 
@@ -371,8 +360,6 @@ async function loadUnifiedDatabaseForEntityGroups() {
  * Build new EntityGroup database
  */
 async function buildNewEntityGroupDatabase() {
-    console.log('🔍 DIAGNOSTIC: buildNewEntityGroupDatabase() called at', new Date().toISOString());
-
     // Check if buildEntityGroupDatabase function exists
     if (typeof buildEntityGroupDatabase !== 'function') {
         showEntityGroupStatus('buildEntityGroupDatabase function not available. Make sure entityGroupBuilder.js is loaded.', 'error');
@@ -383,13 +370,6 @@ async function buildNewEntityGroupDatabase() {
     if (typeof isEntityDatabaseLoaded !== 'function' || !isEntityDatabaseLoaded()) {
         showEntityGroupStatus('Keyed Database not loaded. Please load entities first using "Load All Entities Into Memory".', 'error');
         return;
-    }
-
-    // DIAGNOSTIC: Log the state of unifiedEntityDatabase before build
-    console.log('🔍 DIAGNOSTIC: window.unifiedEntityDatabase exists:', window.unifiedEntityDatabase !== null);
-    if (window.unifiedEntityDatabase) {
-        console.log('🔍 DIAGNOSTIC: unifiedEntityDatabase.metadata.createdAt:', window.unifiedEntityDatabase.metadata?.createdAt);
-        console.log('🔍 DIAGNOSTIC: Entity count:', Object.keys(window.unifiedEntityDatabase.entities || {}).length);
     }
 
     const buildBtn = document.getElementById('entityGroupBuildBtn');

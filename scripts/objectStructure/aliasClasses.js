@@ -1868,10 +1868,10 @@ class Address extends ComplexIdentifiers {
 
         // Phase 4: Look up StreetName object for Block Island addresses
         // biStreetName links the parsed street to the canonical StreetName with alias awareness
-        // IMPORTANT: This does NOT change comparison logic - that's Phase 5
+        // Phase 6: Now uses the new individual-file StreetNameDatabase system
         if (processedAddress.isBlockIslandAddress &&
-            window.blockIslandStreetDatabase &&
-            typeof window.blockIslandStreetDatabase.lookup === 'function') {
+            window.streetNameDatabase &&
+            typeof window.streetNameDatabase.lookup === 'function') {
 
             // Build street string to look up (combine street name + type if available)
             let streetToLookup = processedAddress.street || '';
@@ -1906,11 +1906,11 @@ class Address extends ComplexIdentifiers {
 
             if (streetToLookup) {
                 // Try lookup with full street + type first
-                let matchedStreetName = window.blockIslandStreetDatabase.lookup(streetToLookup);
+                let matchedStreetName = window.streetNameDatabase.lookup(streetToLookup);
 
                 // If no match, try just the street name without type
                 if (!matchedStreetName && processedAddress.street) {
-                    matchedStreetName = window.blockIslandStreetDatabase.lookup(processedAddress.street);
+                    matchedStreetName = window.streetNameDatabase.lookup(processedAddress.street);
                 }
 
                 if (matchedStreetName) {
@@ -1919,6 +1919,54 @@ class Address extends ComplexIdentifiers {
                     // No match in BI database - create fallback StreetName using raw street name
                     // This preserves pre-Phase 5 comparison behavior for unmatched streets
                     address.biStreetName = new StreetName(address.streetName);
+
+                    // Record unmatched street with best-match information for analysis
+                    if (window.unmatchedStreetTracker && window.unmatchedStreetTracker.isActive &&
+                        window.streetNameDatabase && typeof window.streetNameDatabase.getAllObjects === 'function') {
+
+                        let bestMatch = null;
+                        let bestScores = null;
+                        let bestOverallScore = 0;
+                        let bestAlias = '';
+
+                        // Search all streets for the closest match
+                        const allStreets = window.streetNameDatabase.getAllObjects();
+                        for (const street of allStreets) {
+                            const scores = street.compareTo(streetToLookup);
+
+                            // Find best score across categories (exclude synonym - unverified)
+                            const candidateScores = [
+                                { score: scores.primary, alias: street.primaryAlias?.term || '' },
+                                { score: scores.homonym, alias: 'homonym' },
+                                { score: scores.candidate, alias: 'candidate' }
+                            ].filter(s => s.score >= 0);
+
+                            for (const candidate of candidateScores) {
+                                if (candidate.score > bestOverallScore) {
+                                    bestOverallScore = candidate.score;
+                                    bestMatch = street;
+                                    bestScores = scores;
+                                    // Get the actual alias term that matched best
+                                    if (candidate.alias === 'homonym' && street.alternatives?.homonyms?.length > 0) {
+                                        bestAlias = street.alternatives.homonyms[0]?.term || street.primaryAlias?.term || '';
+                                    } else if (candidate.alias === 'candidate' && street.alternatives?.candidates?.length > 0) {
+                                        bestAlias = street.alternatives.candidates[0]?.term || street.primaryAlias?.term || '';
+                                    } else {
+                                        bestAlias = street.primaryAlias?.term || '';
+                                    }
+                                }
+                            }
+                        }
+
+                        // Record the unmatched street
+                        window.unmatchedStreetTracker.record(
+                            streetToLookup,
+                            bestMatch,
+                            bestScores,
+                            bestOverallScore,
+                            bestAlias
+                        );
+                    }
                 }
             }
         }

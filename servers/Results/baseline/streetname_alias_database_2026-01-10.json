@@ -1,0 +1,3166 @@
+{
+  "__format": "StreetNameAliasDatabase",
+  "__version": "1.0",
+  "__created": "2026-01-10T23:23:49.351Z",
+  "__sourceFileId": "1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9",
+  "__streetCount": 112,
+  "__homonymThreshold": 0.875,
+  "__synonymThreshold": 0.845,
+  "streets": [
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "0LD TOWN ROAD RD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 1,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "1248 OFF DORRIES COVE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 2,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "1248  OFF DORRIES COVE",
+            "fieldName": "originalStreetName",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 2,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "1739 CORN NECK",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 3,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "AMY DODGE LANE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 4,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "BEACH",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 5,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "BEACH AVE",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 6,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "BEACON HILL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 7,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "BEACON HILL ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 8,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "BEACON HILL-BARN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 9,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "BLACK ROCK",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 10,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CALICO HILL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 11,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CENTER",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 12,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "CENTER RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 13,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "CENTER ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 14,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CHAMPLIN ROAD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 15,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CHAPEL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 16,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "CHAPEL ST",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 17,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "CHAPEL STREET",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 18,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CHERRY HILL LANE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 20,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "COAST GUARD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 21,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "COAST GUARD ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 22,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "COASTGUARD ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 23,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "COMMON LAND",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 24,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CONNECTICUT AVE RD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 29,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "COONEYMUS SWAMP",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 35,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CORMORANT COVE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 36,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CORN NECK",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 37,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "CORN NECK RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 38,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "CORN NECK RD.",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 39,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "CORN NECK ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 40,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CORN NECK-SULLIVAN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 42,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CORNECK ROAD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 43,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CRES.BEACH LOT",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 44,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "CRESCENT BEACH LOTS",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 45,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "DODGE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 46,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "DODGE  STREET",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 47,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "DODGE STREET",
+            "fieldName": "streetVariationNormalized",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 47,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "DORRY'S COVE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 49,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "DORRY'S COVE ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 50,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "DUNN TOWN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 51,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "DUNN TOWN ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 52,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "FEDERAL HILL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 53,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "FEDERAL HILL CLUSTER",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 54,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "FEDERAL HILL COMMON LAND",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 55,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "GRACE'S COVE ROAD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 59,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "HIGH",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 60,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "HIGH  STREET",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 61,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "HIGH STREET",
+            "fieldName": "streetVariationNormalized",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 61,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "HIGH ST",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 62,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "HIGH STRRET",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 65,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "ISAAC CORNER",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 66,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "LAKESIDE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 67,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "LAKESIDE DRIVE",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 68,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "LEE'S RDG-COONEYMUS",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 69,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "LEE'S RIDGE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 70,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "MANSION",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 71,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "MANSION ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 72,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "MINISTERS LOT",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 73,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "MITCHELL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 74,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "MITCHELL FARM OPN SP",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 75,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "MITCHELL FARM-CONS.",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 76,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "MITCHELL FRM CON EAS",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 77,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "MOHEGAN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 78,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "MOHEGAN TR",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 79,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "MOHEGAN TRAIL",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 80,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "NEW HAVEN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 81,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "NEW HAVEN HOUSE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 82,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "NEW HAVEN HOUSE ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 83,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OCEAN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 84,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OCEAN  AVE",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 85,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OCEAN AVE",
+            "fieldName": "streetVariationNormalized",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 85,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OCEAN AVE.",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 88,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OCEAN AVENUE",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 89,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OCEAN AVE B FRANK'S",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 87,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OCEAN AVENUE APTS.",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 90,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OCEAN SHED",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 91,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OCEAN VIEW LAND",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 92,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF BEACH",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 93,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF BEACON HILL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 94,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF BEACON HILL ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 95,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF BEACON HILL--ROW",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 96,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CENTER",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 97,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF CENTER ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 99,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CENTER RD--POND",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 98,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF COAST GUARD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 102,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF COAST GUARD RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 103,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF COAST GUARD ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 104,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CONN AVE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 105,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CONNECTICUT",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 106,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF CONNECTICUT AVE",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 107,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CONNEYMUS",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 108,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF COONEYMUS",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 109,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF COONEYMUS RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 110,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF COONEYMUS ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 111,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CORN NECK",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 112,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF CORN NECK ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 113,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CORN NECK ROAD RD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 114,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CORNECK ROAD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 115,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CT AVE-RESTRICT",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 116,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF CT AVE--SWAMP",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 117,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF DODGE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 118,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF DORIES COVE ROAD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 119,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF DORRIES COVE",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 120,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF GRACE COVE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 121,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF GRACE COVE ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 122,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF HIGH",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 123,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF HIGH ST",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 124,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF HIGH STREET",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 125,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF HIGH-COMMON LAND",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 126,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF LAKESIDE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 127,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF LAKESIDE DR",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 128,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF LAKESIDE DRIVE",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 129,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF MANSION ROAD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 130,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF MITCHELL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 131,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF MOHEGAN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 132,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF MOHEGAN TRAIL",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 133,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF NEW HAVEN HOUSE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 134,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF OCEAN AVENUE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 135,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF OLD CENTER",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 136,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF OLD MILL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 137,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF OLD TOWN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 138,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF OLD TOWN RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 139,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF PAYNE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 140,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF PAYNE RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 141,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF PAYNE ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 143,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF PAYNE RD--1.8A",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 142,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF PILOT HILL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 144,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF PILOT HILL RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 145,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF PILOT HILL ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 146,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF POILOT HILL ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 147,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF SANDS POND",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 148,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF SANDS POND ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 149,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF SNAKE HOLE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 150,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF SNAKE HOLE ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 151,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF SNAKEHOLE",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 152,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF SOUTH EAST",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 153,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF SOUTH EAST ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 154,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF SOUTHEAST",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 155,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OFF SOUTHEAST ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 156,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF SPRING",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 157,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF SPRING STREET",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 158,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF WATER",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 159,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OFF WATER STREET",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 160,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF WEST BEACH ROAD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 161,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OFF WEST SIDE-CE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 166,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OLD CENTER",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 169,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OLD CENTER ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 170,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "OLD TOWN",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 175,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "OLD TOWN RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 176,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "OLD TOWN ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 177,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "0LD TOWN ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 0,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "PAYNE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 179,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "PAYNE ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 181,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "PAYNE HMST-OPENSPACE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 180,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "PECKHAM FARM",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 182,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "PECKHAM FARM LOT",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 183,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "PILOT HILL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 184,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "PILOT HILL RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 186,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "PILOT HILL ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 187,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "PILOT HILL POND",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 185,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "R O W",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 188,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "ROW",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 189,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "SANDS POND",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 190,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "SANDS POND RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 191,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "SANDS POND ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 192,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "SNAKE HOLE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 193,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "SNAKE HOLE ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 194,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "SOUTH EAST",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 195,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "SOUTH EAST ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 196,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "SOUTHEAST",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 198,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "SOUTHEAST  ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 199,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "SOUTHEAST ROAD",
+            "fieldName": "streetVariationNormalized",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 199,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "SOUTHEAST RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 200,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "SOUTH WEST PT",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 197,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "SPRING",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 202,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "SPRING ST.",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 203,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "SPRING STREET",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 204,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "SUBDVN OFF COONEYMUS",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 205,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "SUNSET HILL",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 206,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "SUNSET HILL--ROW",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 207,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "TRIMS POND RESERVED",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 208,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "TWIN MAPLES",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 209,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "WATER",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 210,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "WATER STREET",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 211,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "WELDONS WAY",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 212,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "WELDON'S WAY",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 213,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "WEST BEACH ROAD",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 214,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [],
+        "synonyms": [],
+        "candidates": []
+      }
+    },
+    {
+      "type": "StreetName",
+      "primaryAlias": {
+        "type": "AttributedTerm",
+        "term": "WEST SIDE",
+        "fieldName": "canonicalStreetName",
+        "sourceMap": {
+          "VA_STREET_DATABASE": {
+            "index": 215,
+            "identifier": "canonical"
+          }
+        }
+      },
+      "alternatives": {
+        "type": "Aliases",
+        "homonyms": [
+          {
+            "type": "AttributedTerm",
+            "term": "WEST SIDE RD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 216,
+                "identifier": "homonym"
+              }
+            }
+          },
+          {
+            "type": "AttributedTerm",
+            "term": "WEST SIDE ROAD",
+            "fieldName": "streetVariation",
+            "sourceMap": {
+              "VA_STREET_DATABASE": {
+                "index": 217,
+                "identifier": "homonym"
+              }
+            }
+          }
+        ],
+        "synonyms": [],
+        "candidates": []
+      }
+    }
+  ]
+}

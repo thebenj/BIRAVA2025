@@ -23,7 +23,7 @@ const MANUAL_EDIT_SOURCE = 'STREET_NAME_BROWSER_MANUAL';
 // =============================================================================
 
 const streetNameBrowser = {
-    // Loaded street database (from blockIslandStreetDatabase)
+    // Loaded street database (from window.streetNameDatabase - individual files per street)
     loadedDatabase: null,
 
     // Current state
@@ -45,6 +45,34 @@ const streetNameBrowser = {
 };
 
 // =============================================================================
+// DATABASE STATE HELPER
+// =============================================================================
+
+/**
+ * Ensures the browser has a reference to the loaded database.
+ * If another process loaded the database, syncs the browser's local reference.
+ * @returns {boolean} True if database is available, false if needs loading
+ */
+function ensureBrowserDatabaseSynced() {
+    // Already have local reference
+    if (streetNameBrowser.loadedDatabase) {
+        return true;
+    }
+
+    // Check if global database was loaded by another process
+    if (window.streetNameDatabase && window.streetNameDatabase._isLoaded) {
+        console.log('[STREET BROWSER] Syncing with database loaded by another process');
+        streetNameBrowser.loadedDatabase = window.streetNameDatabase;
+        streetNameBrowser.hasUnsavedChanges = false;
+        streetNameBrowser.manualEdits = { streetsAdded: [], aliasesAdded: [] };
+        return true;
+    }
+
+    // Database not loaded anywhere
+    return false;
+}
+
+// =============================================================================
 // INITIALIZATION & SETUP
 // =============================================================================
 
@@ -52,11 +80,6 @@ function initializeStreetNameBrowser() {
     console.log("Initializing Street Name Browser");
 
     // Restore file ID from localStorage
-    restoreStreetNameBrowserFileId();
-
-    // Setup file ID persistence
-    setupStreetNameBrowserFileIdPersistence();
-
     // Setup button event handlers
     setupStreetNameBrowserButtons();
 
@@ -72,36 +95,9 @@ function initializeStreetNameBrowser() {
     console.log("Street Name Browser initialized");
 }
 
-function restoreStreetNameBrowserFileId() {
-    const fileIdInput = document.getElementById('streetNameDatabaseFileId');
-    if (fileIdInput) {
-        const savedFileId = localStorage.getItem(STREETNAME_BROWSER_FILE_ID_STORAGE_KEY);
-        if (savedFileId) {
-            fileIdInput.value = savedFileId;
-        } else {
-            fileIdInput.value = DEFAULT_STREETNAME_FILE_ID;
-        }
-    }
-}
-
-function setupStreetNameBrowserFileIdPersistence() {
-    const fileIdInput = document.getElementById('streetNameDatabaseFileId');
-    if (fileIdInput) {
-        fileIdInput.addEventListener('change', (event) => {
-            const fileId = event.target.value.trim();
-            if (fileId) {
-                localStorage.setItem(STREETNAME_BROWSER_FILE_ID_STORAGE_KEY, fileId);
-            }
-        });
-    }
-}
-
 function setupStreetNameBrowserButtons() {
     const loadBtn = document.getElementById('streetNameLoadBtn');
     if (loadBtn) loadBtn.addEventListener('click', loadStreetNameBrowserDatabase);
-
-    const saveBtn = document.getElementById('streetNameSaveBtn');
-    if (saveBtn) saveBtn.addEventListener('click', saveStreetNameBrowserDatabase);
 
     const newBtn = document.getElementById('streetNameNewBtn');
     if (newBtn) newBtn.addEventListener('click', showCreateStreetNameDialog);
@@ -167,21 +163,36 @@ async function loadStreetNameBrowserDatabase() {
             loadBtn.disabled = true;
         }
 
-        // Use existing loadBlockIslandStreetsFromDrive if database not already loaded
-        if (!window.blockIslandStreetDatabase || !window.blockIslandStreetDatabase.streetNames) {
-            await loadBlockIslandStreetsFromDrive();
+        // Load the new StreetNameDatabase (individual files per street)
+        let wasAlreadyLoaded = false;
+        if (window.streetNameDatabase && window.streetNameDatabase._isLoaded) {
+            console.log('[STREET BROWSER] Database already loaded, syncing browser state');
+            wasAlreadyLoaded = true;
+        } else {
+            await window.streetNameDatabase.loadFromDrive();
         }
 
+        // Set up backward compatibility aliases (same as loadBlockIslandStreetsFromDrive)
+        window.blockIslandStreetDatabase = window.streetNameDatabase;
+        const variations = new Set();
+        for (const key of window.streetNameDatabase._variationCache.keys()) {
+            variations.add(key);
+        }
+        window.blockIslandStreets = variations;
+
         // Store reference in browser state
-        streetNameBrowser.loadedDatabase = window.blockIslandStreetDatabase;
+        streetNameBrowser.loadedDatabase = window.streetNameDatabase;
         streetNameBrowser.hasUnsavedChanges = false;
         streetNameBrowser.manualEdits = { streetsAdded: [], aliasesAdded: [] };
 
-        const count = streetNameBrowser.loadedDatabase.streetNames.length;
-        const variationCount = streetNameBrowser.loadedDatabase.variationToStreetName ?
-            streetNameBrowser.loadedDatabase.variationToStreetName.size : 'unknown';
+        const count = streetNameBrowser.loadedDatabase.entries.size;
+        const variationCount = streetNameBrowser.loadedDatabase._variationCache ?
+            streetNameBrowser.loadedDatabase._variationCache.size : 'unknown';
 
-        showStreetNameBrowserStatus(`Loaded ${count} streets (${variationCount} variations)`, 'success');
+        const statusMsg = wasAlreadyLoaded
+            ? `Synced ${count} streets (${variationCount} variations) - already loaded`
+            : `Loaded ${count} streets (${variationCount} variations)`;
+        showStreetNameBrowserStatus(statusMsg, 'success');
 
         // Display all streets
         displayAllStreetNames();
@@ -198,119 +209,9 @@ async function loadStreetNameBrowserDatabase() {
 }
 
 // =============================================================================
-// DATA SAVING (with Phase 8 safeguards)
+// NOTE: Manual save functions removed - all changes now save automatically
+// to Google Drive via the StreetNameDatabase class
 // =============================================================================
-
-async function saveStreetNameBrowserDatabase() {
-    if (!streetNameBrowser.loadedDatabase) {
-        showStreetNameBrowserStatus('No database loaded to save', 'error');
-        return;
-    }
-
-    const fileIdInput = document.getElementById('streetNameDatabaseFileId');
-    const fileId = fileIdInput ? fileIdInput.value.trim() : DEFAULT_STREETNAME_FILE_ID;
-
-    const saveBtn = document.getElementById('streetNameSaveBtn');
-    const originalText = saveBtn ? saveBtn.innerHTML : '';
-
-    try {
-        showStreetNameBrowserStatus('Saving street database...', 'loading');
-        if (saveBtn) {
-            saveBtn.innerHTML = 'Saving...';
-            saveBtn.disabled = true;
-        }
-
-        // Serialize the current database state with manual edits metadata
-        const serializedDatabase = serializeStreetNameBrowserDatabase();
-
-        // Upload to Google Drive
-        await uploadStreetNameBrowserToDrive(serializedDatabase, fileId);
-
-        streetNameBrowser.hasUnsavedChanges = false;
-        showStreetNameBrowserStatus('Street database saved successfully!', 'success');
-
-    } catch (error) {
-        console.error('Error saving street database:', error);
-        showStreetNameBrowserStatus(`Error saving: ${error.message}`, 'error');
-    } finally {
-        if (saveBtn) {
-            saveBtn.innerHTML = originalText;
-            saveBtn.disabled = false;
-        }
-    }
-}
-
-function serializeStreetNameBrowserDatabase() {
-    const streetNames = streetNameBrowser.loadedDatabase.streetNames;
-
-    const serializedStreets = streetNames.map(sn => ({
-        type: 'StreetName',
-        primaryAlias: serializeStreetNameAttributedTerm(sn.primaryAlias),
-        alternatives: {
-            type: 'Aliases',
-            homonyms: (sn.alternatives?.homonyms || []).map(serializeStreetNameAttributedTerm),
-            synonyms: (sn.alternatives?.synonyms || []).map(serializeStreetNameAttributedTerm),
-            candidates: (sn.alternatives?.candidates || []).map(serializeStreetNameAttributedTerm)
-        }
-    }));
-
-    return {
-        __format: 'StreetNameAliasDatabase',
-        __version: '1.2',
-        __created: new Date().toISOString(),
-        __sourceFileId: streetNameBrowser.loadedDatabase.sourceFileId || DEFAULT_STREETNAME_FILE_ID,
-        __streetCount: serializedStreets.length,
-        __modifiedBy: 'StreetNameBrowser',
-        __manualEdits: streetNameBrowser.manualEdits,
-        streets: serializedStreets
-    };
-}
-
-function serializeStreetNameAttributedTerm(at) {
-    if (!at) return null;
-    const sourceMapObj = {};
-    if (at.sourceMap instanceof Map) {
-        for (const [key, value] of at.sourceMap) {
-            sourceMapObj[key] = value;
-        }
-    } else if (at.sourceMap && typeof at.sourceMap === 'object') {
-        Object.assign(sourceMapObj, at.sourceMap);
-    }
-    return {
-        type: 'AttributedTerm',
-        term: at.term,
-        fieldName: at.fieldName,
-        sourceMap: sourceMapObj
-    };
-}
-
-async function uploadStreetNameBrowserToDrive(serializedDatabase, fileId) {
-    const jsonContent = JSON.stringify(serializedDatabase, null, 2);
-
-    const response = await fetch(
-        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
-        {
-            method: 'PATCH',
-            headers: new Headers({
-                'Authorization': `Bearer ${gapi.client.getToken().access_token}`,
-                'Content-Type': 'application/json'
-            }),
-            body: jsonContent
-        }
-    );
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Upload failed: ${response.status} - ${errorText}`);
-    }
-
-    // Update filename with timestamp
-    const fileName = `streetname_alias_database_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`;
-    await gapi.client.drive.files.update({
-        fileId: fileId,
-        resource: { name: fileName }
-    });
-}
 
 // =============================================================================
 // SEARCH & FILTERING
@@ -325,13 +226,13 @@ function performStreetNameBrowserSearch() {
         return;
     }
 
-    if (!streetNameBrowser.loadedDatabase) {
+    if (!ensureBrowserDatabaseSynced()) {
         showStreetNameBrowserStatus('Please load the database first', 'error');
         return;
     }
 
     // Filter streets matching query
-    const results = streetNameBrowser.loadedDatabase.streetNames.filter(sn => {
+    const results = streetNameBrowser.loadedDatabase.getAllObjects().filter(sn => {
         // Check primary
         if (sn.primaryAlias?.term?.toUpperCase().includes(query)) return true;
 
@@ -358,9 +259,9 @@ function clearStreetNameBrowserSearch() {
 }
 
 function displayAllStreetNames() {
-    if (!streetNameBrowser.loadedDatabase) return;
+    if (!ensureBrowserDatabaseSynced()) return;
 
-    const allStreets = streetNameBrowser.loadedDatabase.streetNames;
+    const allStreets = streetNameBrowser.loadedDatabase.getAllObjects();
     streetNameBrowser.currentResults = allStreets;
     displayStreetNameBrowserResults(allStreets);
     updateStreetNameBrowserResultsCount(`Showing all ${allStreets.length} streets`);
@@ -435,15 +336,38 @@ function displayStreetNameBrowserDetails(streetName) {
     const synonyms = streetName.alternatives?.synonyms || [];
     const candidates = streetName.alternatives?.candidates || [];
 
+    // Build list of all alternatives for the "Change Primary" dropdown
+    const allAlternatives = [
+        ...homonyms.map(h => ({ term: h.term, category: 'homonyms' })),
+        ...synonyms.map(s => ({ term: s.term, category: 'synonyms' })),
+        ...candidates.map(c => ({ term: c.term, category: 'candidates' }))
+    ];
+
     let html = '<div style="font-size: 18px; font-weight: bold; color: #00695c; margin-bottom: 10px;">' + escapeHtmlForStreetBrowser(primary) + '</div>';
+
+    // Add "Change Primary Alias" UI if there are alternatives
+    if (allAlternatives.length > 0) {
+        html += '<div style="margin-bottom: 15px; padding: 10px; background: #e8f5e9; border-radius: 4px;">';
+        html += '<label style="font-size: 12px; color: #2e7d32; font-weight: bold;">Change Primary Alias:</label><br>';
+        html += '<select id="streetNameChangePrimarySelect" style="margin-top: 5px; padding: 4px; width: 70%;">';
+        html += '<option value="">-- Select new primary --</option>';
+        for (const alt of allAlternatives) {
+            html += '<option value="' + escapeHtmlForStreetBrowser(alt.term) + '">' + escapeHtmlForStreetBrowser(alt.term) + ' (' + alt.category.slice(0, -1) + ')</option>';
+        }
+        html += '</select>';
+        html += '<button onclick="changeStreetNamePrimaryAlias()" style="margin-left: 5px; padding: 4px 10px; background: #4caf50; color: white; border: none; border-radius: 3px; cursor: pointer;">Change</button>';
+        html += '</div>';
+    }
 
     if (homonyms.length > 0) {
         html += '<div style="margin-top: 10px;"><strong style="color: #2e7d32;">Homonyms (' + homonyms.length + '):</strong></div>';
         html += '<ul style="margin: 5px 0; padding-left: 20px;">';
         for (const h of homonyms) {
-            const sourceInfo = getSourceInfo(h);
-            html += '<li style="font-size: 13px;">' + escapeHtmlForStreetBrowser(h.term) +
-                    (sourceInfo ? ' <span style="color: #999; font-size: 11px;">(' + sourceInfo + ')</span>' : '') + '</li>';
+            const escapedTerm = escapeHtmlForStreetBrowser(h.term);
+            html += '<li style="font-size: 13px;">' +
+                    '<span onclick="deleteStreetNameAlias(\'' + escapedTerm.replace(/'/g, "\\'") + '\', \'homonyms\')" ' +
+                    'style="color: #d32f2f; cursor: pointer; margin-right: 5px; font-weight: bold;" title="Delete this alias">[X]</span>' +
+                    escapedTerm + '</li>';
         }
         html += '</ul>';
     }
@@ -452,9 +376,11 @@ function displayStreetNameBrowserDetails(streetName) {
         html += '<div style="margin-top: 10px;"><strong style="color: #f57f17;">Synonyms (' + synonyms.length + '):</strong></div>';
         html += '<ul style="margin: 5px 0; padding-left: 20px;">';
         for (const s of synonyms) {
-            const sourceInfo = getSourceInfo(s);
-            html += '<li style="font-size: 13px;">' + escapeHtmlForStreetBrowser(s.term) +
-                    (sourceInfo ? ' <span style="color: #999; font-size: 11px;">(' + sourceInfo + ')</span>' : '') + '</li>';
+            const escapedTerm = escapeHtmlForStreetBrowser(s.term);
+            html += '<li style="font-size: 13px;">' +
+                    '<span onclick="deleteStreetNameAlias(\'' + escapedTerm.replace(/'/g, "\\'") + '\', \'synonyms\')" ' +
+                    'style="color: #d32f2f; cursor: pointer; margin-right: 5px; font-weight: bold;" title="Delete this alias">[X]</span>' +
+                    escapedTerm + '</li>';
         }
         html += '</ul>';
     }
@@ -463,9 +389,11 @@ function displayStreetNameBrowserDetails(streetName) {
         html += '<div style="margin-top: 10px;"><strong style="color: #7b1fa2;">Candidates (' + candidates.length + '):</strong></div>';
         html += '<ul style="margin: 5px 0; padding-left: 20px;">';
         for (const c of candidates) {
-            const sourceInfo = getSourceInfo(c);
-            html += '<li style="font-size: 13px;">' + escapeHtmlForStreetBrowser(c.term) +
-                    (sourceInfo ? ' <span style="color: #999; font-size: 11px;">(' + sourceInfo + ')</span>' : '') + '</li>';
+            const escapedTerm = escapeHtmlForStreetBrowser(c.term);
+            html += '<li style="font-size: 13px;">' +
+                    '<span onclick="deleteStreetNameAlias(\'' + escapedTerm.replace(/'/g, "\\'") + '\', \'candidates\')" ' +
+                    'style="color: #d32f2f; cursor: pointer; margin-right: 5px; font-weight: bold;" title="Delete this alias">[X]</span>' +
+                    escapedTerm + '</li>';
         }
         html += '</ul>';
     }
@@ -560,7 +488,7 @@ function clearStreetNameTestResult() {
 // ALIAS MANAGEMENT (with Phase 8 safeguards)
 // =============================================================================
 
-function addAliasToSelectedStreetName() {
+async function addAliasToSelectedStreetName() {
     if (!streetNameBrowser.selectedStreetName) {
         showStreetNameBrowserStatus('Please select a street first', 'error');
         return;
@@ -602,37 +530,204 @@ function addAliasToSelectedStreetName() {
     }
     streetNameBrowser.selectedStreetName.alternatives.add(newTerm, category);
 
-    // Update variation index
-    const normalized = aliasString.toUpperCase().trim();
-    if (streetNameBrowser.loadedDatabase.variationToStreetName &&
-        !streetNameBrowser.loadedDatabase.variationToStreetName.has(normalized)) {
-        streetNameBrowser.loadedDatabase.variationToStreetName.set(normalized, streetNameBrowser.selectedStreetName);
+    try {
+        showStreetNameBrowserStatus('Adding alias and saving...', 'loading');
+
+        // Save the modified object to Google Drive
+        const primaryKey = streetNameBrowser.selectedStreetName.primaryAlias?.term;
+        if (primaryKey) {
+            await streetNameBrowser.loadedDatabase.saveObject(primaryKey);
+            // Rebuild variation cache to include the new alias
+            streetNameBrowser.loadedDatabase._buildVariationCache();
+        }
+
+        // Track manual edit for Phase 8
+        streetNameBrowser.manualEdits.aliasesAdded.push({
+            street: primaryKey,
+            alias: aliasString,
+            category: category
+        });
+
+        // Mark as having unsaved changes (for legacy compatibility)
+        streetNameBrowser.hasUnsavedChanges = true;
+
+        // Clear input and refresh display
+        aliasInput.value = '';
+        displayStreetNameBrowserDetails(streetNameBrowser.selectedStreetName);
+        displayStreetNameBrowserResults(streetNameBrowser.currentResults);
+
+        showStreetNameBrowserStatus('Added "' + aliasString + '" as ' + category.slice(0, -1), 'success');
+    } catch (error) {
+        console.error('[AddAlias] Error:', error);
+        showStreetNameBrowserStatus('Error adding alias: ' + error.message, 'error');
+    }
+}
+
+// =============================================================================
+// CHANGE PRIMARY ALIAS (uses new StreetNameDatabase)
+// =============================================================================
+
+/**
+ * Change the primary alias of the selected street
+ * Uses the new StreetNameDatabase for individual file updates
+ */
+async function changeStreetNamePrimaryAlias() {
+    if (!streetNameBrowser.selectedStreetName) {
+        showStreetNameBrowserStatus('Please select a street first', 'error');
+        return;
     }
 
-    // Track manual edit for Phase 8
-    streetNameBrowser.manualEdits.aliasesAdded.push({
-        street: streetNameBrowser.selectedStreetName.primaryAlias?.term,
-        alias: aliasString,
-        category: category
-    });
+    const selectElement = document.getElementById('streetNameChangePrimarySelect');
+    if (!selectElement) return;
 
-    // Mark as having unsaved changes
-    streetNameBrowser.hasUnsavedChanges = true;
+    const newPrimary = selectElement.value.trim();
+    if (!newPrimary) {
+        showStreetNameBrowserStatus('Please select a new primary alias', 'error');
+        return;
+    }
 
-    // Clear input and refresh display
-    aliasInput.value = '';
-    displayStreetNameBrowserDetails(streetNameBrowser.selectedStreetName);
-    displayStreetNameBrowserResults(streetNameBrowser.currentResults);
+    const oldPrimary = streetNameBrowser.selectedStreetName.primaryAlias?.term;
+    if (!oldPrimary) {
+        showStreetNameBrowserStatus('Current street has no primary alias', 'error');
+        return;
+    }
 
-    showStreetNameBrowserStatus('Added "' + aliasString + '" as ' + category.slice(0, -1), 'success');
+    if (newPrimary.toUpperCase() === oldPrimary.toUpperCase()) {
+        showStreetNameBrowserStatus('Selected alias is already the primary', 'error');
+        return;
+    }
+
+    // Ask where to move the old primary
+    const choice = prompt(
+        '"' + oldPrimary + '" → "' + newPrimary + '"\n\n' +
+        'Move "' + oldPrimary + '" to:\n\n' +
+        '  1 = Homonyms\n' +
+        '  2 = Candidates\n' +
+        '  3 = Synonyms\n' +
+        '  4 = Discard\n\n' +
+        'Enter 1, 2, 3, or 4:',
+        '1'
+    );
+
+    if (choice === null) return; // User cancelled
+
+    const moveToCategory = { '1': 'homonyms', '2': 'candidates', '3': 'synonyms', '4': 'discard' }[choice.trim()] || 'homonyms';
+
+    try {
+        showStreetNameBrowserStatus('Changing primary alias...', 'loading');
+
+        // Use the loaded database's changePrimaryAlias method (saves to Google Drive)
+        await streetNameBrowser.loadedDatabase.changePrimaryAlias(
+            oldPrimary,
+            newPrimary,
+            moveToCategory
+        );
+
+        // Get the updated object from the database (now indexed under newPrimary)
+        const updatedStreet = streetNameBrowser.loadedDatabase.get(newPrimary);
+        if (updatedStreet) {
+            streetNameBrowser.selectedStreetName = updatedStreet;
+        }
+
+        // Track manual edit
+        streetNameBrowser.manualEdits.aliasesAdded.push({
+            street: newPrimary,
+            action: 'primary_change',
+            oldPrimary: oldPrimary,
+            newPrimary: newPrimary
+        });
+
+        streetNameBrowser.hasUnsavedChanges = true;
+
+        // Refresh display with updated object and results
+        displayStreetNameBrowserDetails(streetNameBrowser.selectedStreetName);
+        // Re-fetch current results to reflect the change
+        streetNameBrowser.currentResults = streetNameBrowser.loadedDatabase.getAllObjects();
+        displayStreetNameBrowserResults(streetNameBrowser.currentResults);
+
+        showStreetNameBrowserStatus(
+            'Primary alias changed: "' + oldPrimary + '" → "' + newPrimary + '"',
+            'success'
+        );
+
+    } catch (error) {
+        console.error('[ChangePrimary] Error:', error);
+        showStreetNameBrowserStatus('Error changing primary: ' + error.message, 'error');
+    }
 }
+
+// Export for onclick handler
+window.changeStreetNamePrimaryAlias = changeStreetNamePrimaryAlias;
+
+// =============================================================================
+// DELETE ALIAS
+// =============================================================================
+
+/**
+ * Delete an alias from the selected street
+ * @param {string} term - The alias term to delete
+ * @param {string} category - The category (homonyms, synonyms, candidates)
+ */
+async function deleteStreetNameAlias(term, category) {
+    if (!streetNameBrowser.selectedStreetName) {
+        showStreetNameBrowserStatus('No street selected', 'error');
+        return;
+    }
+
+    if (!confirm('Delete "' + term + '" from ' + category + '?')) {
+        return;
+    }
+
+    const aliases = streetNameBrowser.selectedStreetName.alternatives?.[category];
+    if (!aliases) {
+        showStreetNameBrowserStatus('Category not found: ' + category, 'error');
+        return;
+    }
+
+    // Find and remove the alias
+    const idx = aliases.findIndex(a => a.term === term);
+    if (idx === -1) {
+        showStreetNameBrowserStatus('Alias not found: ' + term, 'error');
+        return;
+    }
+
+    // Remove it
+    aliases.splice(idx, 1);
+
+    try {
+        showStreetNameBrowserStatus('Deleting alias...', 'loading');
+
+        // Save the modified object to Google Drive
+        const primaryKey = streetNameBrowser.selectedStreetName.primaryAlias?.term;
+        if (primaryKey) {
+            await streetNameBrowser.loadedDatabase.saveObject(primaryKey);
+            // Rebuild variation cache
+            streetNameBrowser.loadedDatabase._buildVariationCache();
+        }
+
+        // Mark as having unsaved changes
+        streetNameBrowser.hasUnsavedChanges = true;
+
+        // Refresh display
+        displayStreetNameBrowserDetails(streetNameBrowser.selectedStreetName);
+        displayStreetNameBrowserResults(streetNameBrowser.currentResults);
+
+        showStreetNameBrowserStatus('Deleted "' + term + '" from ' + category, 'success');
+    } catch (error) {
+        console.error('[DeleteAlias] Error:', error);
+        showStreetNameBrowserStatus('Error deleting alias: ' + error.message, 'error');
+    }
+}
+
+// Export for onclick handler
+window.deleteStreetNameAlias = deleteStreetNameAlias;
 
 // =============================================================================
 // CREATE NEW STREETNAME (with Phase 8 safeguards)
 // =============================================================================
 
-function showCreateStreetNameDialog() {
-    if (!streetNameBrowser.loadedDatabase) {
+async function showCreateStreetNameDialog() {
+    if (!ensureBrowserDatabaseSynced()) {
         showStreetNameBrowserStatus('Please load the database first', 'error');
         return;
     }
@@ -642,8 +737,8 @@ function showCreateStreetNameDialog() {
 
     const normalized = streetName.trim().toUpperCase();
 
-    // Check if already exists
-    if (streetNameBrowser.loadedDatabase.variationToStreetName?.has(normalized)) {
+    // Check if already exists using the new database's has() method
+    if (streetNameBrowser.loadedDatabase.has(normalized)) {
         showStreetNameBrowserStatus('This street already exists in the database', 'error');
         return;
     }
@@ -659,22 +754,26 @@ function showCreateStreetNameDialog() {
 
     const newStreetName = new StreetName(primaryAlias);
 
-    // Add to database
-    streetNameBrowser.loadedDatabase.streetNames.push(newStreetName);
-    if (streetNameBrowser.loadedDatabase.variationToStreetName) {
-        streetNameBrowser.loadedDatabase.variationToStreetName.set(normalized, newStreetName);
+    try {
+        showStreetNameBrowserStatus('Creating new street...', 'loading');
+
+        // Add to database (saves to Google Drive)
+        await streetNameBrowser.loadedDatabase.add(newStreetName);
+
+        // Track manual edit for Phase 8
+        streetNameBrowser.manualEdits.streetsAdded.push(normalized);
+
+        // Mark unsaved changes (for legacy serialization if needed)
+        streetNameBrowser.hasUnsavedChanges = true;
+
+        // Refresh display
+        displayAllStreetNames();
+
+        showStreetNameBrowserStatus('Created new street: "' + normalized + '"', 'success');
+    } catch (error) {
+        console.error('[CreateStreet] Error:', error);
+        showStreetNameBrowserStatus('Error creating street: ' + error.message, 'error');
     }
-
-    // Track manual edit for Phase 8
-    streetNameBrowser.manualEdits.streetsAdded.push(normalized);
-
-    // Mark unsaved changes
-    streetNameBrowser.hasUnsavedChanges = true;
-
-    // Refresh display
-    displayAllStreetNames();
-
-    showStreetNameBrowserStatus('Created new street: "' + normalized + '"', 'success');
 }
 
 // =============================================================================
@@ -682,18 +781,18 @@ function showCreateStreetNameDialog() {
 // =============================================================================
 
 function showStreetNameBrowserStats() {
-    if (!streetNameBrowser.loadedDatabase) {
+    if (!ensureBrowserDatabaseSynced()) {
         showStreetNameBrowserStatus('Please load the database first', 'error');
         return;
     }
 
-    const streets = streetNameBrowser.loadedDatabase.streetNames;
+    const streets = streetNameBrowser.loadedDatabase.getAllObjects();
     const totalStreets = streets.length;
     const totalHomonyms = streets.reduce((sum, sn) => sum + (sn.alternatives?.homonyms?.length || 0), 0);
     const totalSynonyms = streets.reduce((sum, sn) => sum + (sn.alternatives?.synonyms?.length || 0), 0);
     const totalCandidates = streets.reduce((sum, sn) => sum + (sn.alternatives?.candidates?.length || 0), 0);
-    const totalVariations = streetNameBrowser.loadedDatabase.variationToStreetName ?
-        streetNameBrowser.loadedDatabase.variationToStreetName.size : 'unknown';
+    const totalVariations = streetNameBrowser.loadedDatabase._variationCache ?
+        streetNameBrowser.loadedDatabase._variationCache.size : 'unknown';
     const streetsWithAliases = streets.filter(sn =>
         (sn.alternatives?.homonyms?.length || 0) +
         (sn.alternatives?.synonyms?.length || 0) +
@@ -719,13 +818,22 @@ function showStreetNameBrowserStats() {
 }
 
 function exportStreetNameBrowserDatabase() {
-    if (!streetNameBrowser.loadedDatabase) {
+    if (!ensureBrowserDatabaseSynced()) {
         showStreetNameBrowserStatus('Please load the database first', 'error');
         return;
     }
 
-    const serialized = serializeStreetNameBrowserDatabase();
-    const jsonContent = JSON.stringify(serialized, null, 2);
+    // Export all street objects using standard serialization
+    const streets = streetNameBrowser.loadedDatabase.getAllObjects();
+    const exportData = {
+        __format: 'StreetNameDatabaseExport',
+        __version: '2.0',
+        __exported: new Date().toISOString(),
+        __count: streets.length,
+        streets: streets.map(s => serializeWithTypes(s))
+    };
+
+    const jsonContent = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonContent], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
 

@@ -11,11 +11,6 @@ async function loadAllEntitiesIntoMemory() {
     console.log('🚀 Loading All Entities Into Memory...');
     console.log('=====================================');
 
-    // DIAGNOSTIC: Log timestamp and localStorage state
-    console.log('🔍 DIAGNOSTIC: loadAllEntitiesIntoMemory() starting at', new Date().toISOString());
-    console.log('🔍 DIAGNOSTIC: localStorage bloomerangConfigFileId =', localStorage.getItem('bloomerangConfigFileId'));
-    console.log('🔍 DIAGNOSTIC: localStorage unifiedDatabaseFileId =', localStorage.getItem('birava_unifiedDatabaseFileId'));
-
     try {
         // Step 1: Load required dependencies
         const dependencies = [
@@ -56,17 +51,12 @@ async function loadAllEntitiesIntoMemory() {
         if (typeof getBloomerangConfigFileId === 'function') {
             try {
                 configFileId = getBloomerangConfigFileId();
-                // DIAGNOSTIC: Log the config file ID being used
-                console.log('🔍 DIAGNOSTIC: getBloomerangConfigFileId() returned:', configFileId);
-                const inputBox = document.getElementById('bloomerangConfigFileId');
-                console.log('🔍 DIAGNOSTIC: bloomerangConfigFileId input box value:', inputBox?.value);
             } catch (error) {
                 console.log('⚠️ No config file ID provided, using default folder search');
                 configFileId = null;
             }
         }
 
-        console.log('🔍 DIAGNOSTIC: Calling loadBloomerangCollectionsWorking with configFileId:', configFileId);
         await loadBloomerangCollectionsWorking(configFileId);
 
         // Step 5: Set up enhanced name extraction
