@@ -2,7 +2,7 @@
 
 **Purpose**: Comprehensive technical guide to the BIRAVA2025 entity matching and contact discovery system
 
-**Last Updated**: December 26, 2025
+**Last Updated**: January 29, 2026
 
 ---
 
@@ -255,6 +255,7 @@ CLASS_REGISTRY = {
     'StreetName': StreetName,                    // Added January 2026
     'AliasedTermDatabase': AliasedTermDatabase,  // Added January 2026
     'StreetNameDatabase': StreetNameDatabase,    // Added January 2026
+    'IndividualNameDatabase': IndividualNameDatabase,  // Added January 2026
     // ... additional classes
 }
 ```
@@ -463,6 +464,32 @@ Extends `AliasedTermDatabase` for Block Island street names.
 - Deleted Folder: `1J7YFTy9zUW_SP1hbOeenTM2LhNmbgOUj`
 
 **Global Access**: `window.streetNameDatabase`
+
+### IndividualNameDatabase (Added January 2026)
+
+Extends `AliasedTermDatabase` for individual names with alias support. Enables matching across name variations (e.g., "JOHN SMITH" matches "JOHNNY SMITH", "J SMITH").
+
+**Location**: `scripts/databases/individualNameDatabase.js`
+
+**Google Drive IDs**:
+- Index File: `1IcC5MiDfw23kmNFlriaaFYY9mtDoqxSC`
+- Object Folder: `1XdIipdWlRy7VKlOJiCt_G706JWqZZY4m`
+- Deleted Folder: `1Dk-hAeSEF96qsX-LoQyRZUHlYwOWKARt`
+- Bulk Database: `1r2G6Spg064KNbBzzKqIk131qAK0NDM9l`
+
+**Key Methods**:
+- `lookupName(name, threshold)` - Find IndividualName by similarity
+- `findByLastName(lastName)` - Find all entries matching a last name
+- `findByPattern(pattern)` - Find entries matching regex pattern
+
+**Global Access**: `window.individualNameDatabase`
+
+**Related Files**:
+- `scripts/databases/individualNameDatabaseBuilder.js` - Builds database from EntityGroups using per-group clustering
+- `scripts/databases/individualNameDatabaseSaveManager.js` - Persistence layer with bulk/individual file sync
+- `scripts/individualNameBrowser.js` - Browser UI for alias management
+
+**Reference Document**: `reference_individualNameDatabase.md`
 
 ### Fire Number Collision Database (Added January 2026)
 
@@ -1146,6 +1173,10 @@ Breaking these = Can't Use Alias-Aware Features
 |------|---------|
 | `scripts/databases/aliasedTermDatabase.js` | Parent class for aliased object databases |
 | `scripts/databases/streetNameDatabase.js` | StreetName individual-file database |
+| `scripts/databases/individualNameDatabase.js` | IndividualName individual-file database |
+| `scripts/databases/individualNameDatabaseBuilder.js` | Builds IndividualNameDatabase from EntityGroups |
+| `scripts/databases/individualNameDatabaseSaveManager.js` | Persistence layer for IndividualNameDatabase |
+| `scripts/individualNameBrowser.js` | IndividualName alias management UI |
 | `scripts/streetTypeAbbreviations.js` | Street type abbreviation management |
 | `scripts/streetNameDatabaseConverter.js` | Migration tool (legacy → individual files) |
 
@@ -1199,6 +1230,11 @@ Breaking these = Can't Use Alias-Aware Features
 - Added householdInformationWeightedComparison to calculator registry (Section 3.4)
 - Fixed verification.js path notation (root folder, not scripts/) (Section 8.3)
 - Removed archived dataSourceManager.js from Critical Files (Section 8.5)
+
+**Version 2.1 Changes (January 2026)**:
+- Added IndividualNameDatabase documentation (Section 2.6)
+- Added IndividualNameDatabase files to Tier 6 Critical Files Reference (Section 8.6)
+- Updated CLASS_REGISTRY with IndividualNameDatabase (Section 2.4)
 
 **Version 2.0 Changes (January 2026)**:
 - Added StreetName class and biStreetName property documentation (Section 2.3)

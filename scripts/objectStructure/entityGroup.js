@@ -754,6 +754,7 @@ class EntityGroupDatabase {
         // Construction metadata
         this.constructionTimestamp = null;
         this.constructionComplete = false;
+        this.consensusBuiltTimestamp = null;  // Set when consensus entities are built
 
         // Statistics
         this.stats = {
@@ -969,6 +970,7 @@ class EntityGroupDatabase {
             constructionConfig: this.constructionConfig,
             constructionTimestamp: this.constructionTimestamp,
             constructionComplete: this.constructionComplete,
+            consensusBuiltTimestamp: this.consensusBuiltTimestamp || null,
             stats: this.stats
         };
     }
@@ -995,6 +997,7 @@ class EntityGroupDatabase {
         db.constructionConfig = data.constructionConfig;
         db.constructionTimestamp = data.constructionTimestamp;
         db.constructionComplete = data.constructionComplete;
+        db.consensusBuiltTimestamp = data.consensusBuiltTimestamp || null;
         db.stats = data.stats;
 
         return db;

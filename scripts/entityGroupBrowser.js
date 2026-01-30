@@ -188,6 +188,12 @@ function setupEntityGroupButtons() {
     if (saveAsNewBtn) {
         saveAsNewBtn.addEventListener('click', saveEntityGroupToNewFiles);
     }
+
+    // Rebuild Consensus button - rebuilds consensus entities without full EntityGroup rebuild
+    const rebuildConsensusBtn = document.getElementById('entityGroupRebuildConsensusBtn');
+    if (rebuildConsensusBtn) {
+        rebuildConsensusBtn.addEventListener('click', rebuildConsensusEntities);
+    }
 }
 
 /**
@@ -428,9 +434,9 @@ async function buildNewEntityGroupDatabase() {
         }
 
         // Build the database (auto-saves to new files to avoid token expiration issues)
+        // Note: Consensus building is now a separate step - use "Rebuild Consensus" button after build
         const result = await buildEntityGroupDatabase({
             verbose: true,
-            buildConsensus: true,
             saveToGoogleDrive: true,  // Auto-save to new files - tokens expire after 1 hour
             sampleSize: sampleSize    // null = full build, number = stratified sample for testing
         });
@@ -590,6 +596,102 @@ async function saveEntityGroupToNewFiles() {
             saveBtn.innerHTML = originalText;
             saveBtn.disabled = false;
         }
+    }
+}
+
+/**
+ * Rebuild consensus entities for all multi-member groups
+ * Allows iterating on consensus algorithm without full EntityGroup rebuild
+ */
+async function rebuildConsensusEntities() {
+    // Check prerequisites
+    if (!entityGroupBrowser.loadedDatabase) {
+        showEntityGroupStatus('No EntityGroup database loaded. Load one first.', 'error');
+        return;
+    }
+
+    if (!window.unifiedEntityDatabase?.entities) {
+        showEntityGroupStatus('Unified entity database not loaded. Load it first.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('entityGroupRebuildConsensusBtn');
+    const originalText = btn?.innerHTML;
+
+    try {
+        if (btn) btn.innerHTML = '⏳ Rebuilding...';
+        showEntityGroupStatus('Rebuilding consensus entities...', 'loading');
+
+        entityGroupBrowser.loadedDatabase.buildAllConsensusEntities(
+            window.unifiedEntityDatabase.entities
+        );
+
+        // Record when consensus was built - used by downstream consumers to detect if rebuild needed
+        entityGroupBrowser.loadedDatabase.consensusBuiltTimestamp = new Date().toISOString();
+
+        const multiMemberCount = entityGroupBrowser.loadedDatabase.stats?.multiMemberGroups ||
+            Object.values(entityGroupBrowser.loadedDatabase.groups)
+                .filter(g => g.memberKeys?.length > 1).length;
+
+        showEntityGroupStatus(
+            `Rebuilt consensus entities for ${multiMemberCount} multi-member groups. Save to preserve.`,
+            'success'
+        );
+
+        console.log(`✅ Rebuilt consensus entities for ${multiMemberCount} multi-member groups`);
+
+    } catch (error) {
+        console.error('Error rebuilding consensus:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    } finally {
+        if (btn) btn.innerHTML = originalText;
+    }
+}
+
+/**
+ * Ensure consensus entities have been built for the given database
+ * Called automatically by downstream consumers (CSV exports, etc.) before accessing consensusEntity
+ *
+ * @param {EntityGroupDatabase} db - The EntityGroup database (defaults to entityGroupBrowser.loadedDatabase)
+ * @param {Object} entityDb - The unified entity database (defaults to window.unifiedEntityDatabase.entities)
+ * @returns {boolean} True if consensus is available, false if prerequisites missing
+ */
+function ensureConsensusBuilt(db = null, entityDb = null) {
+    // Use defaults if not provided
+    db = db || entityGroupBrowser.loadedDatabase;
+    entityDb = entityDb || window.unifiedEntityDatabase?.entities;
+
+    // Check prerequisites
+    if (!db) {
+        console.warn('[ensureConsensusBuilt] No EntityGroup database available');
+        return false;
+    }
+
+    if (!entityDb) {
+        console.warn('[ensureConsensusBuilt] No unified entity database available');
+        return false;
+    }
+
+    // Check if consensus already built
+    if (db.consensusBuiltTimestamp) {
+        console.log(`[ensureConsensusBuilt] Consensus already built at ${db.consensusBuiltTimestamp}`);
+        return true;
+    }
+
+    // Build consensus
+    console.log('[ensureConsensusBuilt] Consensus not built, building now...');
+    try {
+        db.buildAllConsensusEntities(entityDb);
+        db.consensusBuiltTimestamp = new Date().toISOString();
+
+        const multiMemberCount = db.stats?.multiMemberGroups ||
+            Object.values(db.groups).filter(g => g.memberKeys?.length > 1).length;
+
+        console.log(`[ensureConsensusBuilt] Built consensus for ${multiMemberCount} multi-member groups`);
+        return true;
+    } catch (error) {
+        console.error('[ensureConsensusBuilt] Error building consensus:', error);
+        return false;
     }
 }
 

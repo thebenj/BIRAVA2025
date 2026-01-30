@@ -5,8 +5,8 @@
 read_order: [ROOT_CAUSE_DEBUGGING_RULE, COMPLETION_VERIFICATION_RULE, CURRENT_WORK_CONTEXT, TERMINOLOGY, MANDATORY_COMPARETO_ARCHITECTURE]
 focus_section: ROOT_CAUSE_DEBUGGING_RULE_then_COMPLETION_VERIFICATION_RULE_then_CURRENT_WORK_CONTEXT
 processing_directive: ignore_visual_formatting_process_semantic_content_only
-last_updated: 2026-01-27
-version: 153.0_SESSION64_UNMATCHED_STREET_TRACKER_FIX
+last_updated: 2026-01-29
+version: 173.0_SESSION80_DOCUMENTATION_COMPLETE
 ```
 
 ---
@@ -105,38 +105,35 @@ CLAUDE_MD_UPDATE_PROTECTION:
 ```yaml
 # QUICK START - READ THIS FIRST
 #
-# WHAT WE'RE DOING: Three-task roadmap for alias system expansion + code quality
+# ROADMAP (in order):
+#   1. Task 1 (Database Maintenance Box): USER_VERIFIED_COMPLETE
+#   2. Task 2 (AliasedTermDatabase): USER_VERIFIED_COMPLETE
+#   3. Code Quality CQ-1: USER_VERIFIED_COMPLETE
+#   4. IndividualNameDatabase System: USER_VERIFIED_COMPLETE
+#   5. Task 3 (Phonebook Integration): IN_PROGRESS
 #
-# WHERE WE ARE:
-#   - Task 1 (Database Maintenance Box): USER VERIFIED COMPLETE
-#   - Task 2 (AliasedTermDatabase): USER VERIFIED COMPLETE
-#   - Code Quality CQ-1: USER VERIFIED COMPLETE (inline scripts extracted)
-#
-# NEXT ACTION: Task 3 (Phonebook Integration)
+# NEXT ACTION: Execute Option D implementation plan (Section 7C of reference doc)
 
-immediate_status: CODE_QUALITY_CQ1_COMPLETE_READY_FOR_TASK_3
-current_focus: Task 3 (Phonebook Integration) is next
+immediate_status: READY_TO_EXECUTE_PLAN
+current_focus: IndividualName.compareTo() rename and rebuild (Option D)
 
-tasks:
-  task_1:
-    name: Create Database Maintenance Box in Browser
-    status: USER_VERIFIED_COMPLETE
-    description: Collapsible boxes for Entity Browsers and Database Maintenance browsers
+current_project:
+  name: Task 3 - Phonebook Integration (preparatory work)
+  status: IN_PROGRESS
+  reference: reference_phonebookIntegration.md
+  current_phase: Option D Implementation Plan ready for execution
 
-  task_2:
-    name: AliasedTermDatabase Class Architecture
-    status: USER_VERIFIED_COMPLETE
-    reference: reference_aliasedTermDatabasePlan.md (includes phase details and implementation summary)
+next_action:
+  what: Execute Section 7C plan - add numericCompareTo() and error-throwing compareTo()
+  reference: reference_phonebookIntegration.md Section 7C
+  steps_remaining: 11 (see Execution Checklist in reference doc)
 
-  task_3:
-    name: Integrate Phonebook Data and Generalize Model
-    status: PLANNED
-    reference: reference_streetNameAliasArchitecture.md Section 14 "Task 3"
-
-key_references:
-  collision_architecture: reference_fireNumberCollisionArchitecture.md
-  streetname_architecture: reference_streetNameAliasArchitecture.md (Section 2: Two-File Architecture)
-  aliasedterm_database_plan: reference_aliasedTermDatabasePlan.md
+completed_tasks:
+  task_1: USER_VERIFIED_COMPLETE (Database Maintenance Box)
+  task_2: USER_VERIFIED_COMPLETE (reference_aliasedTermDatabasePlan.md)
+  cq_1: USER_VERIFIED_COMPLETE (reference_codeQualityRoadmap.md)
+  individualNameDatabase: USER_VERIFIED_COMPLETE (reference_individualNameDatabase.md)
+  move_alias: USER_VERIFIED_COMPLETE (reference_moveAliasFeaturePlan.md)
 ```
 
 ---
@@ -228,6 +225,11 @@ CRITICAL_LESSONS:
   - database_key_generation: NEVER generate keys twice - use keys that already exist in database
   - regex_metacharacters: In JavaScript regex, ^ is a metacharacter - escape as \^ for literal match
   - NO_CACHE_BUST_QUERYSTRINGS: NEVER add ?timestamp to script URLs - use hard refresh (Ctrl+Shift+R) instead
+  - google_drive_rate_limits: Max ~3 writes/sec sustained; process in batches of 400 max; save index incrementally
+  - two_object_reference_trap: When loading individual file on selection creates DIFFERENT object than bulk-loaded dbEntry.object; edits to one don't affect the other
+  - index_corruption_risk: Edit operations that save index may overwrite valid fileIds with nulls if index not properly loaded first
+  - google_drive_filename_chars: Characters / \ < > : " | ? * are invalid in filenames; use normalizeForGoogleDrive() when comparing bulk keys to folder names
+  - _saveIndex_corruption: db.saveObject/add/changePrimaryAlias call _saveIndex() which overwrites Drive index with db.entries (bulk-loaded with fileId:null). IndividualNameBrowser emulates these operations with direct _updateObjectFile/_createObjectFile calls, bypassing _saveIndex(). New items use addEntryToGoogleDriveIndex() for targeted updates.
 
 DEBUGGING_PROTOCOL:
   ALWAYS: Add diagnostic console.log to verify code path BEFORE making changes
@@ -239,11 +241,18 @@ DEBUGGING_PROTOCOL:
 
 ## REFERENCE_NAVIGATION
 ```yaml
+# READ reference_systemDocumentation_executiveSummary.md BEFORE SEARCHING CODE when you need
+# to understand code structure, locate functionality, or explore the app architecture.
+
 PRIMARY_DOCUMENTATION:
+  reference_systemDocumentation_executiveSummary.md: AI quick reference - class hierarchies, function→file mappings, database structures
   reference_systemDocumentation.md: MISSION CRITICAL - Authoritative system guide (8 sections). READ ONLY WHEN INSTRUCTED due to length.
-  reference_streetNameAliasArchitecture.md: StreetName architecture (Phases 0-5 COMPLETE, 3-Task Roadmap)
+  reference_phonebookIntegration.md: IN_PROGRESS - Task 3 planning, Option D implementation plan (Section 7C)
+  reference_individualNameDatabase.md: COMPLETE - IndividualNameDatabase system documentation
+  reference_moveAliasFeaturePlan.md: COMPLETE - Move Alias feature (delete becomes move)
+  reference_streetNameAliasArchitecture.md: StreetName architecture (Phases 0-5 COMPLETE)
   reference_fireNumberCollisionArchitecture.md: Fire number collision system (COMPLETE)
-  reference_aliasedTermDatabasePlan.md: AliasedTermDatabase class architecture (Phases 1-6 READY_FOR_TESTING)
+  reference_aliasedTermDatabasePlan.md: AliasedTermDatabase class architecture (COMPLETE)
   reference_codeQualityRoadmap.md: Code improvements (CQ-1 COMPLETE, see doc for future tasks)
 
 HISTORICAL_DOCUMENTATION:
@@ -266,7 +275,7 @@ CORE_CODE_LOCATIONS:
   browsers: scripts/ (entityGroupBrowser.js, unifiedEntityBrowser.js, entityRenderer.js, streetNameBrowser.js)
   serialization: scripts/utils/classSerializationUtils.js
   export: scripts/export/ (csvReports.js, lightweightExporter.js)
-  diagnostics: scripts/diagnostics/ (entityComparison.js, auditOverrideRules.js, streetArchitectureBaseline.js)
+  diagnostics: scripts/diagnostics/ (entityComparison.js, auditOverrideRules.js, streetArchitectureBaseline.js, individualIdentificationResearch.js)
   address_processing: scripts/address/addressProcessing.js
   street_infrastructure: scripts/ (streetNameBrowser.js, streetNameDatabaseConverter.js, streetTypeAbbreviations.js)
 ```
@@ -278,26 +287,24 @@ CORE_CODE_LOCATIONS:
 completed_projects:
   - Fire Number Collision Integration: reference_fireNumberCollisionArchitecture.md
   - StreetName Alias Architecture (Phases 0-5): reference_streetNameAliasArchitecture.md
-  - Database Maintenance Collapsible Box: (no reference doc)
-  - Code Quality CQ-1 (Extract Inline Scripts): reference_codeQualityRoadmap.md
-  - Unmatched Street Tracker Fix: session 64 in reference_sessionHistory_2026_January.md
+  - AliasedTermDatabase Class (Task 2): reference_aliasedTermDatabasePlan.md
+  - Database Maintenance Collapsible Box (Task 1): (no reference doc)
+  - Code Quality CQ-1: reference_codeQualityRoadmap.md
+  - IndividualNameDatabase System: reference_individualNameDatabase.md
+  - Move Alias Feature: reference_moveAliasFeaturePlan.md
 
-active_roadmap:
-  name: Alias System Expansion (3 Tasks)
-  task_1: Database Maintenance Box - USER_VERIFIED_COMPLETE
-  task_2: AliasedTermDatabase Class - USER_VERIFIED_COMPLETE (Phases 1-6 all complete)
-  task_3: Phonebook Integration & Generalization - PLANNED (includes VA reconciliation workflow)
-  code_quality: CQ-1 COMPLETE (inline handlers extracted to workflowHandlers.js)
+active_project:
+  name: Task 3 - Phonebook Integration
+  status: Option D plan ready for execution
+  reference: reference_phonebookIntegration.md (Section 7C)
 
 current_system_state:
-  entity_groups: 1869
+  entity_groups: 1868
   entities: 4104
-
-new_infrastructure:
-  aliasedTermDatabase_class: scripts/databases/aliasedTermDatabase.js
-  streetNameDatabase_class: scripts/databases/streetNameDatabase.js
-  workflowHandlers: scripts/ui/workflowHandlers.js
-  google_drive_ids: See reference_aliasedTermDatabasePlan.md Section 12
+  individual_name_entries: 2107
+  google_drive_folder_files: 2107
+  index_entries: 2107
+  batch_size: 400 items per click
 ```
 
 ---
@@ -400,17 +407,14 @@ MANDATORY_BACKUP:
 
 ## SESSION_METADATA
 ```yaml
-last_updated: January_27_2026
-document_version: 153.0_SESSION64_UNMATCHED_STREET_TRACKER_FIX
-previous_version: 152.0_SESSION63_CODE_QUALITY_CQ1_COMPLETE
+last_updated: January_30_2026
+document_version: 174.0_SESSION81_OPTION_D_PLAN_READY
+previous_version: 173.0_SESSION80_DOCUMENTATION_COMPLETE
 
 version_notes: |
-  Version 153.0 - Unmatched Street Tracker Bug Fix USER_VERIFIED_COMPLETE
-  - Fixed window.unmatchedStreetTracker not writing to Google Drive files
-  - Root cause 1: record() call was missing from aliasClasses.js
-  - Root cause 2: Database API changed from .streets to .getAllObjects() during Task 2
-  - Added best-match search and record() call to Address.fromProcessedAddress()
-  - Result: Bloomerang 12 records, VA 3 records now being saved
+  Version 174.0 - Session 81: Option D plan ready
+  Details: reference_sessionHistory_2026_January.md (Session 81)
+  Next: Execute reference_phonebookIntegration.md Section 7C
 
 working_directory: /home/robert-benjamin/RPBprojects/VisionAppraisal/BIRAVA2025
 platform: linux

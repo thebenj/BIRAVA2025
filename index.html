@@ -651,6 +651,53 @@
             background-color: #e1bee7;
             color: #7b1fa2;
         }
+
+        /* Individual Name Browser Styles */
+        .individualname-result-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .individualname-result-item:hover {
+            background-color: #e3f2fd;
+        }
+        .individualname-selected {
+            background-color: #bbdefb !important;
+            border-left: 3px solid #1565c0;
+        }
+        .individualname-primary {
+            font-weight: 600;
+            color: #1565c0;
+        }
+        .individualname-components {
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        .individualname-alias-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            margin-right: 5px;
+        }
+        .individualname-alias-homonym {
+            background-color: #c8e6c9;
+            color: #2e7d32;
+        }
+        .individualname-alias-synonym {
+            background-color: #fff9c4;
+            color: #f57f17;
+        }
+        .individualname-alias-candidate {
+            background-color: #e1bee7;
+            color: #7b1fa2;
+        }
+        .individualname-alias-count {
+            font-size: 11px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -1146,8 +1193,42 @@
                 <button id="entityGroupExportBtn" class="action-button">📄 Export Groups</button>
                 <button id="entityGroupStatsBtn" class="action-button">📊 Group Stats</button>
             </div>
+        </div>
+
+        <!-- Individual and AggregateHousehold Creation Section -->
+        <div class="entity-browser-section" style="border-color: #e91e63;">
+            <h3 style="color: #e91e63;">👥 Individual and AggregateHousehold Creation</h3>
+            <div style="padding: 12px; background: #fce4ec; border: 1px solid #f8bbd9; border-radius: 6px;">
+                <button id="entityGroupRebuildConsensusBtn" class="action-button"
+                        style="background-color: #e91e63; padding: 10px 16px; font-weight: 600;">
+                    🔄 Rebuild Consensus
+                </button>
+                <div style="font-size: 11px; color: #880e4f; margin-top: 8px;">
+                    Rebuild consensus entities for all multi-member groups using the current algorithm.
+                    Requires EntityGroup database and Unified Entity Database to be loaded. Save to preserve changes.
+                </div>
+            </div>
+        </div>
+
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <!-- TOOLS: CSV Reports, Entity Comparison, Override Rules Audit                 -->
+        <!-- ═══════════════════════════════════════════════════════════════════════════ -->
+        <div class="phase-section tools collapsed" id="toolsSection">
+            <div class="phase-header" onclick="togglePhase('toolsSection')">
+                <span class="phase-toggle">▼</span>
+                <span class="phase-title">TOOLS: Reports and Diagnostics</span>
+                <span class="phase-subtitle">CSV exports, entity comparison, override audits</span>
+            </div>
+            <div class="phase-content">
+
+        <div class="entity-browser-section" style="border-color: #607d8b;">
+            <h3 style="color: #607d8b;">🛠️ Tools</h3>
+
             <!-- CSV Reports Panel -->
-            <div style="margin-top: 15px; padding: 12px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 6px;">
+            <div style="padding: 12px; background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 6px; margin-bottom: 15px;">
                 <div style="font-weight: 600; margin-bottom: 10px; color: #2e7d32;">📥 CSV Reports</div>
 
                 <!-- Prospects + Donors Export -->
@@ -1234,7 +1315,7 @@
             </div>
 
             <!-- Entity Comparison Tool -->
-            <div style="margin-top: 15px; padding: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px;">
+            <div style="padding: 12px; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; margin-bottom: 15px;">
                 <div style="font-weight: 600; margin-bottom: 8px; color: #495057;">Entity Comparison Tool</div>
                 <div style="display: flex; flex-direction: column; gap: 6px;">
                     <input type="text" id="compareEntityKey1" placeholder="Entity 1 Key (e.g., visionAppraisal:FireNumber:1418)"
@@ -1252,7 +1333,7 @@
             </div>
 
             <!-- Override Rules Audit -->
-            <div style="margin-top: 15px; padding: 12px; background: #fff3e0; border: 1px solid #ffcc80; border-radius: 6px;">
+            <div style="padding: 12px; background: #fff3e0; border: 1px solid #ffcc80; border-radius: 6px;">
                 <div style="font-weight: 600; margin-bottom: 8px; color: #e65100;">🔍 Override Rules Audit</div>
                 <button onclick="runOverrideRulesAudit()"
                         style="padding: 8px 16px; background: #ff6f00; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
@@ -1382,6 +1463,198 @@
             <div class="action-buttons">
                 <button id="streetNameStatsBtn" class="action-button">Database Stats</button>
                 <button id="streetNameExportBtn" class="action-button">Export JSON</button>
+            </div>
+        </div>
+
+                <!-- Individual Name Browser Section -->
+                <div class="entity-browser-section" style="border-color: #1565c0;">
+                    <h3 style="color: #1565c0;">Individual Name Browser - Name Alias Database Explorer</h3>
+
+            <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
+                <h4 style="margin: 0 0 15px 0; color: #1565c0;">Initializing Build</h4>
+
+                <!-- Build/Resume Controls -->
+                <div class="control-row" style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group">
+                        <button id="individualNameBuildResumeBtn" class="action-button" style="background-color: #4caf50; padding: 10px 20px; font-weight: 600;">
+                            Build Run/Resume
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <label style="font-weight: 600; display: block; margin-bottom: 5px;">Completed:</label>
+                        <input type="text" id="individualNameCompletedCount" value="0" readonly
+                               style="width: 80px; padding: 8px; text-align: center; background: #e8f5e9;">
+                    </div>
+                    <div class="control-group">
+                        <label style="font-weight: 600; display: block; margin-bottom: 5px;">Remaining:</label>
+                        <input type="text" id="individualNameRemainingCount" value="--" readonly
+                               style="width: 80px; padding: 8px; text-align: center; background: #fff3e0;">
+                    </div>
+                    <div class="control-group">
+                        <button id="individualNameResetBtn" class="action-button" style="background-color: #f44336; padding: 10px 20px; font-weight: 600;">
+                            Reset
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="individualNameConsistencyCheckBtn" class="action-button" style="background-color: #2196f3; padding: 10px 20px; font-weight: 600;">
+                            Constncy Chk
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="individualNameBackupBulkBtn" class="action-button" style="background-color: #4caf50; padding: 10px 20px; font-weight: 600;">
+                            Backup Bulk
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Folder ID Configuration -->
+                <div class="control-row" style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group" style="flex: 1; min-width: 300px;">
+                        <label style="font-weight: 600; display: block; margin-bottom: 5px;">Objects Folder ID:</label>
+                        <input type="text" id="individualNameFolderId" value="1XdIipdWlRy7VKlOJiCt_G706JWqZZY4m"
+                               style="width: 100%; padding: 8px; font-family: monospace; font-size: 11px;">
+                    </div>
+                    <div class="control-group" style="flex: 1; min-width: 300px;">
+                        <label style="font-weight: 600; display: block; margin-bottom: 5px;">Deleted Folder ID:</label>
+                        <input type="text" id="individualNameDeletedFolderId" value="1Dk-hAeSEF96qsX-LoQyRZUHlYwOWKARt"
+                               style="width: 100%; padding: 8px; font-family: monospace; font-size: 11px;">
+                    </div>
+                </div>
+
+                <!-- Repopulate Window Button -->
+                <div class="control-row" style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group">
+                        <button id="individualNameLoadBtn" class="action-button" style="background-color: #607d8b; padding: 8px 16px; font-weight: 600;">
+                            Repop. Window
+                        </button>
+                    </div>
+                </div>
+
+                <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                    <strong>Individual Name Browser:</strong> Browse, search, and manage individual name aliases.
+                    Built from EntityGroup consensus building. Changes are saved automatically to Google Drive.
+                    <br><strong>Build Run/Resume:</strong> Processes up to 400 names per click to avoid Google Drive rate limits.
+                    <br><strong>Repop. Window:</strong> Reload browser display from bulk database file.
+                </div>
+            </div>
+
+            <!-- Incremental Change Controls -->
+            <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
+                <h4 style="margin: 0 0 15px 0; color: #1565c0;">Incremental Change</h4>
+
+                <!-- Rebuild Bulk Controls -->
+                <div class="control-row" style="display: flex; gap: 20px; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap;">
+                    <div class="control-group">
+                        <button id="individualNameRebuildBulkBtn" class="action-button" style="background-color: #ff9800; padding: 10px 20px; font-weight: 600;">
+                            Rebuild Bulk from Files
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="individualNameCrossCheckBtn" class="action-button" style="background-color: #9c27b0; padding: 10px 20px; font-weight: 600;">
+                            Cross Check
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="individualNameRebuildMapBtn" class="action-button" style="background-color: #00897b; padding: 10px 20px; font-weight: 600;">
+                            Rebuild Map
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="individualNameSyncDevToOriginalBtn" class="action-button" style="background-color: #2196f3; padding: 10px 20px; font-weight: 600;">
+                            Sync DEV → Original
+                        </button>
+                    </div>
+                </div>
+
+                <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+                    <strong>Purpose:</strong> Rebuild bulk file from Google Drive individual files.
+                    <br>This is the reverse of Initializing Build - use when individual files have been modified and need to be consolidated back into the bulk database.
+                    <br><strong>Note:</strong> Currently writes to DEV file for testing.
+                </div>
+            </div>
+
+            <!-- Search Section -->
+            <div class="search-section" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                <input type="text" id="individualNameSearchInput" class="search-input" placeholder="Search individual names..." style="flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #ced4da; border-radius: 4px;">
+                <button id="individualNameSearchBtn" class="search-button" style="padding: 8px 16px; background: #1565c0; color: white; border: none; border-radius: 4px; cursor: pointer;">Search</button>
+                <button id="individualNameClearBtn" class="search-button" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">Clear</button>
+                <button id="individualNameNewBtn" class="search-button" style="padding: 8px 16px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer;">+ New Name</button>
+            </div>
+
+            <!-- Status Message -->
+            <div id="individualNameStatusMessage" class="status-message" style="display: none;"></div>
+
+            <!-- Main Content: Two-Panel Layout -->
+            <div style="display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
+
+                <!-- Left Panel: Name List -->
+                <div class="results-section" style="flex: 1; min-width: 350px;">
+                    <div class="results-header">
+                        <span id="individualNameResultsCount">Load individual name database to begin</span>
+                    </div>
+                    <div id="individualNameResultsList" class="results-list" style="max-height: 400px;">
+                        <div style="padding: 20px; text-align: center; color: #999;">
+                            <div style="font-size: 48px; margin-bottom: 15px;">&#128100;</div>
+                            <div style="font-weight: 600; margin-bottom: 10px;">Individual Name Browser</div>
+                            <div>Load the individual name database to begin browsing</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Details and Testing -->
+                <div style="flex: 1; min-width: 400px;">
+
+                    <!-- Selected Name Details -->
+                    <div id="individualNameDetailsPanel" style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1565c0;">Selected Individual</h4>
+                        <div id="individualNameDetailsContent" style="color: #666;">
+                            Select a name from the list to view details
+                        </div>
+                    </div>
+
+                    <!-- compareTo Test Panel -->
+                    <div style="background: #e3f2fd; border: 1px solid #90caf9; border-radius: 8px; padding: 15px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #1976d2;">Test compareTo()</h4>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <input type="text" id="individualNameTestInput" placeholder="Enter name to test..."
+                                   style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                            <button id="individualNameTestBtn" style="background: #1976d2; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                Test
+                            </button>
+                        </div>
+                        <div id="individualNameTestResult" style="font-family: monospace; font-size: 12px; background: white; padding: 10px; border-radius: 4px; min-height: 60px;">
+                            Enter a name and press Enter or click Test to see compareTo() results
+                        </div>
+                    </div>
+
+                    <!-- Add Alias Panel -->
+                    <div style="background: #fff3e0; border: 1px solid #ffcc80; border-radius: 8px; padding: 15px;">
+                        <h4 style="margin: 0 0 10px 0; color: #ef6c00;">Add Alias to Selected Name</h4>
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;">
+                            <input type="text" id="individualNameAliasInput" placeholder="New alias string..."
+                                   style="flex: 1; min-width: 150px; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                            <select id="individualNameAliasCategory" style="padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+                                <option value="homonyms">Homonym</option>
+                                <option value="synonyms">Synonym</option>
+                                <option value="candidates">Candidate</option>
+                            </select>
+                        </div>
+                        <button id="individualNameAddAliasBtn" style="background: #ef6c00; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                            + Add Alias
+                        </button>
+                        <div style="font-size: 11px; color: #666; margin-top: 8px;">
+                            <strong>Homonym:</strong> High-similarity match |
+                            <strong>Synonym:</strong> Medium-similarity match |
+                            <strong>Candidate:</strong> Lower-similarity match
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button id="individualNameStatsBtn" class="action-button">Database Stats</button>
+                <button id="individualNameExportBtn" class="action-button">Export JSON</button>
             </div>
         </div>
 
@@ -1527,6 +1800,7 @@
     <script type="text/javascript" src="./scripts/utils/classSerializationUtils.js"></script>
     <script type="text/javascript" src="./scripts/databases/aliasedTermDatabase.js"></script>
     <script type="text/javascript" src="./scripts/databases/streetNameDatabase.js"></script>
+    <script type="text/javascript" src="./scripts/databases/individualNameDatabase.js"></script>
     <script type="text/javascript" src="./scripts/visionAppraisalParser.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/visionAppraisal.js"></script>
     <script type="text/javascript" src="./scripts/dataSources/processAllVisionAppraisalRecords.js"></script>
@@ -1947,6 +2221,9 @@
 
     <!-- Street Name Browser -->
     <script src="./scripts/streetNameBrowser.js"></script>
+    <script src="./scripts/databases/individualNameDatabaseBuilder.js"></script>
+    <script src="./scripts/databases/individualNameDatabaseSaveManager.js"></script>
+    <script src="./scripts/individualNameBrowser.js"></script>
 
     <!-- Fire Number Collision Database -->
     <script src="./scripts/fireNumberCollisionDatabase.js"></script>

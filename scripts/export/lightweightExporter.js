@@ -342,6 +342,12 @@ function exportLightweightJSON(entityGroupDatabase, entityDatabase = null) {
  * @param {Object} entityDatabase - The unified entity database (optional)
  */
 function downloadLightweightExport(entityGroupDatabase, filename = 'entityGroups_lightweight.json', entityDatabase = null) {
+    // Ensure consensus entities are built (auto-builds if needed)
+    const entDb = entityDatabase || window.unifiedEntityDatabase?.entities;
+    if (typeof ensureConsensusBuilt === 'function' && entDb) {
+        ensureConsensusBuilt(entityGroupDatabase, entDb);
+    }
+
     const jsonString = exportLightweightJSON(entityGroupDatabase, entityDatabase);
     if (!jsonString) {
         console.error('[LightweightExporter] Export failed, nothing to download');

@@ -10,6 +10,105 @@ This document contains detailed session-by-session work logs offloaded from CLAU
 
 ---
 
+## Session 81 - Option D Implementation Plan (January 30, 2026)
+
+### Status: PLAN_READY_FOR_EXECUTION
+
+**Session Goal:** Create detailed implementation plan for IndividualName.compareTo() refactoring (preparatory work for Task 3 Phonebook Integration)
+
+### What Was Done
+
+**Studies Completed:**
+1. IndividualName class structure analysis - discovered redundant storage (primaryAlias.term vs firstName/lastName/otherNames components)
+2. Catalogued all 21 IndividualName instantiation points during entity creation (20 in visionAppraisalNameParser.js, 1 in bloomerang.js)
+3. Catalogued all IndividualName.compareTo() usage - 6 verified call sites that involve IndividualName
+
+**Option D Selected:**
+- Rename current inherited behavior to `numericCompareTo()`
+- Add `numericCompareTo()` to Aliased base class (all subclasses inherit)
+- Add error-throwing `compareTo()` to IndividualName (diagnostic phase)
+- Update 6 call sites to use `numericCompareTo()`
+- Later: Replace error-throwing with four-score implementation
+
+**Code Modified:**
+- syncDevToOriginal() in individualNameDatabaseSaveManager.js - added DEV/INDEX key validation and fileId injection
+
+### Files Changed/Created
+
+| File | Changes |
+|------|---------|
+| reference_phonebookIntegration.md | Created - Task 3 planning document with Sections 7, 7B, 7C |
+| individualNameDatabaseSaveManager.js | Modified syncDevToOriginal() for DEV/INDEX validation |
+
+### Implementation Plan Location
+
+Full execution plan with code snippets, line numbers, and checklist: **reference_phonebookIntegration.md Section 7C**
+
+### Next Session
+
+Execute Section 7C: Add numericCompareTo() to Aliased, add error-throwing compareTo() to IndividualName, update 6 call sites, verify with testing.
+
+---
+
+## Session 66 - Consensus Building Enhancement Phase 1 (January 28, 2026)
+
+### Status: USER_VERIFIED_COMPLETE (Phase 1)
+
+**Session Goal:** Implement Phase 1 of Consensus Building Enhancement - migrate consensus building to standalone functionality
+
+### What Was Done
+
+**Phase 1: Full Migration (not duplication)**
+
+The consensus building functionality was migrated from being embedded in "Build New EntityGroups" to a standalone operation:
+
+1. **UI Reorganization:**
+   - Created new "Individual and AggregateHousehold Creation" box with "Rebuild Consensus" button
+   - Moved Tools (CSV Reports, Entity Comparison, Override Rules Audit) to new "TOOLS" collapsible phase-section
+
+2. **Core Migration:**
+   - Changed `buildConsensus` default to `false` in `buildEntityGroupDatabase()`
+   - Removed explicit `buildConsensus: true` from caller
+   - Added `rebuildConsensusEntities()` function as standalone entry point
+   - Added `ensureConsensusBuilt()` helper for downstream auto-rebuild
+
+3. **Metadata Tracking:**
+   - Added `consensusBuiltTimestamp` to EntityGroupDatabase (constructor, serialize, deserialize)
+   - Downstream consumers check this and auto-rebuild if null
+
+4. **Downstream Integration:**
+   - Added `ensureConsensusBuilt()` calls to: downloadCSVExport(), downloadAssessmentValueReport(), exportMultiVAPropertyReport(), runProspectMailMergeExport(), downloadLightweightExport()
+
+**Phase 2: Research Code Created**
+
+Created `scripts/diagnostics/individualIdentificationResearch.js` for analyzing individual identification patterns within entity groups. Not loaded permanently - run via console copy/paste.
+
+### Files Changed
+
+| File | Changes |
+|------|---------|
+| index.html | UI reorganization: new boxes and TOOLS phase-section |
+| scripts/matching/entityGroupBuilder.js | Changed buildConsensus default to false |
+| scripts/entityGroupBrowser.js | Added rebuildConsensusEntities(), ensureConsensusBuilt(), event listener |
+| scripts/objectStructure/entityGroup.js | Added consensusBuiltTimestamp to constructor/serialize/deserialize |
+| scripts/export/csvReports.js | Added ensureConsensusBuilt() to 4 export functions |
+| scripts/export/lightweightExporter.js | Added ensureConsensusBuilt() call |
+| scripts/diagnostics/individualIdentificationResearch.js | New file - Phase 2 research code |
+| reference_consensusBuildingEnhancement.md | Updated with Section 1.4.1 (downstream calls) and Section 1.7 (implementation details) |
+
+### Verification
+
+- User verified: Build New no longer builds consensus (no "Building Consensus Entities" in console)
+- User verified: CSV export triggers auto-rebuild with "[ensureConsensusBuilt] Consensus not built, building now..."
+- User verified: Export completes successfully after auto-rebuild
+
+### Next Steps
+
+- Run Phase 2 research code to analyze individual identification patterns
+- Use findings to design Phase 3 enhanced consensus builder
+
+---
+
 ## Session 64 - Unmatched Street Tracker Bug Fix (January 27, 2026)
 
 ### Status: USER_VERIFIED_COMPLETE

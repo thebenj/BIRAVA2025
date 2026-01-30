@@ -45,7 +45,7 @@ const ENTITYGROUP_DATABASE_FILE_ID = '18uVAvUBIwvqTKTOLCulgVyCtU_uqWFlr';
 async function buildEntityGroupDatabase(options = {}) {
     const config = {
         verbose: true,
-        buildConsensus: true,
+        buildConsensus: false,  // Consensus building migrated to standalone "Rebuild Consensus" button
         saveToGoogleDrive: true,
         googleDriveFileId: ENTITYGROUP_DATABASE_FILE_ID,
         sampleSize: null,  // null = full database, number = stratified sample

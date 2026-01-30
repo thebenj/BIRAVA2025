@@ -6,8 +6,9 @@ const Case31Validator = {
 
     // Business terms list for case detection (from prior analysis)
     businessTerms: [
-        'LLC', 'INC', 'CORP', 'TRUST', 'TRUSTEE', 'ESTATE', 'FOUNDATION',
-        'ASSOCIATION', 'SOCIETY', 'COMPANY', 'ENTERPRISES', 'PROPERTIES',
+        'LLC', 'INC', 'CORP', 'TRUST', 'TRUSTS', 'TRUSTEE', 'TRUSTEES', 'IRT', 'IRTRUST',
+        'QPRT', 'REVOCABLE', 'ESTATE', 'FOUNDATION',
+        'ASSOCIATION', 'ASSOC', 'HOA', 'SOCIETY', 'COMPANY', 'ENTERPRISES', 'PROPERTIES',
         'INVESTMENTS', 'HOLDINGS', 'MANAGEMENT', 'SERVICES', 'GROUP',
         'PARTNERS', 'PARTNERSHIP', 'CO', 'LTD', 'LIMITED', 'INCORPORATED',
         'CONSERVANCY'

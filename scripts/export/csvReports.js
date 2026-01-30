@@ -573,6 +573,11 @@ function downloadCSVExport() {
         return;
     }
 
+    // Ensure consensus entities are built (auto-builds if needed)
+    if (typeof ensureConsensusBuilt === 'function') {
+        ensureConsensusBuilt(db, window.unifiedEntityDatabase.entities);
+    }
+
     showEntityGroupStatus('Generating CSV export...', 'loading');
 
     try {
@@ -986,6 +991,11 @@ function downloadAssessmentValueReport() {
         return;
     }
 
+    // Ensure consensus entities are built (auto-builds if needed)
+    if (typeof ensureConsensusBuilt === 'function') {
+        ensureConsensusBuilt(db, window.unifiedEntityDatabase.entities);
+    }
+
     showEntityGroupStatus('Generating Assessment Value Report...', 'loading');
 
     try {
@@ -1201,6 +1211,11 @@ function exportMultiVAPropertyReport(minVAMembers = 3) {
     if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
         console.error('Please load the Unified Entity Database first (needed for entity details).');
         return;
+    }
+
+    // Ensure consensus entities are built (auto-builds if needed)
+    if (typeof ensureConsensusBuilt === 'function') {
+        ensureConsensusBuilt(groupDatabase, window.unifiedEntityDatabase.entities);
     }
 
     console.log(`Generating Multi-VA Property Report (minimum ${minVAMembers} VA members)...`);
@@ -2093,6 +2108,11 @@ async function runProspectMailMergeExport() {
                 if (button) button.textContent = originalText;
                 return;
             }
+        }
+
+        // Step 2.5: Ensure consensus entities are built (auto-builds if needed)
+        if (typeof ensureConsensusBuilt === 'function') {
+            ensureConsensusBuilt(db, window.unifiedEntityDatabase.entities);
         }
 
         // Step 3: Run the mail merge export
