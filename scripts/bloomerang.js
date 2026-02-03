@@ -212,6 +212,28 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
     try {
         console.log('=== Starting Bloomerang Entity Processing ===');
 
+        // Load IndividualNameDatabase if lookup is enabled (BYPASS = false)
+        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+        if (lookupEnabled) {
+            console.log('📚 IndividualName lookup is ON - checking database...');
+            if (!window.individualNameDatabase || !window.individualNameDatabase._isLoaded ||
+                !window.individualNameDatabase.entries || window.individualNameDatabase.entries.size === 0) {
+                console.log('📚 Loading IndividualNameDatabase...');
+                if (typeof repopulateWindowFromBulk === 'function') {
+                    await repopulateWindowFromBulk('original');
+                } else {
+                    throw new Error('repopulateWindowFromBulk function not available - open IndividualName Browser first');
+                }
+            }
+            // Verify database has entries after loading
+            if (!window.individualNameDatabase.entries || window.individualNameDatabase.entries.size === 0) {
+                throw new Error('IndividualNameDatabase is empty after loading');
+            }
+            console.log(`✅ IndividualNameDatabase ready: ${window.individualNameDatabase.entries.size} entries`);
+        } else {
+            console.log('⚠️ IndividualName lookup is OFF - entities will create new IndividualName objects');
+        }
+
         // Step 1: Fetch CSV data (same as original function)
         const reqBase = "http://127.0.0.99:3000";
         const fileUrl = `${reqBase}/csv-file`;
@@ -489,6 +511,28 @@ async function readBloomerangWithEntitiesQuiet(saveToGoogleDrive = false, batchI
 
         console.log('=== BLOOMERANG ENTITY CREATION (QUIET) ===');
         console.log('Processing all Bloomerang records with minimal output...');
+
+        // Load IndividualNameDatabase if lookup is enabled (BYPASS = false)
+        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+        if (lookupEnabled) {
+            console.log('📚 IndividualName lookup is ON - checking database...');
+            if (!window.individualNameDatabase || !window.individualNameDatabase._isLoaded ||
+                !window.individualNameDatabase.entries || window.individualNameDatabase.entries.size === 0) {
+                console.log('📚 Loading IndividualNameDatabase...');
+                if (typeof repopulateWindowFromBulk === 'function') {
+                    await repopulateWindowFromBulk('original');
+                } else {
+                    throw new Error('repopulateWindowFromBulk function not available - open IndividualName Browser first');
+                }
+            }
+            // Verify database has entries after loading
+            if (!window.individualNameDatabase.entries || window.individualNameDatabase.entries.size === 0) {
+                throw new Error('IndividualNameDatabase is empty after loading');
+            }
+            console.log(`✅ IndividualNameDatabase ready: ${window.individualNameDatabase.entries.size} entries`);
+        } else {
+            console.log('⚠️ IndividualName lookup is OFF - entities will create new IndividualName objects');
+        }
 
         // Step 1: Fetch CSV data (same as original function)
         const reqBase = "http://127.0.0.99:3000";
@@ -1221,16 +1265,11 @@ async function createNameObjects(fields, fieldMap, rowIndex, accountNumber, data
     const nameParts = [title, firstName, middleName, lastName, suffix].filter(part => part !== '');
     const completeName = nameParts.join(' ');
 
-    // IndividualName for Individual entities
-    const individualNameTerm = new AttributedTerm(completeName, dataSource, rowIndex, accountNumber);
-    const individualName = new IndividualName(
-        individualNameTerm,
-        title,
-        firstName,
-        middleName,
-        lastName,
-        suffix
-    );
+    // IndividualName for Individual entities - use common resolver
+    const individualName = resolveIndividualName(completeName, () => {
+        const individualNameTerm = new AttributedTerm(completeName, dataSource, rowIndex, accountNumber);
+        return new IndividualName(individualNameTerm, title, firstName, middleName, lastName, suffix);
+    });
 
     // HouseholdName for AggregateHousehold entities
     let householdNameObject = null;
@@ -2744,6 +2783,28 @@ async function inspectProcessedRecords(recordNumbers) {
     console.log(`Inspecting ${recordNumbers.length} records: [${recordNumbers.join(', ')}]`);
 
     try {
+        // Load IndividualNameDatabase if lookup is enabled (BYPASS = false)
+        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+        if (lookupEnabled) {
+            console.log('📚 IndividualName lookup is ON - checking database...');
+            if (!window.individualNameDatabase || !window.individualNameDatabase._isLoaded ||
+                !window.individualNameDatabase.entries || window.individualNameDatabase.entries.size === 0) {
+                console.log('📚 Loading IndividualNameDatabase...');
+                if (typeof repopulateWindowFromBulk === 'function') {
+                    await repopulateWindowFromBulk('original');
+                } else {
+                    throw new Error('repopulateWindowFromBulk function not available - open IndividualName Browser first');
+                }
+            }
+            // Verify database has entries after loading
+            if (!window.individualNameDatabase.entries || window.individualNameDatabase.entries.size === 0) {
+                throw new Error('IndividualNameDatabase is empty after loading');
+            }
+            console.log(`✅ IndividualNameDatabase ready: ${window.individualNameDatabase.entries.size} entries`);
+        } else {
+            console.log('⚠️ IndividualName lookup is OFF - entities will create new IndividualName objects');
+        }
+
         // Step 1: Fetch and parse CSV data
         const reqBase = "http://127.0.0.99:3000";
         const fileUrl = `${reqBase}/csv-file`;

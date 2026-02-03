@@ -425,8 +425,8 @@ function compareNames(name1, name2) {
     if (!name1 || !name2) return 0;
 
     try {
-        if (typeof name1.compareTo === 'function') {
-            return name1.compareTo(name2);
+        if (typeof name1.numericCompareTo === 'function') {
+            return name1.numericCompareTo(name2);
         }
     } catch (e) {
         console.warn('Error comparing names:', e);

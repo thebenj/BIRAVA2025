@@ -142,10 +142,11 @@ function analyzeCombinedAddress(rawAddress) {
  */
 class Entity {
     constructor(locationIdentifier, name, propertyLocation = null, ownerAddress = null, accountNumber = null) {
-        // Location identifier: Fire Number (primary), PID (secondary), or Street Address (fallback)
-        // Type: IdentifyingData containing Fire Number, PID, or ComplexIdentifiers for street address
+        // Location identifier: Fire Number (primary) or PID (secondary)
+        // Type: FireNumber or PID (both SimpleIdentifier subclasses)
         // Fire Numbers: integer 4 digits or less <3500, definitive for Block Island locations
         // PIDs: only when Fire Number unavailable, should have 1:1 relationship with Fire Numbers
+        // Note: Bloomerang entities without location data use placeholder FireNumber 3499
         this.locationIdentifier = locationIdentifier;
 
         // Entity name: IndividualName or HouseholdName

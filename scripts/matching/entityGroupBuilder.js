@@ -1203,10 +1203,9 @@ async function saveEntityGroupDatabase(groupDb, fileId = ENTITYGROUP_DATABASE_FI
         throw new Error('No file ID provided for EntityGroupDatabase save.');
     }
 
-    // Serialize the database
+    // Serialize the database using serializeWithTypes for automatic type preservation
     log('Serializing EntityGroupDatabase...');
-    const serializedData = groupDb.serialize();
-    const jsonString = JSON.stringify(serializedData);
+    const jsonString = serializeWithTypes(groupDb);
     const sizeKB = (jsonString.length / 1024).toFixed(1);
     const sizeMB = (jsonString.length / (1024 * 1024)).toFixed(2);
     log(`Serialized size: ${sizeKB} KB (${sizeMB} MB)`);
@@ -1285,9 +1284,8 @@ async function loadEntityGroupDatabase(fileId = ENTITYGROUP_DATABASE_FILE_ID) {
     const sizeKB = (jsonString.length / 1024).toFixed(1);
     console.log(`Downloaded ${sizeKB} KB`);
 
-    // Parse and deserialize
-    const serializedData = JSON.parse(jsonString);
-    const groupDb = EntityGroupDatabase.deserialize(serializedData);
+    // Deserialize using deserializeWithTypes for automatic type restoration
+    const groupDb = deserializeWithTypes(jsonString);
 
     // Store in global
     window.entityGroupDatabase = groupDb;
@@ -1306,10 +1304,9 @@ async function loadEntityGroupDatabase(fileId = ENTITYGROUP_DATABASE_FILE_ID) {
  * @returns {Promise<Object>} Save result with new file ID
  */
 async function saveEntityGroupDatabaseToNewFile(groupDb, folderId = null, log = console.log) {
-    // Serialize the database
+    // Serialize the database using serializeWithTypes for automatic type preservation
     log('Serializing EntityGroupDatabase for new file...');
-    const serializedData = groupDb.serialize();
-    const jsonString = JSON.stringify(serializedData);
+    const jsonString = serializeWithTypes(groupDb);
     const sizeKB = (jsonString.length / 1024).toFixed(1);
     const sizeMB = (jsonString.length / (1024 * 1024)).toFixed(2);
     log(`Serialized size: ${sizeKB} KB (${sizeMB} MB)`);

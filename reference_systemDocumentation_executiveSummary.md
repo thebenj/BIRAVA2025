@@ -24,9 +24,9 @@ Entity (base)
   ├── Individual
   ├── CompositeHousehold
   ├── AggregateHousehold (has individuals[] array)
-  └── NonHuman
-        ├── Business
-        └── LegalConstruct
+  └── NonHuman              ← Can be instantiated directly (Bloomerang organizations)
+        ├── Business        ← VisionAppraisal businesses
+        └── LegalConstruct  ← VisionAppraisal trusts, estates, etc.
 ```
 **Location:** `scripts/objectStructure/entityClasses.js`
 
@@ -84,6 +84,10 @@ entityGroupDatabase = {
 
 **EntityGroup Properties:** `index, foundingMemberKey, memberKeys[], nearMissKeys[], consensusEntity, hasBloomerangMember, isProspect, isExistingDonor`
 
+**EntityGroup Collection Properties (February 2026):** `individualNames{}, unrecognizedIndividualNames{}, blockIslandPOBoxes{}, blockIslandAddresses{}, unrecognizedBIAddresses{}, offIslandAddresses[]`
+
+**Key Method:** `buildMemberCollections(entityDatabase)` - Aggregates unique identifiers from member entities (multi-member groups only)
+
 ### AliasedTermDatabase (January 2026)
 ```javascript
 AliasedTermDatabase = {
@@ -106,7 +110,7 @@ Extends AliasedTermDatabase for Block Island street names.
 ### IndividualNameDatabase (January 2026)
 Extends AliasedTermDatabase for individual names with alias support. Enables matching across name variations (e.g., "JOHN SMITH" ↔ "JOHNNY SMITH").
 
-**Key Methods:** `lookupName(name, threshold)`, `findByLastName(lastName)`, `findByPattern(pattern)`
+**Key Methods:** `lookupExisting(name)`, `lookupName(name, threshold)`, `findByLastName(lastName)`, `findByPattern(pattern)`
 
 **Location:** `scripts/databases/individualNameDatabase.js`
 
@@ -175,6 +179,13 @@ Entity comparisons flow through TWO separate code paths:
 2. `universalCompareTo()` → `compareIndividualToEntityDirect` (in universalEntityMatcher.js)
 
 **CRITICAL:** Changes affecting comparison logic may need to be applied to BOTH paths.
+
+### IndividualName Four-Score Comparison (February 2026)
+- `IndividualName.compareTo()` returns `{primary, homonym, synonym, candidate}` for database lookup
+- `Aliased.numericCompareTo()` returns single weighted score (0-1) for entity matching
+- `safeNumericCompare()` helper handles polymorphic comparison calls
+- `lookupExisting()` in IndividualNameDatabase uses four-score comparison (threshold: any category >= 0.99)
+- `resolveIndividualName()` in utils.js provides standard lookup-or-create pattern
 
 ### Weighted Comparison Calculators
 | Calculator | Purpose |
@@ -297,7 +308,8 @@ Entity comparisons flow through TWO separate code paths:
 | File | Purpose |
 |------|---------|
 | `scripts/unifiedEntityBrowser.js` | Unified Entity Browser |
-| `scripts/entityGroupBrowser.js` | EntityGroup Browser + CSV Reports |
+| `scripts/entityGroupBrowser.js` | EntityGroup Browser + CSV Reports + Collections Report |
+| `scripts/export/csvReports.js` | CSV export functions including Collections Report |
 | `scripts/entityRenderer.js` | Entity details popup windows |
 | `scripts/export/lightweightExporter.js` | Lightweight JSON export |
 | `scripts/streetNameBrowser.js` | StreetName alias management |
@@ -341,7 +353,12 @@ cd BIRAVA2025 && node servers/server.js
 
 ---
 
-**Document Version:** 2.1
+**Document Version:** 2.2
 **Created:** January 28, 2026
-**Updated:** January 29, 2026
-**Source Document:** reference_systemDocumentation.md v2.1
+**Updated:** February 3, 2026
+**Source Document:** reference_systemDocumentation.md v2.2
+
+**Version 2.2 Changes (February 2026):**
+- EntityGroup collection properties (6 new properties for aggregating member data)
+- IndividualName four-score comparison architecture
+- Collections Report CSV export

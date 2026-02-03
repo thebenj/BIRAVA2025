@@ -761,6 +761,24 @@
                     </div>
                 </div>
 
+                <!-- IndividualName Database Lookup Control -->
+                <div class="step-box" style="background-color: #e7f3ff; border: 2px solid #0066cc;">
+                    <div class="step-label" style="color: #0066cc;">IndividualName Database Lookup</div>
+                    <div class="step-description" style="margin-bottom: 10px;">
+                        Controls whether entity creation (VA and Bloomerang) looks up existing IndividualName objects from the database or creates new ones.
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+                        <button id="bypassToggleBtn" class="optBut" onclick="toggleIndividualNameBypass()" style="font-size: 14px; padding: 10px 20px; min-width: 200px;">
+                            Loading...
+                        </button>
+                        <span id="bypassStatusText" style="font-size: 12px; color: #495057;"></span>
+                    </div>
+                    <div style="font-size: 11px; color: #666; padding: 8px; background-color: #f8f9fa; border-radius: 4px;">
+                        <div style="margin-bottom: 5px;"><strong>LOOKUP ON (Recommended):</strong> Entities reuse existing IndividualName objects from the database. Preserves alias relationships and Google Drive file linkage.</div>
+                        <div><strong>LOOKUP OFF:</strong> Entities create fresh IndividualName objects. Use only for baseline testing or when rebuilding the IndividualNameDatabase.</div>
+                    </div>
+                </div>
+
                 <!-- Step A4: Process VA Data and Create Entities -->
                 <div class="step-box">
                     <div class="step-label">Step A4: Process VisionAppraisal Data and Create Entities</div>
@@ -1167,6 +1185,17 @@
                 </div>
             </div>
 
+            <!-- Status Notes Section -->
+            <div style="margin-bottom: 15px; padding: 12px; background-color: #e8f4fd; border: 1px solid #b8daff; border-radius: 6px;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                    <label for="entityGroupStatusNotes" style="font-weight: 600; color: #004085;">📝 Status Notes:</label>
+                    <span id="entityGroupNotesLastSaved" style="font-size: 11px; color: #6c757d;"></span>
+                </div>
+                <textarea id="entityGroupStatusNotes"
+                    style="width: 100%; min-height: 60px; padding: 8px; border: 1px solid #b8daff; border-radius: 4px; font-size: 13px; resize: vertical; font-family: inherit;"
+                    placeholder="Add notes about current file status, pending tasks, or reminders..."></textarea>
+            </div>
+
             <div class="search-section">
                 <input type="text" id="entityGroupSearchInput" class="search-input" placeholder="Search groups by name, address, or member details...">
                 <button id="entityGroupSearchBtn" class="search-button">🔍 Search</button>
@@ -1203,8 +1232,18 @@
                         style="background-color: #e91e63; padding: 10px 16px; font-weight: 600;">
                     🔄 Rebuild Consensus
                 </button>
+                <button id="entityGroupBuildCollectionsBtn" class="action-button"
+                        style="background-color: #ad1457; padding: 10px 16px; font-weight: 600; margin-left: 8px;">
+                    📦 Build Collections Only
+                </button>
+                <button id="entityGroupBuildConsensusOnlyBtn" class="action-button"
+                        style="background-color: #880e4f; padding: 10px 16px; font-weight: 600; margin-left: 8px;">
+                    🎯 Build Consensus Only
+                </button>
                 <div style="font-size: 11px; color: #880e4f; margin-top: 8px;">
-                    Rebuild consensus entities for all multi-member groups using the current algorithm.
+                    <strong>Rebuild Consensus:</strong> Runs both collections and consensus building.<br>
+                    <strong>Build Collections Only:</strong> Build member collections without rebuilding consensus.<br>
+                    <strong>Build Consensus Only:</strong> Build consensus entities without rebuilding collections.<br>
                     Requires EntityGroup database and Unified Entity Database to be loaded. Save to preserve changes.
                 </div>
             </div>
@@ -1256,6 +1295,16 @@
                     </label>
                     <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
                         Groups with multiple VisionAppraisal entities (potential same-location issues). 54-column format, sorted by VA member count descending.
+                    </div>
+                </div>
+
+                <!-- Collections Report -->
+                <div style="margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #c8e6c9;">
+                    <button onclick="runCollectionsReport()" style="padding: 8px 14px; background: #9c27b0; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                        📋 Collections Report
+                    </button>
+                    <div style="font-size: 11px; color: #558b2f; margin-top: 4px;">
+                        Multi-member groups with consensus row + collection rows showing individualNames, addresses, PO boxes aggregated from members.
                     </div>
                 </div>
 
@@ -1470,6 +1519,20 @@
                 <div class="entity-browser-section" style="border-color: #1565c0;">
                     <h3 style="color: #1565c0;">Individual Name Browser - Name Alias Database Explorer</h3>
 
+            <!-- Process Description -->
+            <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 12px 15px; background-color: #e3f2fd; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #1565c0;">
+                <strong style="color: #1565c0;">Process Description</strong>
+                <div style="display: flex; gap: 30px; margin-top: 8px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 280px;">
+                        <strong>Full Rebuild:</strong> Cross Check → Reset → Build Run/Resume (repeat until done) → Constncy Chk → Backup Bulk
+                    </div>
+                    <div style="flex: 1; min-width: 280px;">
+                        <strong>Edit Existing:</strong> Repop. Window → edit names → Rebuild Bulk from Files → Cross Check → Sync DEV → Original
+                    </div>
+                </div>
+                <div style="margin-top: 6px; font-style: italic;">Rebuild Map: index repair only, not part of normal workflow.</div>
+            </div>
+
             <div class="control-section" style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #e1e5e9;">
                 <h4 style="margin: 0 0 15px 0; color: #1565c0;">Initializing Build</h4>
 
@@ -1609,6 +1672,16 @@
                         <h4 style="margin: 0 0 10px 0; color: #1565c0;">Selected Individual</h4>
                         <div id="individualNameDetailsContent" style="color: #666;">
                             Select a name from the list to view details
+                        </div>
+                        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #dee2e6;">
+                            <button id="individualNameDeleteBtn" disabled
+                                    style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; opacity: 0.5;"
+                                    title="Delete selected item (only available when loaded from DEV bulk)">
+                                🗑️ Delete Selected
+                            </button>
+                            <span id="individualNameDeleteStatus" style="margin-left: 10px; font-size: 11px; color: #666;">
+                                (Requires DEV bulk source)
+                            </span>
                         </div>
                     </div>
 
@@ -1791,6 +1864,8 @@
     <script type="text/javascript" src="./scripts/testing/addressTesting.js"></script>
     <script type="text/javascript" src="./scripts/postProcessing.js"></script>
     <script type="text/javascript" src="./scripts/phonebook.js"></script>
+    <script type="text/javascript" src="./scripts/validation/case31Validator.js"></script>
+    <script type="text/javascript" src="./scripts/dataSources/visionAppraisalNameParser.js"></script>
     <script type="text/javascript" src="./scripts/phonebookParser.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/aliasClasses.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/contactInfo.js"></script>
@@ -1824,6 +1899,46 @@
                 section.classList.toggle('collapsed');
             }
         }
+
+        // IndividualName Database Lookup Bypass Toggle
+        // Controls whether entity creation uses existing IndividualName objects from the database
+        function toggleIndividualNameBypass() {
+            // Toggle the value (default to true if undefined)
+            const currentValue = window.BYPASS_INDIVIDUALNAME_LOOKUP !== false;
+            window.BYPASS_INDIVIDUALNAME_LOOKUP = !currentValue;
+            updateBypassButtonState();
+            console.log(`[IndividualName Lookup] ${window.BYPASS_INDIVIDUALNAME_LOOKUP ? 'BYPASS ON - Creating new IndividualNames' : 'BYPASS OFF - Using database lookup'}`);
+        }
+
+        function updateBypassButtonState() {
+            const btn = document.getElementById('bypassToggleBtn');
+            const statusText = document.getElementById('bypassStatusText');
+            if (!btn) return;
+
+            const isLookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+
+            if (isLookupEnabled) {
+                btn.innerHTML = '✅ Lookup ON';
+                btn.style.backgroundColor = '#28a745';
+                btn.style.color = 'white';
+                if (statusText) statusText.textContent = 'Entities will reuse existing IndividualName objects from the database';
+            } else {
+                btn.innerHTML = '⚠️ Lookup OFF';
+                btn.style.backgroundColor = '#ffc107';
+                btn.style.color = '#212529';
+                if (statusText) statusText.textContent = 'Entities will create new IndividualName objects (bypass active)';
+            }
+        }
+
+        // Initialize bypass button state on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Default to BYPASS ON (lookup disabled) for backward compatibility
+            if (typeof window.BYPASS_INDIVIDUALNAME_LOOKUP === 'undefined') {
+                window.BYPASS_INDIVIDUALNAME_LOOKUP = true;
+            }
+            // Delay to ensure button exists
+            setTimeout(updateBypassButtonState, 100);
+        });
 
         // Sync the two unified database file ID inputs
         document.addEventListener('DOMContentLoaded', function() {
@@ -2212,6 +2327,9 @@
 
     <!-- Street Architecture Baseline Capture -->
     <script src="./scripts/diagnostics/streetArchitectureBaseline.js"></script>
+
+    <!-- Entity Source Analysis (IndividualName lookup testing) -->
+    <script src="./scripts/diagnostics/entitySourceAnalysis.js"></script>
 
     <!-- Street Type Abbreviation Manager -->
     <script src="./scripts/streetTypeAbbreviations.js"></script>

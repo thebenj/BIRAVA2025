@@ -38,7 +38,8 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.hasCommas &&
                        data.firstWordEndsComma;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 1: "KASTNER, JONATHAN" → lastName="KASTNER", firstName="JONATHAN"
                 if (words.length !== 2) {
                     throw new Error(`Case 1 expects 2 words, got ${words.length}`);
@@ -47,6 +48,11 @@ const VisionAppraisalNameParser = {
                 const lastName = words[0].replace(/[,;]$/, '').trim();
                 const firstName = words[1].trim();
                 const fullName = `${firstName} ${lastName}`;
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: '', fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
@@ -72,7 +78,8 @@ const VisionAppraisalNameParser = {
                        !data.hasBusinessTerms &&
                        !data.punctuationInfo.hasMajorPunctuation;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 3: "DEUTSCH LISA" → firstName="DEUTSCH", lastName="LISA"
                 if (words.length !== 2) {
                     throw new Error(`Case 3 expects 2 words, got ${words.length}`);
@@ -81,6 +88,11 @@ const VisionAppraisalNameParser = {
                 const firstName = words[0].trim();
                 const lastName = words[1].trim();
                 const fullName = `${firstName} ${lastName}`;
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: '', fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
@@ -109,7 +121,8 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        data.firstWordEndsComma;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 5: "LAST, FIRST OTHER" → Individual (single person, not household)
                 if (words.length !== 3) {
                     throw new Error(`Case 5 expects 3 words, got ${words.length}`);
@@ -117,14 +130,19 @@ const VisionAppraisalNameParser = {
 
                 const lastName = words[0].replace(/[,;]$/, '').trim();
                 const firstName = words[1].trim();
-                const otherName = words[2].trim();
-                const fullName = `${firstName} ${otherName} ${lastName}`;
+                const otherNames = words[2].trim();
+                const fullName = `${firstName} ${otherNames} ${lastName}`;
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: otherNames, fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
                     "", // title
                     firstName, // firstName
-                    otherName, // otherNames
+                    otherNames, // otherNames
                     lastName, // lastName
                     "" // suffix
                 );
@@ -146,7 +164,8 @@ const VisionAppraisalNameParser = {
                        !data.punctuationInfo.hasMajorPunctuation &&
                        data.lastWordIsSingleLetter;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 8: "LICHT SUSAN M" → lastName="LICHT", firstName="SUSAN", other="M"
                 if (words.length !== 3) {
                     throw new Error(`Case 8 expects 3 words, got ${words.length}`);
@@ -154,14 +173,19 @@ const VisionAppraisalNameParser = {
 
                 const lastName = words[0].trim();
                 const firstName = words[1].trim();
-                const otherName = words[2].trim(); // single letter middle initial
-                const fullName = `${firstName} ${otherName} ${lastName}`;
+                const otherNames = words[2].trim(); // single letter middle initial
+                const fullName = `${firstName} ${otherNames} ${lastName}`;
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: otherNames, fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
                     "", // title
                     firstName, // firstName
-                    otherName, // otherNames
+                    otherNames, // otherNames
                     lastName, // lastName
                     "" // suffix
                 );
@@ -178,9 +202,14 @@ const VisionAppraisalNameParser = {
                        data.hasBusinessTerms &&
                        !data.punctuationInfo.hasMajorPunctuation;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 13: Three words business, no punctuation
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 const businessName = new AttributedTerm(ownerName.trim(), 'VISION_APPRAISAL', index, record.pid);
 
                 // Check if it's a trust/legal construct or regular business
@@ -201,9 +230,13 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.hasAmpersand &&
                        data.onlyCommaInFirstWord;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 25: Five+ words, ampersand pattern, shared last name household
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
 
                 if (!fullName.includes('&')) {
                     throw new Error('Case 25 requires ampersand');
@@ -263,11 +296,15 @@ const VisionAppraisalNameParser = {
                        !data.hasBusinessTerms &&
                        !data.fitsIdentifiedCases;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 30: Complex patterns - catch-all for 5+ word household patterns
                 // Examples: "BENJAMIN ROBERT P & CAROLYN H" (shared last name, ampersand-only)
                 //           "STRATTON, ROBERT P & SANDRA MCLEAN, STRATTON" (complex with commas)
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
                 const individuals = [];
 
                 // Check if this contains an ampersand (married couple pattern)
@@ -354,9 +391,14 @@ const VisionAppraisalNameParser = {
                 return data.wordCount >= 5 &&
                        data.hasBusinessTerms;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 31: Five+ words with business terms
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 const businessName = new AttributedTerm(ownerName.trim(), 'VISION_APPRAISAL', index, record.pid);
 
                 const lowerName = ownerName.toLowerCase();
@@ -377,9 +419,14 @@ const VisionAppraisalNameParser = {
                 const name = data.words.join(' ');
                 return Case31Validator.isBusinessTermsMasterMatch(name);
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 0: Business Terms Master List - complete business names
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 return this.createBusinessEntity(ownerName, record, index);
             }
         },
@@ -394,22 +441,28 @@ const VisionAppraisalNameParser = {
                        !data.lastWordIsSingleLetter &&
                        !data.secondWordIsSingleLetter;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 10: "FIRST MIDDLE LAST" → firstName="FIRST", middle="MIDDLE", lastName="LAST"
                 if (words.length !== 3) {
                     throw new Error(`Case 10 expects 3 words, got ${words.length}`);
                 }
 
                 const firstName = words[0].trim();
-                const middleName = words[1].trim();
+                const otherNames = words[1].trim(); // middle name
                 const lastName = words[2].trim();
-                const fullName = `${firstName} ${middleName} ${lastName}`;
+                const fullName = `${firstName} ${otherNames} ${lastName}`;
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: otherNames, fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
                     "", // title
                     firstName, // firstName
-                    middleName, // otherNames
+                    otherNames, // otherNames
                     lastName, // lastName
                     "" // suffix
                 );
@@ -426,9 +479,14 @@ const VisionAppraisalNameParser = {
                        data.hasBusinessTerms &&
                        !data.punctuationInfo.hasMajorPunctuation;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 19: Four words business, no punctuation
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 const businessName = new AttributedTerm(ownerName.trim(), 'VISION_APPRAISAL', index, record.pid);
 
                 const lowerName = ownerName.toLowerCase();
@@ -449,8 +507,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.hasCommas &&
                        data.firstWordEndsComma;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 15a: "LAST, FIRST & SECOND" → Two individuals with shared last name
+                const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 if (words.length !== 4) {
                     throw new Error(`Case 15a expects 4 words, got ${words.length}`);
                 }
@@ -497,20 +561,26 @@ const VisionAppraisalNameParser = {
                        data.secondWordIsSingleLetter &&
                        !data.lastWordIsSingleLetter;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 9: "PHELAN W BLAKE" → firstName="PHELAN", middle="W", lastName="BLAKE"
                 if (words.length !== 3) {
                     throw new Error(`Case 9 expects 3 words, got ${words.length}`);
                 }
 
                 const firstName = words[0].trim();
-                const middleName = words[1].trim();
+                const otherNames = words[1].trim(); // middle initial
                 const lastName = words[2].trim();
-                const fullName = `${firstName} ${middleName} ${lastName}`;
+                const fullName = `${firstName} ${otherNames} ${lastName}`;
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: otherNames, fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
-                    "", firstName, middleName, lastName, ""
+                    "", firstName, otherNames, lastName, ""
                 );
 
                 return this.createIndividual(individualName, record, index);
@@ -525,12 +595,18 @@ const VisionAppraisalNameParser = {
                        !data.hasBusinessTerms &&
                        !data.punctuationInfo.hasMajorPunctuation;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 18: Four words, no business terms, no major punctuation
                 const fullName = words.join(' ');
                 const firstName = words[0].trim();
                 const lastName = words[words.length - 1].trim();
                 const otherNames = words.slice(1, -1).join(' ');
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: otherNames, fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
@@ -550,11 +626,16 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        data.firstAndThirdWordsMatch;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 15b: "LAST, FIRST, LAST, SECOND" → Two individuals with shared last name
                 // Pattern: first and third words match and are the shared last name
                 // Example: "SMITH, JOHN, SMITH, MARY" → JOHN SMITH, MARY SMITH
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 const individuals = [];
 
                 // First and third words are the shared last name (remove trailing commas)
@@ -588,9 +669,14 @@ const VisionAppraisalNameParser = {
                        !data.hasBusinessTerms &&
                        data.punctuationInfo.ampersandOnly;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 17: Four words, ampersand only
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
@@ -604,9 +690,14 @@ const VisionAppraisalNameParser = {
                        data.hasBusinessTerms &&
                        data.punctuationInfo.hasCommas;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 4: Two words, with business terms, with comma
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 return this.createBusinessEntity(ownerName, record, index);
             }
         },
@@ -619,9 +710,14 @@ const VisionAppraisalNameParser = {
                        data.hasBusinessTerms &&
                        data.punctuationInfo.commasOnly;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 14: Three words, with business terms, commas only
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 return this.createBusinessEntity(ownerName, record, index);
             }
         },
@@ -635,9 +731,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        !data.firstAndThirdWordsMatch;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 16: Four words, commas only, first and third don't match
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
@@ -651,9 +752,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        data.case20Pattern;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 20: Four words business, comma pattern
                 const cleanedName = words.join(' ').replace(/,/g, '').trim();
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: cleanedName, otherNames: '', fullName: cleanedName };
+                }
+
                 const businessName = new AttributedTerm(cleanedName, 'VISION_APPRAISAL', index, record.pid);
 
                 const lowerName = cleanedName.toLowerCase();
@@ -673,9 +779,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.hasAmpersand &&
                        data.commasInFirstAndFirstAfterAmp;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 26: Five+ words, household with complex ampersand pattern
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
@@ -689,10 +800,15 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        data.moreThanOneCommaWithRepeating;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 27: Five+ words, commas with repeating pattern
                 // Too many edge cases to reliably extract individuals
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
@@ -706,9 +822,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        data.moreThanOneCommaNoRepeating;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 28: Five+ words, commas without repeating pattern
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
@@ -722,9 +843,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.ampersandOnly &&
                        data.ampersandHasOnlyOneWordAfter;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 29: Five+ words, ampersand with one word after
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
@@ -738,11 +864,17 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.hasCommas &&
                        data.lastWordEndsComma;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 2: Two words, last word ends with comma (e.g., "FIRST LAST,")
                 const firstName = words[0].replace(/[,;]$/, '').trim();
                 const lastName = words[1].replace(/[,;]$/, '').trim();
                 const fullName = `${lastName}, ${firstName}`;
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: '', fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
@@ -765,9 +897,14 @@ const VisionAppraisalNameParser = {
                        data.hasBusinessTerms &&
                        !data.punctuationInfo.hasMajorPunctuation;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 4N: Two words business, no major punctuation
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 return this.createBusinessEntity(ownerName, record, index);
             }
         },
@@ -781,11 +918,17 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        data.middleWordIsComma;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns {firstName, lastName, otherNames, fullName} without creating entities
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 6: Three words with middle word being comma (e.g., "LAST , FIRST")
                 const lastName = words[0].replace(/[,;]$/, '').trim();
                 const firstName = words[2].replace(/[,;]$/, '').trim();
                 const fullName = `${lastName}, ${firstName}`;
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: '', fullName: fullName };
+                }
 
                 const individualName = new IndividualName(
                     new AttributedTerm(fullName, 'VISION_APPRAISAL', index, record.pid),
@@ -809,7 +952,7 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        data.hasWordsBeforeCommaWord;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 7: Three words with comma in later position
                 const fullName = words.join(' ').replace(/,/g, ', ');
 
@@ -823,6 +966,11 @@ const VisionAppraisalNameParser = {
                 } else {
                     firstName = words.slice(0, commaIndex + 1).join(' ').replace(/[,;]$/, '').trim();
                     lastName = words.slice(commaIndex + 1).join(' ').trim();
+                }
+
+                // Early return for component-only mode (avoids entity creation)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: firstName, lastName: lastName, otherNames: '', fullName: fullName };
                 }
 
                 const individualName = new IndividualName(
@@ -847,9 +995,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.ampersandOnly &&
                        data.ampersandIsOneOfWords;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 11: Three words with ampersand (e.g., "JOHN & MARY")
                 const fullName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: fullName, otherNames: '', fullName: fullName };
+                }
+
                 return this.createHouseholdFromIndividuals(fullName, [], record, index);
             }
         },
@@ -863,9 +1016,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.slashOnly &&
                        data.wordsAroundSlashAreBusiness;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 12: Three words with slash and business context
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 return this.createBusinessEntity(ownerName, record, index);
             }
         },
@@ -879,9 +1037,14 @@ const VisionAppraisalNameParser = {
                        data.punctuationInfo.commasOnly &&
                        data.hasMultipleCommas;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 // Case 21N: Four words business with multiple commas
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'Business', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 return this.createBusinessEntity(ownerName, record, index);
             }
         },
@@ -894,8 +1057,13 @@ const VisionAppraisalNameParser = {
                 // Case 32: Catch-all for household patterns (has ampersand, not business)
                 return !data.hasBusinessTerms && data.punctuationInfo.hasAmpersand;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'AggregateHousehold', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 return this.createHouseholdFromIndividuals(ownerName, [], record, index);
             }
         },
@@ -907,8 +1075,14 @@ const VisionAppraisalNameParser = {
                 // Case 33: Catch-all for individual patterns (no business terms, no ampersand)
                 return !data.hasBusinessTerms && !data.punctuationInfo.hasAmpersand;
             },
-            processor: function(words, record, index) {
+            // processor 4th arg: returnComponentsOnly (default false) - when true, returns object with full name as lastName
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 const ownerName = words.join(' ');
+
+                // Early return for component-only mode (catch-all uses full name as lastName)
+                if (returnComponentsOnly) {
+                    return { entityType: 'Individual', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
                 const individualName = new IndividualName(
                     new AttributedTerm(ownerName, 'VISION_APPRAISAL', index, record.pid),
                     "", // title
@@ -928,8 +1102,13 @@ const VisionAppraisalNameParser = {
                 // Case 34: Final catch-all for ANY remaining pattern with business terms
                 return data.hasBusinessTerms;
             },
-            processor: function(words, record, index) {
+            processor: function(words, record, index, returnComponentsOnly = false) {
                 const ownerName = words.join(' ');
+
+                if (returnComponentsOnly) {
+                    return { entityType: 'LegalConstruct', firstName: '', lastName: ownerName, otherNames: '', fullName: ownerName };
+                }
+
                 const lowerName = ownerName.toLowerCase();
 
                 // Create LegalConstruct for business patterns (LLC, LP, INC, etc.)
@@ -992,6 +1171,9 @@ const VisionAppraisalNameParser = {
 
     // Helper method: Create Individual entity (copied from existing parser for compatibility)
     createIndividual(individualName, record, index) {
+        // Resolve to existing IndividualName if match found, otherwise use the one passed in
+        const nameToUse = resolveIndividualName(individualName.primaryAlias?.term || '', () => individualName);
+
         // Create proper locationIdentifier object (Cases 4 & 5 resolution)
         let locationIdentifier = null;
         if (record.fireNumber) {
@@ -999,7 +1181,7 @@ const VisionAppraisalNameParser = {
         } else if (record.pid) {
             locationIdentifier = this.createPidObject(record.pid);
         }
-        const individual = new Individual(locationIdentifier, individualName, record.propertyLocation, record.ownerAddress, null);
+        const individual = new Individual(locationIdentifier, nameToUse, record.propertyLocation, record.ownerAddress, null);
 
         // Add VisionAppraisal-specific properties (addresses handled by constructor)
         individual.pid = record.pid;

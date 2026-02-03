@@ -173,6 +173,10 @@ function setupIndividualNameBrowserButtons() {
     const syncDevToOriginalBtn = document.getElementById('individualNameSyncDevToOriginalBtn');
     if (syncDevToOriginalBtn) syncDevToOriginalBtn.addEventListener('click', handleSyncDevToOriginal);
 
+    // Delete Selected button
+    const deleteBtn = document.getElementById('individualNameDeleteBtn');
+    if (deleteBtn) deleteBtn.addEventListener('click', handleDeleteSelectedIndividualName);
+
     // Folder ID persistence
     setupFolderIdPersistence();
 }
@@ -857,6 +861,9 @@ async function repopulateWindowFromBulk(source) {
         const statusMsg = `${sourceIndicator} Loaded: ${bulkCount} names, ${indexCount} indexed (${variationCount} variations)`;
         showIndividualNameBrowserStatus(statusMsg, 'success');
 
+        // Update delete button state based on source
+        updateDeleteButtonState();
+
     } catch (error) {
         console.error('[RepopulateWindow] Error:', error);
         showIndividualNameBrowserStatus(`Error: ${error.message}`, 'error');
@@ -1328,6 +1335,9 @@ function displayIndividualNameBrowserDetails(individualName) {
     }
 
     detailsContent.innerHTML = html;
+
+    // Update delete button state now that selection changed
+    updateDeleteButtonState();
 }
 
 function clearIndividualNameBrowserDetails() {
@@ -1358,11 +1368,11 @@ function performIndividualNameCompareToTest() {
         return;
     }
 
-    // Call compareTo on selected individual name
-    // IndividualName.compareTo returns a single numeric score (0-1)
+    // Call numericCompareTo on selected individual name
+    // IndividualName.numericCompareTo returns a single numeric score (0-1)
     let score;
     try {
-        score = individualNameBrowser.selectedIndividualName.compareTo(testString);
+        score = individualNameBrowser.selectedIndividualName.numericCompareTo(testString);
     } catch (e) {
         resultDiv.innerHTML = '<span style="color: #d32f2f;">Error calling compareTo: ' + escapeHtmlForIndividualNameBrowser(e.message) + '</span>';
         return;
@@ -3601,6 +3611,218 @@ async function testDuplicateResolutionDialog() {
 }
 
 window.testDuplicateResolutionDialog = testDuplicateResolutionDialog;
+
+// =============================================================================
+// DELETE SELECTED INDIVIDUAL NAME
+// =============================================================================
+
+/**
+ * Update the delete button state based on:
+ * 1. Whether the browser was loaded from DEV bulk (not original)
+ * 2. Whether an item is currently selected
+ */
+function updateDeleteButtonState() {
+    const btn = document.getElementById('individualNameDeleteBtn');
+    const status = document.getElementById('individualNameDeleteStatus');
+    if (!btn) return;
+
+    const isDevSource = individualNameBrowser.bulkSource === 'dev';
+    const hasSelection = individualNameBrowser.selectedIndex >= 0 &&
+                         individualNameBrowser.selectedIndividualName != null;
+
+    const canDelete = isDevSource && hasSelection;
+
+    btn.disabled = !canDelete;
+    btn.style.opacity = canDelete ? '1' : '0.5';
+    btn.style.cursor = canDelete ? 'pointer' : 'not-allowed';
+
+    if (status) {
+        if (!isDevSource) {
+            status.textContent = '(Requires DEV bulk source)';
+            status.style.color = '#666';
+        } else if (!hasSelection) {
+            status.textContent = '(Select an item first)';
+            status.style.color = '#666';
+        } else {
+            status.textContent = '';
+        }
+    }
+}
+
+/**
+ * Handle Delete Selected button click.
+ * Shows confirmation dialog with item details, then moves file to deleted folder.
+ */
+async function handleDeleteSelectedIndividualName() {
+    const selectedName = individualNameBrowser.selectedIndividualName;
+    const fileId = individualNameBrowser.loadedFromDriveFileId;
+
+    if (!selectedName) {
+        showIndividualNameBrowserStatus('No item selected', 'error');
+        return;
+    }
+
+    if (!fileId) {
+        showIndividualNameBrowserStatus('Selected item has no associated file ID', 'error');
+        return;
+    }
+
+    // Build confirmation message with item details
+    const primaryTerm = selectedName.primaryAlias?.term || '(unknown)';
+    const completeName = selectedName.completeName || primaryTerm;
+    const aliasCount = countAllAliases(selectedName);
+
+    const confirmed = await showDeleteConfirmationDialog(completeName, primaryTerm, aliasCount, fileId);
+
+    if (!confirmed) {
+        console.log('[Delete] User cancelled deletion');
+        return;
+    }
+
+    // Perform the deletion
+    const btn = document.getElementById('individualNameDeleteBtn');
+    const originalText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.innerHTML = 'Deleting...';
+        btn.disabled = true;
+    }
+
+    try {
+        const deletedFolderId = document.getElementById('individualNameDeletedFolderId')?.value?.trim();
+        if (!deletedFolderId) {
+            throw new Error('Deleted Folder ID is not configured');
+        }
+
+        // Move file to deleted folder
+        await gapi.client.drive.files.update({
+            fileId: fileId,
+            addParents: deletedFolderId,
+            removeParents: document.getElementById('individualNameFolderId')?.value?.trim(),
+            resource: {
+                name: `DELETED_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}_${primaryTerm}.json`
+            }
+        });
+
+        console.log(`[Delete] Moved file ${fileId} to deleted folder`);
+
+        // Remove from in-memory database
+        if (window.individualNameDatabase?.entries) {
+            const keyToDelete = primaryTerm.toUpperCase();
+            window.individualNameDatabase.entries.delete(keyToDelete);
+            console.log(`[Delete] Removed "${keyToDelete}" from in-memory database`);
+        }
+
+        // Remove from current results and refresh display
+        const index = individualNameBrowser.selectedIndex;
+        if (index >= 0) {
+            individualNameBrowser.currentResults.splice(index, 1);
+            individualNameBrowser.selectedIndex = -1;
+            individualNameBrowser.selectedIndividualName = null;
+            individualNameBrowser.loadedFromDrive = null;
+            individualNameBrowser.loadedFromDriveFileId = null;
+
+            // Refresh the display
+            displayIndividualNameBrowserResults(individualNameBrowser.currentResults);
+
+            // Clear details panel
+            const detailsContent = document.getElementById('individualNameDetailsContent');
+            if (detailsContent) {
+                detailsContent.innerHTML = 'Select a name from the list to view details';
+            }
+        }
+
+        showIndividualNameBrowserStatus(`Deleted "${completeName}" successfully`, 'success');
+        updateDeleteButtonState();
+
+    } catch (error) {
+        console.error('[Delete] Error:', error);
+        showIndividualNameBrowserStatus(`Delete failed: ${error.message}`, 'error');
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalText;
+            updateDeleteButtonState();
+        }
+    }
+}
+
+/**
+ * Count all aliases (homonyms + synonyms + candidates) for an IndividualName
+ */
+function countAllAliases(individualName) {
+    if (!individualName?.alternatives) return 0;
+    const h = individualName.alternatives.homonyms?.length || 0;
+    const s = individualName.alternatives.synonyms?.length || 0;
+    const c = individualName.alternatives.candidates?.length || 0;
+    return h + s + c;
+}
+
+/**
+ * Show confirmation dialog for deletion.
+ * @returns {Promise<boolean>} True if user confirms, false if cancelled
+ */
+function showDeleteConfirmationDialog(completeName, primaryTerm, aliasCount, fileId) {
+    return new Promise((resolve) => {
+        // Remove any existing dialog
+        const existingOverlay = document.getElementById('deleteConfirmOverlay');
+        if (existingOverlay) existingOverlay.remove();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'deleteConfirmOverlay';
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+        `;
+
+        overlay.innerHTML = `
+            <div style="background: white; padding: 25px; border-radius: 8px; max-width: 500px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                <h3 style="margin: 0 0 15px 0; color: #dc3545;">⚠️ Confirm Deletion</h3>
+                <p style="margin: 0 0 15px 0;">Are you sure you want to delete this IndividualName?</p>
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 15px; font-family: monospace; font-size: 13px;">
+                    <div><strong>Name:</strong> ${escapeHtmlForIndividualNameBrowser(completeName)}</div>
+                    <div><strong>Primary Key:</strong> ${escapeHtmlForIndividualNameBrowser(primaryTerm)}</div>
+                    <div><strong>Aliases:</strong> ${aliasCount}</div>
+                    <div><strong>File ID:</strong> ${fileId}</div>
+                </div>
+                <p style="margin: 0 0 20px 0; color: #666; font-size: 12px;">
+                    The file will be moved to the Deleted folder. This action can be undone by moving the file back manually.
+                </p>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button id="deleteConfirmCancel" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button id="deleteConfirmOk" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600;">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+
+        // Wire up buttons
+        document.getElementById('deleteConfirmCancel').addEventListener('click', () => {
+            overlay.remove();
+            resolve(false);
+        });
+
+        document.getElementById('deleteConfirmOk').addEventListener('click', () => {
+            overlay.remove();
+            resolve(true);
+        });
+
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+                resolve(false);
+            }
+        });
+    });
+}
+
+window.updateDeleteButtonState = updateDeleteButtonState;
+window.handleDeleteSelectedIndividualName = handleDeleteSelectedIndividualName;
 
 // =============================================================================
 // INITIALIZATION ON DOM READY

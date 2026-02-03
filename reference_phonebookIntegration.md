@@ -1,11 +1,10 @@
-# Phonebook Integration Plan
+# Supplemental Data Source Integration Plan
 
-**Document Purpose**: Plan for integrating phonebook data with the StreetName alias system and generalizing the pattern.
+**Document Purpose**: Plan for integrating phonebook and email data with EntityGroups to augment existing contacts with phone numbers and email addresses.
 
-**Document Status**: PLANNING
+**Document Status**: IN_PROGRESS (Section 7 USER_VERIFIED_COMPLETE, Section 4 REVISED AND PENDING)
 
-**Created**: January 30, 2026
-**Last Updated**: January 30, 2026
+**Last Updated**: February 3, 2026
 
 ---
 
@@ -16,705 +15,440 @@
 - Task 1 (Database Maintenance Box): COMPLETE
 - Task 2 (AliasedTermDatabase): COMPLETE
 - IndividualNameDatabase system: COMPLETE
-- **Task 3 (Phonebook Integration)**: THIS DOCUMENT
+- EntityGroup Collections: COMPLETE
+- **Task 3 (Supplemental Data Integration)**: THIS DOCUMENT
+  - Section 7 (IndividualName lookup): USER_VERIFIED_COMPLETE
+  - Section 4 (Phonebook/Email Integration): PENDING - REVISED February 3, 2026
 
 ### Prerequisites Complete
-- StreetName class with alias support
-- StreetNameDatabase loaded from Google Drive (116 StreetName objects, 208 variations)
+- EntityGroup database with member collections (`individualNames{}`, `blockIslandAddresses{}`, etc.)
+- IndividualNameDatabase with `lookupExisting()` pattern
 - AliasedTermDatabase wrapper pattern established
-- IndividualNameDatabase demonstrates the pattern for aliased term databases
 
 ---
 
 ## SECTION 1: OVERVIEW
 
 ### Goal
-Incorporate phonebook street name variations into the StreetName database, enriching the alias system with real-world usage data from Block Island residents.
+Integrate supplemental data sources (phonebook, email lists) with existing EntityGroups to:
+1. Match source entities against existing EntityGroups
+2. Augment matched groups with phone numbers and email addresses
+3. Create new EntityGroups for unmatched entities
+4. Log potential IndividualName database entries (without modifying the database)
 
-### Key Principle: Phonebook Augments, VA Is Primary
+### Key Principle: EntityGroups Are Primary
 
-**VisionAppraisal is the PRIMARY and AUTHORITATIVE source for street names.** If a street is not in VA, it does not exist on Block Island (from our data model's perspective).
+**EntityGroups built from VisionAppraisal + Bloomerang are the PRIMARY and AUTHORITATIVE representation of real-world persons/households.** Supplemental data sources augment these existing groups.
 
-The phonebook's role is to:
-- Add **candidate variations** for streets that already exist in the VA-based database
-- Identify potential data quality issues when phonebook streets don't match any VA street
+The supplemental data's role is to:
+- Add **phone numbers** and **email addresses** to entities within existing groups
+- Identify **new contacts** not present in VA or Bloomerang
+- **NOT** to modify the fundamental entity structure or group membership
 
-The phonebook does NOT add new canonical streets - it only adds alternative spellings for existing ones.
+### Data Sources
 
----
-
-## SECTION 2: CURRENT PHONEBOOK HANDLING
-
-### Location
-`scripts/phonebookParser.js`
-
-### Current Behavior
-1. Extracts street names from phone book entries
-2. Normalizes and looks up in `window.blockIslandStreets`
-3. Reports unvalidated streets (streets not found in database)
-4. Stores `streetNormalized` if a match is found
-
-### Current Limitations
-- Simple string matching (no alias awareness)
-- Unrecognized streets are reported but not systematically tracked
-- No mechanism to add discovered variations back to the database
+| Source | Fields Available | Match Capabilities |
+|--------|------------------|-------------------|
+| Phonebook | Name, Address, Phone | Full match, Name-only, Address-only |
+| Email List | Name, Email | Name-only (no address available) |
 
 ---
 
-## SECTION 3: PROPOSED ARCHITECTURE
+## SECTION 2: PROCESSING ARCHITECTURE
 
-### Phonebook Processing Flow
+### When Processing Happens
 
 ```
-Phonebook Entry: "Corn Neck Rd."
-    ↓
-Lookup in StreetName database (VA-based)
-    ↓
-Similar match found: "CORN NECK ROAD" (canonical from VA)
-    ↓
-Add "Corn Neck Rd." as CANDIDATE to that existing StreetName
-(phonebook context provides verification)
-    ↓
-Save updated database to Google Drive
+VA + Bloomerang → EntityGroup Database (existing workflow)
+                        ↓
+              Phonebook Processing (new buttons) ← THIS DOCUMENT
+                        ↓
+              Email Processing (future, same pattern)
 ```
 
-### Match Categories
+Processing is an **augmentation step** that runs AFTER EntityGroup construction is complete. It is triggered via UI buttons, not automatically.
 
-1. **Exact match found**: Use canonical StreetName (no action needed)
-2. **Similar match found**: Add extracted string as new **candidate** to the EXISTING StreetName
-3. **No match found**: Add as "unresolved" entry for human review
+### Data-Driven Matching Algorithm
 
-### Why Phonebook Entries Become Candidates (Not Synonyms)
+The matching algorithm adapts based on what data the source entity has:
 
-Phonebook variations have **circumstantial verification**:
-- The phonebook is a trusted source (real addresses used by real residents)
-- If a variation appears in the phonebook, someone actually used that spelling for mail delivery
-- This contextual evidence promotes the variation directly to candidate status
+1. **If entity has name** → attempt name matching against EntityGroup name collections
+2. **If entity has address** → attempt address matching against EntityGroup address collections
+3. **Classify result** based on what matched:
+   - Both matched same group → **Full match**
+   - Name only matched → **Name match**
+   - Address only matched → **Address match**
+   - Neither matched → **No match**
 
-Synonyms are for **similarity-based captures** that need verification. Phonebook entries already have verification through their source.
-
----
-
-## SECTION 4: IMPLEMENTATION TASKS
-
-### Task List (Preliminary)
-
-| # | Task | Status |
-|---|------|--------|
-| 1 | Analyze current phonebookParser.js structure | PENDING |
-| 2 | Modify phonebook parsing to look up StreetName objects | PENDING |
-| 3 | Collect new variations as candidates | PENDING |
-| 4 | Handle unrecognized phonebook streets as "unresolved" entries | PENDING |
-| 5 | Create mechanism to review and resolve unrecognized streets | PENDING |
-| 6 | Save updated database back to Google Drive | PENDING |
-| 7 | Testing and validation | PENDING |
-
-### Deferred: VA Post-Process Button
-
-**Note**: Originally Phase 8 of the StreetName architecture, now deferred.
-
-**Purpose**: After a VA download completes, update the StreetName Alias Database to reflect any changes in VA's street data.
-
-**Why deferred**: The core alias architecture can be developed using current VA data. The post-process button is only needed when VA data is re-downloaded (infrequent).
+This single algorithm handles all sources - phonebook entities (with name + address) can achieve any match type, while email entities (name only) can only achieve name matches.
 
 ---
 
-## SECTION 5: HANDLING UNRECOGNIZED STREETS
+## SECTION 3: MATCH SPECIFICATION
 
-When a phonebook street doesn't match any VA street, it could be:
-- A variation/misspelling of an existing street (most common)
-- A data entry error in the phonebook
-- A real street that VA doesn't have (rare, but possible if VA data is incomplete)
+### Match Type Definitions
 
-### Resolution Options
+| Match Type | Condition |
+|------------|-----------|
+| **Full Match** | Entity's name matches a member of the EntityGroup's name collections AND entity's address matches a member of the EntityGroup's address collections |
+| **Name Match** | Entity's name matches a member of an EntityGroup's name collections, BUT no address match to that group, AND there is no OTHER EntityGroup for which it has both a name and address match |
+| **Address Match** | Entity's address matches a member of an EntityGroup's address collections, BUT no name match to that group, AND there is no OTHER EntityGroup for which it has both a name and address match |
+| **No Match** | Entity matches no EntityGroup's name or address collections |
 
-1. **Assign to existing street**: Add as candidate to a specific StreetName
-2. **Mark as error**: Data entry mistake, do not add
-3. **Flag for investigation**: Potential missing VA street
+### Priority Rules
 
-### Storage for Unresolved Streets
+**Full matches supersede partial matches.** When a source entity has a full match to ANY EntityGroup:
+- Ignore all name-only matches for that entity
+- Ignore all address-only matches for that entity
+- Process only the full match(es)
 
-TBD - Options include:
-- Separate Google Drive file for unresolved entries
-- Section within the StreetName database file
-- Browser UI for review and resolution
+Name-only and address-only matches are only processed when the entity has NO full matches anywhere.
 
----
+### Multiple Match Handling
 
-## SECTION 6: OPEN QUESTIONS
+A source entity CAN have multiple matches of the same type:
+- Multiple full matches to different EntityGroups
+- Multiple name-only matches (when no full match exists)
+- Multiple address-only matches (when no full match exists)
 
-Questions to resolve during planning:
-
-1. **Phonebook data source**: Where is the phonebook data stored? What format?
-2. **Processing trigger**: When should phonebook processing run?
-3. **Similarity threshold**: What threshold determines "similar match" vs "no match"?
-4. **UI requirements**: Does the user need a browser interface for reviewing unresolved streets?
-5. **Batch vs incremental**: Process entire phonebook at once or incrementally?
+The code takes action on ALL relevant matches (not just the first/best).
 
 ---
 
-## SECTION 7: INDIVIDUALNAME INSTANTIATION STUDY
+## SECTION 4: PHONE NUMBER ASSIGNMENT SPECIFICATION
+
+### Phone Number Aliased Structure
+
+Phone numbers use the Aliased pattern (like IndividualName):
+- **Primary**: The main/preferred phone number
+- **Candidates**: Additional known phone numbers
+
+**Matching rule**: Phone numbers match as identical or not identical. Comparison normalizes:
+- Remove all punctuation (dashes, parentheses, spaces)
+- Handle 401-466 area code presence/absence (Block Island exchange)
+
+**Addition rule**: Unless in a special data correction case, new phone numbers are added as **candidates**, not as primary.
+
+### Assignment Logic
+
+When a source entity matches an EntityGroup, determine which entity member(s) receive the phone number:
+
+#### For Full Match
+Find entity members that hold BOTH:
+- The member of the name collection that the source matched to, AND
+- The member of the address collection that the source matched to
+
+#### For Name Match
+Find entity members that hold the matched name.
+
+#### For Address Match
+Find entity members that hold the matched address.
+
+### Entity Type Filtering
+
+If multiple entities qualify for phone number assignment but are of **different entity types**, only assign to those matching the **source entity's type**.
+
+Example: If a phonebook Individual matches an EntityGroup containing both an Individual and an AggregateHousehold, only the Individual receives the phone number.
+
+### AggregateHousehold Propagation Rules
+
+Phone numbers propagate bidirectionally between AggregateHouseholds and their members, with loop prevention:
+
+| Trigger | Action |
+|---------|--------|
+| Phone assigned to household (NOT via member propagation) | Add as candidate to EACH member's phone alias (if not already present) |
+| Phone assigned to household member (NOT via household propagation) | Add as candidate to household's phone alias |
+
+**CRITICAL: Loop Prevention**
+The propagation rules must track WHY a number is being added to prevent:
+```
+Household gets number → propagates to members →
+member "gets" number → propagates back to household → INFINITE LOOP
+```
+
+Implementation must distinguish between:
+- Direct assignment (triggers propagation)
+- Propagated assignment (does NOT trigger further propagation)
+
+---
+
+## SECTION 5: UNMATCHED ENTITY HANDLING
+
+When a source entity has no full match, no name match, and no address match to any EntityGroup:
+
+1. **Create a new EntityGroup** for this entity
+2. **Log** that this implies a potential new IndividualName database entry may be needed
+
+### IndividualName Database Policy
+
+During phonebook/email processing:
+- **DO NOT** create new IndividualName entries on Google Drive
+- **DO NOT** modify existing IndividualName entries
+- **DO** log suggestions for potential new entries for later human review
+
+This preserves the integrity of the IndividualName database while capturing information about potential additions.
+
+---
+
+## SECTION 6: IMPLEMENTATION TASKS (REVISED February 3, 2026)
+
+### Phase A: Foundation
+
+| # | Task | Description | Status |
+|---|------|-------------|--------|
+| 4.1 | Analyze phonebook data structure | Understand current phonebookParser.js, data format, existing entity creation | PENDING |
+| 4.2 | Design matching algorithm | General algorithm using EntityGroup collections; data-driven match type determination | PENDING |
+| 4.3 | Design phone number Aliased structure | If not already present, design primary/candidate structure for phone numbers | PENDING |
+| 4.4 | **Test:** Verify phone Aliased structure | Create test instances, verify primary/candidate behavior | PENDING |
+
+### Phase B: Matching Implementation
+
+| # | Task | Description | Status |
+|---|------|-------------|--------|
+| 4.5 | Implement EntityGroup collection lookup | Efficient lookup against individualNames{}, blockIslandAddresses{}, etc. | PENDING |
+| 4.6 | **Test:** Verify collection lookup | Test against known EntityGroups with various name/address combinations | PENDING |
+| 4.7 | Implement match classification | Determine Full/Name-only/Address-only/None based on what matched | PENDING |
+| 4.8 | **Test:** Verify match classification | Test each classification path with sample data | PENDING |
+| 4.9 | Implement match priority logic | Full matches supersede partial; handle multiple matches | PENDING |
+| 4.10 | **Test:** Verify priority and multiple match handling | Test scenarios with overlapping matches | PENDING |
+
+### Phase C: Assignment Implementation
+
+| # | Task | Description | Status |
+|---|------|-------------|--------|
+| 4.11 | Implement entity qualification logic | Find entities holding matched name AND/OR address | PENDING |
+| 4.12 | Implement entity type filtering | Only assign to entities matching source entity type | PENDING |
+| 4.13 | **Test:** Verify qualification and filtering | Test with mixed entity types in groups | PENDING |
+| 4.14 | Implement phone number assignment | Add as candidate to qualifying entities' phone Aliased | PENDING |
+| 4.15 | **Test:** Verify phone assignment | Confirm numbers added as candidates correctly | PENDING |
+| 4.16 | Implement AggregateHousehold propagation | Bidirectional propagation with loop prevention | PENDING |
+| 4.17 | **Test:** Verify propagation and loop prevention | Test household-member propagation, confirm no infinite loops | PENDING |
+
+### Phase D: Edge Cases & Logging
+
+| # | Task | Description | Status |
+|---|------|-------------|--------|
+| 4.18 | Handle unmatched entities | Create new EntityGroup for entities with no matches | PENDING |
+| 4.19 | **Test:** Verify new EntityGroup creation | Confirm unmatched entities become new groups | PENDING |
+| 4.20 | Implement IndividualName logging | Log potential new IndividualName entries (no DB modification) | PENDING |
+| 4.21 | Implement processing log | Track all matches, assignments, new groups created | PENDING |
+| 4.22 | **Test:** Verify logging output | Confirm logs capture expected information | PENDING |
+
+### Phase E: UI & Integration
+
+| # | Task | Description | Status |
+|---|------|-------------|--------|
+| 4.23 | Create phonebook processing button(s) | UI to trigger phonebook processing after EntityGroups built | PENDING |
+| 4.24 | **Test:** End-to-end phonebook processing | Full workflow test with real phonebook data | PENDING |
+| 4.25 | Design for email reusability | Ensure architecture supports email processing with same pattern | PENDING |
+| 4.26 | **Test:** Verify email compatibility | Test matching algorithm with name-only data (no address) | PENDING |
+
+### Deferred Items
+
+- **Specific matching criteria** (thresholds, exact vs fuzzy) - to be specified during implementation
+- **Logging format and storage location** - to be detailed later
+- **UI button workflow specifics** - to be detailed later
+- **VA Post-Process Button** - Originally Phase 8 of StreetName architecture; only needed when VA data is re-downloaded (infrequent)
+
+---
+
+## SECTION 7: INDIVIDUALNAME LOOKUP IMPLEMENTATION
+
+**Status: USER_VERIFIED_COMPLETE (February 2, 2026)**
 
 ### Purpose
-Before implementing IndividualName database lookups during entity creation, we need to understand where IndividualName objects are created and how they're constructed.
+Before creating a new IndividualName object during entity parsing, check if a matching IndividualName already exists in the IndividualNameDatabase. If so, return the existing object instead of creating a new one.
 
-### IndividualName Class Structure
+### IndividualName Instantiation Points
 
-The `IndividualName` class has **redundant storage**:
-- `primaryAlias.term` - complete name string (e.g., "JOHN MIDDLE SMITH")
-- `firstName`, `lastName`, `otherNames`, `title`, `suffix` - parsed components
+**VisionAppraisal (visionAppraisalNameParser.js)** - 20 instantiation points in case processors
 
-**Constructor signature:**
+| Case | Type | Notes |
+|------|------|-------|
+| 1 | Individual | 2-word: LAST, FIRST |
+| 2 | Individual | Trailing comma |
+| 3 | Individual | 2-word: FIRST LAST |
+| 5 | Individual | 3-word with middle |
+| 6 | Individual | Middle comma |
+| 7 | Individual | Case 7 pattern |
+| 8 | Individual | 3-word variant |
+| 9 | Individual | 3-word standard |
+| 10 | Individual | 3-word standard |
+| 18 | Individual | 4-word pattern |
+| 33 | Individual | CATCH-ALL: entire name in lastName |
+
+**Bloomerang (bloomerang.js)** - 1 instantiation point at line ~1226
+
+**Excluded from lookup:**
+- Deserialization (aliasClasses.js) - restores saved data
+- Database building (individualNameDatabaseBuilder.js) - creates canonical names
+
+### Lookup Specification
+
+**Match Criteria**: Any four-score category >= 0.99
 ```javascript
-constructor(primaryAlias, title = "", firstName = "", otherNames = "", lastName = "", suffix = "")
+function isMatch(compareToResult) {
+    return compareToResult.primary >= 0.99 ||
+           compareToResult.homonym >= 0.99 ||
+           compareToResult.synonym >= 0.99 ||
+           compareToResult.candidate >= 0.99;
+}
 ```
 
-**Key finding:** The constructor does NOT parse `primaryAlias.term` into components. Consistency depends entirely on the caller providing matching values.
+**Action on Match**: Return the existing IndividualName object from the database (preserves Google Drive file ID linkage)
 
-### Entity Creation Instantiation Points
+**Object Reuse**: Shared object identity is the desired behavior - multiple entities may reference the same IndividualName object.
 
-#### VisionAppraisal (visionAppraisalNameParser.js) - 20 instantiation points
+### Implementation Architecture
 
-| Line | Case | Arguments Pattern | Notes |
-|------|------|-------------------|-------|
-| 51 | Case 1 | `(primaryAlias, "", firstName, "", lastName, "")` | 2-word: LAST, FIRST |
-| 85 | Case 3 | `(primaryAlias, "", firstName, "", lastName, "")` | 2-word: FIRST LAST |
-| 123 | Case 5 | `(primaryAlias, "", firstName, otherName, lastName, "")` | 3-word with middle |
-| 160 | Case 8 | `(primaryAlias, "", firstName, otherName, lastName, "")` | 3-word variant |
-| 230 | Household | `(primaryAlias, '', firstName1, otherNames1, sharedLastName, '')` | Ampersand pattern (1st) |
-| 245 | Household | `(primaryAlias, '', firstName2, otherNames2, sharedLastName, '')` | Ampersand pattern (2nd) |
-| 292 | Household | `(primaryAlias, '', firstName1, otherNames1, sharedLastName, '')` | Another ampersand (1st) |
-| 324 | Household | `(primaryAlias, '', firstName2, otherNames2, lastName2, '')` | Another ampersand (2nd) |
-| 338 | Edge case | `(primaryAlias, '', firstName, otherNames, '', '')` | No lastName parsed |
-| 408 | Case 10 | `(primaryAlias, "", firstName, middleName, lastName, "")` | 3-word standard |
-| 471 | Case 15a | `(primaryAlias, "", firstName1, "", sharedLastName, "")` | Shared lastName (1st) |
-| 476 | Case 15a | `(primaryAlias, "", firstName2, "", sharedLastName, "")` | Shared lastName (2nd) |
-| 511 | Case 9 | `(primaryAlias, "", firstName, middleName, lastName, "")` | 3-word standard |
-| 535 | Case 18 | `(primaryAlias, "", firstName, otherNames, lastName, "")` | 4-word pattern |
-| 566 | Household | `(primaryAlias, "", firstName1, "", sharedLastName, "")` | Household (1st) |
-| 573 | Household | `(primaryAlias, "", firstName2, "", sharedLastName, "")` | Household (2nd) |
-| 747 | Case 2 | `(primaryAlias, "", firstName, "", lastName, "")` | Trailing comma |
-| 790 | Case 6 | `(primaryAlias, "", firstName, "", lastName, "")` | Middle comma |
-| 828 | Comma case | `(primaryAlias, "", firstName, "", lastName, "")` | General comma |
-| **912** | **Case 33** | `(primaryAlias, "", "", "", ownerName, "")` | **CATCH-ALL: entire name in lastName!** |
+**Option D was implemented**:
+- `numericCompareTo()` returns single weighted score (0-1) for entity matching
+- `compareTo()` returns four-score object `{ primary, homonym, synonym, candidate }` for database lookup
+- `safeNumericCompare()` helper handles polymorphic comparison calls
 
-#### Bloomerang (bloomerang.js) - 1 instantiation point
-
-| Line | Arguments Pattern | Notes |
-|------|-------------------|-------|
-| 1226 | `(individualNameTerm, title, firstName, middleName, lastName, suffix)` | Full CSV fields |
-
-#### Other (non-entity-creation)
-
-| File | Line | Purpose |
-|------|------|---------|
-| aliasClasses.js | 1299 | Deserialization (restores saved data) |
-| individualNameDatabaseBuilder.js | 365, 565 | Building IndividualNameDatabase (post-EntityGroup) |
-| utils.js | 2381 | Test code |
-
-### Key Findings
-
-1. **ALL production instantiations pass BOTH primaryAlias AND component strings**
-   - No instantiation uses only primaryAlias with empty components (except Case 33)
-   - Consistency is maintained by CONSTRUCTION
-
-2. **Consistency mechanism**: The caller builds `primaryAlias.term` from the same parsed data used for components
-   ```javascript
-   const fullName = `${firstName} ${lastName}`;
-   new IndividualName(
-       new AttributedTerm(fullName, ...),  // Built from components
-       "", firstName, "", lastName, ""      // Same data
-   );
-   ```
-
-3. **Edge case - Case 33 (line 912)**: Catch-all puts entire name string in `lastName` field
-   - `firstName` = ""
-   - `lastName` = entire ownerName string
-   - This is intentional for unparseable names
-
-4. **No automatic enforcement**: The class trusts callers to provide consistent values
-
-### Implications for IndividualName Database Lookup
-
-To check if a name exists in the IndividualNameDatabase during entity creation:
-
-1. **Lookup point**: Before calling `new IndividualName(...)` in each location above
-2. **What to compare**: The `primaryAlias.term` (complete name string)
-3. **Comparison method**: Need to modify `IndividualName.compareTo()` to return four-score object like `StreetName.compareTo()`
-4. **Match criteria**: Score === 1.0 in primary, homonym, or candidate category
-
-### Required Changes
-
-1. **Modify IndividualName.compareTo()**: Return `{ primary, homonym, synonym, candidate }` scores instead of weighted component comparison
-2. **Update AliasedTermDatabase.lookup()**: Already handles four-score objects correctly
-3. **Add lookup calls**: Insert lookup before each `new IndividualName()` call listed above
+**Key Files Modified:**
+- `aliasClasses.js` - Added numericCompareTo() to Aliased, compareTo() override to IndividualName, safeNumericCompare() helper
+- `individualNameDatabase.js` - Added lookupExisting() method with BYPASS flag
+- `bloomerang.js` - Uses resolveIndividualName() in createNameObjects()
+- `visionAppraisalNameParser.js` - Uses resolveIndividualName() in createIndividual()
+- `utils.js` - Added resolveIndividualName() common function
 
 ---
 
-## SECTION 7B: INDIVIDUALNAME.COMPARETO() USAGE STUDY
+## SECTION 7A: RECURSION FIX
 
-### Purpose
-Before modifying `IndividualName.compareTo()` to return a four-score object, we must identify ALL places where it's called and understand what return type they expect.
+### Problem
+When `compareTo()` used `parsePhonebookNameWithCase31()` for parsing, it triggered full entity creation which called `resolveIndividualName()` which called `lookupExisting()` which called `compareTo()` - infinite recursion.
 
-### Current Behavior
-`IndividualName` does NOT override `compareTo()`. It inherits from `Aliased.compareTo()` which returns a **single numeric score (0-1)** via `genericObjectCompareTo()`.
+### Solution
+Added `returnComponentsOnly` parameter to all case processors in visionAppraisalNameParser.js. When true, processors return `{entityType, firstName, lastName, otherNames, fullName}` BEFORE entity creation.
 
-`StreetName` DOES override `compareTo()` and returns a **four-score object**: `{ primary, homonym, synonym, candidate }`.
+Created `getNameComponentsFromCase31()` in phonebookParser.js that calls processors with `returnComponentsOnly=true`.
 
-### Definite IndividualName.compareTo() Calls
+Updated `getComponents()` in IndividualName.compareTo() to use `getNameComponentsFromCase31()` instead of `parsePhonebookNameWithCase31()`.
 
-| File | Line | Code | Expects | Notes |
-|------|------|------|---------|-------|
-| individualNameBrowser.js | 1365 | `individualNameBrowser.selectedIndividualName.compareTo(testString)` | numeric | UI test tool |
-| individualNameDatabaseBuilder.js | 386 | `name1.compareTo(name2)` | numeric | In `compareNames()` for clustering |
-| individualIdentificationResearch.js | 429 | `name1.compareTo(name2)` | numeric | In `compareNames()` diagnostic |
-
-### Polymorphic Calls - VERIFIED Analysis
-
-**Verification method**: Traced call chains to determine what object types actually flow through each location.
-
-| File | Line | Code | Involves IndividualName? | Currently Handles | Notes |
-|------|------|------|-------------------------|-------------------|-------|
-| aliasedTermDatabase.js | 310 | `obj.compareTo(term)` | **YES** (in IndividualNameDatabase) | **BOTH** (number or object) | Database lookup - already handles four-score |
-| aliasClasses.js | 586 | `aliasedObjects[i].compareTo(aliasedObjects[j])` | **YES** (via entityGroup consensus) | numeric only | In `Aliased.createConsensus()`, called from entityGroup.js:248 for names |
-| aliasClasses.js | 684 | `this.compareTo(otherObject)` | **NO** | numeric only | In `mergeAlternatives()` - **NEVER CALLED** in production code |
-| entityGroup.js | 280 | `values[i].compareTo(values[j])` | **YES** (fallback path) | numeric only | In `_selectBestPrimary()`, fallback for `_createAliasedConsensus()` when `Aliased.createConsensus` unavailable |
-| entityGroup.js | 637 | `individual.name.compareTo(existing.name)` | **YES** | numeric only | In `_deduplicateIndividuals()` - compares IndividualName objects directly |
-| universalEntityMatcher.js | 142 | `individual.name.compareTo(entity.name)` | **YES** (when both are Individual) | **BOTH** | Only called when `name1Type === name2Type`; uses `.overallSimilarity` fallback |
-| universalEntityMatcher.js | 323 | `name1.compareTo(name2)` | **YES** (when both are Individual) | **BOTH** | Only called when `name1Type === name2Type`; uses `.overallSimilarity` fallback |
-
-### Verification Summary
-
-**6 of 7 locations DO involve IndividualName:**
-1. `aliasedTermDatabase.js:310` - Used by IndividualNameDatabase.lookup()
-2. `aliasClasses.js:586` - Used when building EntityGroup consensus names
-3. `entityGroup.js:280` - Fallback consensus path (rarely used)
-4. `entityGroup.js:637` - Deduplicating individuals in consensus building
-5. `universalEntityMatcher.js:142` - Comparing Individual entity names
-6. `universalEntityMatcher.js:323` - Comparing entity names in general matcher
-
-**1 location does NOT involve IndividualName:**
-- `aliasClasses.js:684` - In `mergeAlternatives()` method which is **defined but never called**
-
-### Entity-Level compareTo (NOT IndividualName directly)
-
-These compare Entity objects (which internally compare name, contactInfo, etc.):
-
-| File | Line | Code | Notes |
-|------|------|------|-------|
-| universalEntityMatcher.js | 72 | `individual1.compareTo(individual2, true)` | Individual entity comparison |
-| universalEntityMatcher.js | 99 | `individual.compareTo(householdIndividual, true)` | Individual vs household member |
-| universalEntityMatcher.js | 243 | `ind1.compareTo(ind2, true)` | Individual comparison |
-| utils.js | 1590 | `thisEntity.name.compareTo(otherEntity.name, true)` | Entity weighted comparison |
-| utils.js | 2076 | `value1.compareTo(value2)` | `genericObjectCompareTo()` - numeric only |
-| utils.js | 2848 | `entity1.name.compareTo(entity2.name, true)` | Debug/diagnostic |
-| entityComparison.js | 71 | `entity1.compareTo(entity2, true)` | Diagnostic tool |
-| unifiedEntityBrowser.js | 1754 | `entity.compareTo(targetWrapper.entity, true)` | Browser comparison |
-| unifiedEntityBrowser.js | 2735 | `baseEntity.compareTo(targetEntity, true)` | Browser comparison |
-
-### Other Class compareTo Calls (NOT IndividualName)
-
-**StreetName.compareTo()** - Already returns four-score object:
-| File | Line | Code |
-|------|------|------|
-| aliasClasses.js | 1160 | `this.compareTo(streetString)` in `StreetName.matches()` |
-| aliasClasses.js | 1935 | `street.compareTo(streetToLookup)` in Address processing |
-| utils.js | 1077 | `addr1.biStreetName.compareTo(addr2.biStreetName)` |
-
-**Address.compareTo()** - Returns numeric:
-| File | Line | Code |
-|------|------|------|
-| utils.js | 1226 | `addr.compareTo(contactInfo.primaryAddress)` |
-| utils.js | 1238 | `addr.compareTo(secondaries[i])` |
-| utils.js | 1384 | `thisAddr.compareTo(otherAddr)` |
-| utils.js | 1490 | `matchedBaseAddress.compareTo(matchedTargetAddress, true)` |
-| utils.js | 2657 | `addr1.compareTo(addr2)` |
-| entityGroup.js | 381, 412 | Address similarity checks |
-| fireNumberCollisionHandler.js | 301, 551 | Address comparisons |
-
-**ContactInfo.compareTo()** - Returns numeric:
-| File | Line | Code |
-|------|------|------|
-| universalEntityMatcher.js | 177 | `individual.contactInfo.compareTo(entity.contactInfo, true)` |
-| utils.js | 1630 | `thisEntity.contactInfo.compareTo(otherEntity.contactInfo, true)` |
-| utils.js | 2901 | `entity1.contactInfo.compareTo(entity2.contactInfo, true)` |
-
-### Impact Analysis (VERIFIED)
-
-If we change `IndividualName.compareTo()` to return `{ primary, homonym, synonym, candidate }`:
-
-**Will work without changes (already handle both types):**
-- `aliasedTermDatabase.js:310` - has explicit type checking for number vs object
-- `universalEntityMatcher.js:142, 323` - uses `?.overallSimilarity` fallback
-
-**NOT AFFECTED (never called or doesn't involve IndividualName):**
-- `aliasClasses.js:684` - in `mergeAlternatives()` which is **never called**
-
-**WILL BREAK (expect numeric only):**
-1. `individualNameBrowser.js:1365` - displays score directly
-2. `individualNameDatabaseBuilder.js:386` - uses score for clustering
-3. `individualIdentificationResearch.js:429` - uses score for comparison
-4. `aliasClasses.js:586` - `Aliased.createConsensus()` sums scores (line 587-590 checks `typeof score === 'number'`)
-5. `entityGroup.js:280` - `_selectBestPrimary()` sums scores (line 281 checks `typeof score === 'number'`)
-6. `entityGroup.js:637` - `_deduplicateIndividuals()` compares score to threshold
-7. `utils.js:2076` - `genericObjectCompareTo()` propagates non-zero (used in Entity.compareTo chain)
-
-### Recommended Approach
-
-**Option A: Add new method, keep existing compareTo**
-- Add `IndividualName.compareToAliases(term)` returning four-score object
-- Keep existing `compareTo()` for entity-level weighted comparison
-- Database lookup calls the new method
-
-**Option B: Modify compareTo to return both**
-- Return `{ primary, homonym, synonym, candidate, overallSimilarity }`
-- Existing code can use `.overallSimilarity` or treat as number via `typeof` check
-- Update critical breakage points
-
-**Option C: Full refactor**
-- Change all `compareTo()` calls to handle four-score object
-- Most invasive but most consistent
-
-**Option D: Rename and Rebuild (SELECTED)**
-- Rename current inherited behavior to `numericCompareTo()`
-- Update all existing call sites to use `numericCompareTo()`
-- New `compareTo()` returns four-score object `{ primary, homonym, synonym, candidate }`
-- Achieves consistency with StreetName.compareTo()
-
----
-
-## SECTION 7C: OPTION D IMPLEMENTATION PLAN
-
-### Overview
-
-**Approach**: Rename and Rebuild
-1. Add `numericCompareTo()` to IndividualName - replicates current inherited weighted comparison
-2. Add `compareTo()` override that throws an error (diagnostic phase)
-3. Update 6 identified call sites to use `numericCompareTo()`
-4. Test to verify all call sites found
-5. Replace error-throwing `compareTo()` with real four-score implementation
-
-**Why error-throwing diagnostic phase**: This ensures we detect ANY call sites we may have missed. If an undiscovered call site exists, it will throw an error rather than silently produce wrong results.
-
-### Phase 1: Add Methods to IndividualName Class
-
-**File**: `scripts/objectStructure/aliasClasses.js`
-**Location**: Inside IndividualName class, after `initializeWeightedComparison()` method (after line 1330)
-
-**Step 1.1**: Add `numericCompareTo()` method
-
-This method replicates the current inherited behavior from `Aliased.compareTo()` which uses `genericObjectCompareTo()`:
-
-```javascript
-/**
- * Numeric comparison for IndividualName (weighted component comparison)
- * Returns a single weighted score (0-1) based on name component similarity.
- *
- * This method preserves the original compareTo() behavior for call sites
- * that need numeric scores (entity matching, consensus building, etc.)
- *
- * @param {IndividualName|string} other - IndividualName object or name string to compare
- * @param {boolean} [returnDetails=false] - If true, return detailed breakdown
- * @returns {number} Weighted similarity score (0-1)
- */
-numericCompareTo(other, returnDetails = false) {
-    // Delegate to the generic weighted comparison inherited from Aliased
-    // This uses comparisonWeights (lastName: 0.5, firstName: 0.4, otherNames: 0.1)
-    return genericObjectCompareTo(this, other, returnDetails);
-}
+**Call chain after fix:**
 ```
-
-**Step 1.2**: Add diagnostic `compareTo()` override
-
-```javascript
-/**
- * DIAGNOSTIC PHASE: compareTo override that throws error
- *
- * This temporary implementation helps identify any call sites we missed.
- * Once all call sites are confirmed to use numericCompareTo(), this will
- * be replaced with the four-score alias comparison.
- *
- * @throws {Error} Always throws to identify call sites
- */
-compareTo(other, returnDetails = false) {
-    throw new Error(
-        `IndividualName.compareTo() called but should use numericCompareTo(). ` +
-        `This: "${this.primaryAlias?.term}", Other: "${other?.primaryAlias?.term || other}". ` +
-        `Stack trace will show the call site that needs updating.`
-    );
-}
-```
-
-### Phase 2: Update Call Sites to Use numericCompareTo()
-
-**CRITICAL**: Do NOT use grep to find these locations. Use the documented line numbers from Section 7B. If the exact line has shifted, search within ±20 lines of the expected location for the documented code pattern.
-
-#### Call Site 2.1: individualNameBrowser.js
-
-**Expected Location**: Line 1365
-**Code Pattern**: `individualNameBrowser.selectedIndividualName.compareTo(testString)`
-**Context**: UI test tool for comparing names
-**Change**: Replace `.compareTo(` with `.numericCompareTo(`
-
-#### Call Site 2.2: individualNameDatabaseBuilder.js
-
-**Expected Location**: Line 386
-**Code Pattern**: `name1.compareTo(name2)`
-**Context**: Inside `compareNames()` function used for clustering
-**Change**: Replace `.compareTo(` with `.numericCompareTo(`
-
-#### Call Site 2.3: individualIdentificationResearch.js
-
-**Expected Location**: Line 429
-**Code Pattern**: `name1.compareTo(name2)`
-**Context**: Inside `compareNames()` diagnostic function
-**Change**: Replace `.compareTo(` with `.numericCompareTo(`
-
-#### Call Site 2.4: aliasClasses.js - Aliased.createConsensus()
-
-**Expected Location**: Line 586
-**Code Pattern**: `aliasedObjects[i].compareTo(aliasedObjects[j])`
-**Context**: Static method `Aliased.createConsensus()` for building consensus from multiple aliased objects
-**Special Consideration**: This is a polymorphic call that handles multiple Aliased subclasses
-**Change**: Replace `.compareTo(` with `.numericCompareTo(`
-
-**NOTE**: Since this is in the parent class and used by multiple subclasses, verify that StreetName also has `numericCompareTo()` or that this call only affects IndividualName objects.
-
-#### Call Site 2.5: entityGroup.js - _selectBestPrimary()
-
-**Expected Location**: Line 280
-**Code Pattern**: `values[i].compareTo(values[j])`
-**Context**: Fallback consensus path in `_selectBestPrimary()` method
-**Change**: Replace `.compareTo(` with `.numericCompareTo(`
-
-#### Call Site 2.6: entityGroup.js - _deduplicateIndividuals()
-
-**Expected Location**: Line 637
-**Code Pattern**: `individual.name.compareTo(existing.name)`
-**Context**: Deduplicating individuals during consensus building
-**Change**: Replace `.compareTo(` with `.numericCompareTo(`
-
-### Phase 3: Verification Testing
-
-After making all changes, perform the following tests to verify no call sites were missed:
-
-**Test 3.1: Load Application**
-1. Start server: `cd BIRAVA2025 && node servers/server.js`
-2. Open browser to http://127.0.0.1:1337/
-3. Open browser console (F12)
-4. Watch for any errors mentioning "IndividualName.compareTo() called"
-
-**Test 3.2: Load IndividualNameDatabase**
-1. Click button to load IndividualNameDatabase
-2. Verify no compareTo errors thrown
-
-**Test 3.3: Entity Group Building**
-1. Load unified entity database
-2. Build entity groups (this exercises consensus building and deduplication)
-3. Verify no compareTo errors thrown
-
-**Test 3.4: Individual Name Browser**
-1. Open Individual Name Browser
-2. Select a name
-3. Use the comparison test tool
-4. Verify no compareTo errors (should use numericCompareTo now)
-
-**Test 3.5: Entity Comparison**
-1. Use unified entity browser
-2. Compare two Individual entities
-3. Verify no compareTo errors
-
-### Phase 4: Implement Real compareTo()
-
-**Only proceed after all Phase 3 tests pass with no errors.**
-
-Replace the error-throwing `compareTo()` with the real four-score implementation:
-
-```javascript
-/**
- * Alias-based comparison for IndividualName
- * Returns four-score object like StreetName.compareTo() for consistency.
- *
- * @param {IndividualName|string} other - IndividualName object or name string to compare
- * @returns {Object} Four-score object { primary, homonym, synonym, candidate }
- */
-compareTo(other) {
-    // Extract comparison term
-    let termToCompare;
-    if (typeof other === 'string') {
-        termToCompare = other.trim().toUpperCase();
-    } else if (other?.primaryAlias?.term) {
-        termToCompare = other.primaryAlias.term.trim().toUpperCase();
-    } else {
-        return { primary: 0, homonym: 0, synonym: 0, candidate: 0 };
-    }
-
-    const result = { primary: 0, homonym: 0, synonym: 0, candidate: 0 };
-
-    // Check primary alias
-    if (this.primaryAlias?.term) {
-        const thisTerm = this.primaryAlias.term.trim().toUpperCase();
-        result.primary = thisTerm === termToCompare ? 1.0 :
-                         stringSimilarity(thisTerm, termToCompare);
-    }
-
-    // Check alternatives if available
-    if (this.alternatives) {
-        // Check homonyms
-        if (this.alternatives.homonyms) {
-            for (const h of this.alternatives.homonyms) {
-                const hTerm = (h.term || h).toString().trim().toUpperCase();
-                const sim = hTerm === termToCompare ? 1.0 : stringSimilarity(hTerm, termToCompare);
-                result.homonym = Math.max(result.homonym, sim);
-            }
-        }
-
-        // Check synonyms
-        if (this.alternatives.synonyms) {
-            for (const s of this.alternatives.synonyms) {
-                const sTerm = (s.term || s).toString().trim().toUpperCase();
-                const sim = sTerm === termToCompare ? 1.0 : stringSimilarity(sTerm, termToCompare);
-                result.synonym = Math.max(result.synonym, sim);
-            }
-        }
-
-        // Check candidates
-        if (this.alternatives.candidates) {
-            for (const c of this.alternatives.candidates) {
-                const cTerm = (c.term || c).toString().trim().toUpperCase();
-                const sim = cTerm === termToCompare ? 1.0 : stringSimilarity(cTerm, termToCompare);
-                result.candidate = Math.max(result.candidate, sim);
-            }
-        }
-    }
-
-    return result;
-}
-```
-
-### Phase 5: Final Verification
-
-After implementing the real `compareTo()`:
-
-1. Re-run all Phase 3 tests
-2. Verify `IndividualNameDatabase.lookup()` returns correct results
-3. Test that entity matching still works correctly (via entity group building)
-4. Verify the comparison test tool in IndividualNameBrowser displays meaningful results
-
-### Execution Checklist
-
-| Step | Description | File | Line | Code Pattern | Status |
-|------|-------------|------|------|--------------|--------|
-| 1.1 | Add numericCompareTo() to Aliased base class | aliasClasses.js | ~782 | After `compareTo()`, before `}` closing Aliased | PENDING |
-| 1.2 | Add error-throwing compareTo() to IndividualName | aliasClasses.js | ~1330 | After `initializeWeightedComparison()` | PENDING |
-| 2.1 | Update individualNameBrowser.js | individualNameBrowser.js | ~1365 | `.compareTo(testString)` | PENDING |
-| 2.2 | Update individualNameDatabaseBuilder.js | individualNameDatabaseBuilder.js | ~386 | `name1.compareTo(name2)` | PENDING |
-| 2.3 | Update individualIdentificationResearch.js | individualIdentificationResearch.js | ~429 | `name1.compareTo(name2)` | PENDING |
-| 2.4 | Update Aliased.createConsensus() | aliasClasses.js | ~586 | `aliasedObjects[i].compareTo(aliasedObjects[j])` | PENDING |
-| 2.5 | Update _selectBestPrimary() | entityGroup.js | ~280 | `values[i].compareTo(values[j])` | PENDING |
-| 2.6 | Update _deduplicateIndividuals() | entityGroup.js | ~637 | `individual.name.compareTo(existing.name)` | PENDING |
-| 3.x | Verification testing | - | - | See Phase 3 test list | PENDING |
-| 4 | Implement real compareTo() | aliasClasses.js | ~1330 | Replace error-throwing with four-score | PENDING |
-| 5 | Final verification | - | - | Re-run all Phase 3 tests | PENDING |
-
-### Key File Locations (Verified January 30, 2026)
-
-| File | Class/Method | Line |
-|------|--------------|------|
-| aliasClasses.js | Aliased.compareTo() | 773-782 |
-| aliasClasses.js | Aliased class closing brace | 783 |
-| aliasClasses.js | Aliased.createConsensus() | 557-649 |
-| aliasClasses.js | StreetName.compareTo() | 1078-1150 |
-| aliasClasses.js | IndividualName.initializeWeightedComparison() | 1322-1330 |
-| aliasClasses.js | IndividualName class closing brace | 1331 |
-
-### Special Consideration: Aliased.createConsensus()
-
-Call site 2.4 is in the parent class `Aliased` (line ~586) and is used polymorphically for all Aliased subclasses.
-
-**Finding**: `numericCompareTo()` does not exist anywhere in the codebase yet.
-
-**Solution**: Add `numericCompareTo()` to the **base Aliased class** so all subclasses inherit it:
-
-```javascript
-// In Aliased base class
-numericCompareTo(other, returnDetails = false) {
-    return genericObjectCompareTo(this, other, returnDetails);
-}
-```
-
-This way:
-- StreetName inherits `numericCompareTo()` and uses its comparisonWeights
-- IndividualName inherits `numericCompareTo()` and uses its specific weights (lastName: 0.5, firstName: 0.4, otherNames: 0.1)
-- All other Aliased subclasses get the method automatically
-
-**Updated Step 1.1**: Add `numericCompareTo()` to **Aliased base class** (not IndividualName)
-
-### Revised Phase 1: Add Methods
-
-**Step 1.1**: Add `numericCompareTo()` to Aliased base class
-- **File**: `scripts/objectStructure/aliasClasses.js`
-- **Location**: Inside Aliased class, after the existing `compareTo()` method (around line 495)
-
-```javascript
-/**
- * Numeric comparison returning a single weighted score (0-1).
- * Uses genericObjectCompareTo with this object's comparisonWeights.
- *
- * This method provides consistent numeric comparison across all Aliased subclasses,
- * while allowing subclasses to override compareTo() for alias-based comparison.
- *
- * @param {Aliased|string} other - Object or string to compare
- * @param {boolean} [returnDetails=false] - If true, return detailed breakdown
- * @returns {number} Weighted similarity score (0-1)
- */
-numericCompareTo(other, returnDetails = false) {
-    return genericObjectCompareTo(this, other, returnDetails);
-}
-```
-
-**Step 1.2**: Add error-throwing `compareTo()` override to IndividualName class
-- **File**: `scripts/objectStructure/aliasClasses.js`
-- **Location**: Inside IndividualName class, after `initializeWeightedComparison()` (after line 1330)
-
-```javascript
-/**
- * DIAGNOSTIC PHASE: compareTo override that throws error
- *
- * This temporary implementation helps identify any call sites we missed.
- * Once all call sites are confirmed to use numericCompareTo(), this will
- * be replaced with the four-score alias comparison.
- *
- * @throws {Error} Always throws to identify call sites
- */
-compareTo(other, returnDetails = false) {
-    throw new Error(
-        `IndividualName.compareTo() called but should use numericCompareTo(). ` +
-        `This: "${this.primaryAlias?.term}", Other: "${other?.primaryAlias?.term || other}". ` +
-        `Stack trace will show the call site that needs updating.`
-    );
-}
+compareTo() → getComponents() → getNameComponentsFromCase31()
+    → processor(returnComponentsOnly=true)
+    → returns {firstName, lastName, ...} [NO ENTITY CREATION]
 ```
 
 ---
 
-## SECTION 8: SESSION NOTES
+## SECTION 7B: ENTITYTYPE FILTERING
 
-### Session 81 (January 30, 2026)
+### Problem
+Database entries with business-like names (e.g., "LLC Sea") routed to Business case processors during `getComponents()`, causing null pointer errors (`record.pid` was null).
 
-**Accomplished:**
-1. Modified `syncDevToOriginal()` to validate DEV/INDEX key consistency and add fileIds
-2. Studied IndividualName class structure - discovered redundant storage (primaryAlias vs components)
-3. Catalogued all 22 IndividualName instantiation points in entity creation code
-4. Identified that consistency is maintained by construction, not enforcement
+### Solution
+1. All case processors now return `entityType` property when `returnComponentsOnly=true`
+2. `getComponents()` filters out non-Individual types (returns null)
+3. Names that parse as Business/Household use fallback simple string comparison
 
-**Next steps:**
-- Modify `IndividualName.compareTo()` to return four-score object
-- Implement lookup calls at entity creation points
+**EntityType Mapping:**
+- **Individual**: Cases 1, 2, 3, 5, 6, 7, 8, 9, 10, 18, 33
+- **Business**: Cases 0, 4, 4N, 12, 13, 14, 19, 20, 21N, 31
+- **AggregateHousehold**: Cases 11, 15a, 15b, 16, 17, 25, 26, 27, 28, 29, 30, 32
+- **LegalConstruct**: Case 34
+
+---
+
+## SECTION 7C: TESTING
+
+### Test Scripts
+`scripts/diagnostics/entitySourceAnalysis.js`
+
+### Test Functions
+```javascript
+analyzeBloomerangFile(fileId)      // Entity counts, source distribution, alias counts
+analyzeVisionAppraisalFile()       // Same metrics for VA
+compareAnalysisResults(b, t, l1, l2) // Compare two runs
+trackDatabaseUsage(entities)       // Database entry usage statistics
+```
+
+### Complete Test Plan
+
+**Prerequisites:**
+1. Application loaded at http://127.0.0.1:1337/
+2. IndividualNameDatabase loaded
+3. Browser console open (F12)
+
+#### Part 1: Baseline (BYPASS = TRUE)
+```javascript
+window.BYPASS_INDIVIDUALNAME_LOOKUP = true;
+```
+Click "Process Bloomerang CSV", note file ID.
+
+#### Part 2: Analyze Baseline Bloomerang
+```javascript
+const baselineBloomerang = await analyzeBloomerangFile('FILE_ID_HERE');
+```
+Click "Create Entities from Processed Data".
+
+#### Part 3: Analyze Baseline VA
+```javascript
+const baselineVA = await analyzeVisionAppraisalFile();
+```
+
+#### Part 4: Test (BYPASS = FALSE)
+```javascript
+window.BYPASS_INDIVIDUALNAME_LOOKUP = false;
+```
+Click "Process Bloomerang CSV", note NEW file ID.
+
+#### Part 5: Analyze Test Bloomerang
+```javascript
+const testBloomerang = await analyzeBloomerangFile('NEW_FILE_ID');
+```
+Click "Create Entities from Processed Data".
+
+#### Part 6: Compare Results
+```javascript
+const testVA = await analyzeVisionAppraisalFile();
+compareAnalysisResults(baselineBloomerang, testBloomerang, 'BYPASS=TRUE', 'BYPASS=FALSE');
+compareAnalysisResults(baselineVA, testVA, 'BYPASS=TRUE', 'BYPASS=FALSE');
+```
+
+### Test Results (Session 89 - Combined Analysis)
+
+| Metric | Bloomerang | VisionAppraisal |
+|--------|------------|-----------------|
+| Standalone individuals from DB | 1361 | 428 |
+| Household members from DB | 0 | 838 |
+| **Total from DB** | 1361 (100%) | 1266 (100%) |
+
+**Database Usage:**
+| Metric | Count |
+|--------|-------|
+| Total database entries | 2108 |
+| Unused | 0 |
+| Used once | 1719 |
+| Used multiple times | 389 |
+
+**Interpretation:** The lookup system is working correctly. All 2108 IndividualNameDatabase entries are being used. The 838 VA household members (individuals inside AggregateHouseholds) are correctly looked up from the database.
+
+### Test Status: USER_VERIFIED_COMPLETE (February 2, 2026)
+
+---
+
+## APPENDIX A: COMPARISON TO ORIGINAL PLAN
+
+The original Section 4 (written earlier) focused on **StreetName database enrichment** - integrating phonebook street variations into the StreetName alias system. This was the wrong focus.
+
+| Original Focus | Revised Focus (February 3, 2026) |
+|----------------|----------------------------------|
+| StreetName database enrichment | EntityGroup augmentation |
+| Street name variations as candidates | Phone numbers/emails to entities |
+| Unrecognized streets | Unmatched entities → new EntityGroups |
+| StreetName lookup | EntityGroup collection lookup |
+| 7 tasks | 26 tasks (comprehensive with integrated testing) |
+
+The actual goal is **entity-to-EntityGroup matching** - taking phonebook (and later email) data and matching it against the existing EntityGroup database to augment groups with phone numbers and email addresses.
 
 ---
 
 ## DOCUMENT END
 
-**Document Version**: 1.0
-**Last Updated**: January 30, 2026
+**Document Version**: 3.0
+**Last Updated**: February 3, 2026 (Section 4 completely revised; Sections 1-5 rewritten for new focus)

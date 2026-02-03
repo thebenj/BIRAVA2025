@@ -387,13 +387,8 @@ function compareSizes(entityGroupDatabase, entityDatabase = null) {
 
     console.log('[LightweightExporter] Comparing full vs lightweight sizes...');
 
-    // Full serialization size
-    let fullSerialized;
-    if (typeof entityGroupDatabase.serialize === 'function') {
-        fullSerialized = JSON.stringify(entityGroupDatabase.serialize());
-    } else {
-        fullSerialized = JSON.stringify(entityGroupDatabase);
-    }
+    // Full serialization size using serializeWithTypes for automatic type preservation
+    const fullSerialized = serializeWithTypes(entityGroupDatabase);
     const fullSize = fullSerialized.length;
 
     // Lightweight export size

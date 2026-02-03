@@ -101,6 +101,28 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
             console.warn('⚠️ Fire number collision database not loaded - collisions will not be persisted');
         }
 
+        // Load IndividualNameDatabase if lookup is enabled (BYPASS = false)
+        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+        if (lookupEnabled) {
+            console.log('\n📚 IndividualName lookup is ON - checking database...');
+            const dbLoaded = window.individualNameDatabase &&
+                             window.individualNameDatabase.entries &&
+                             window.individualNameDatabase.entries.size > 0;
+            if (!dbLoaded) {
+                console.log('📚 Loading IndividualNameDatabase...');
+                if (typeof window.repopulateWindowFromBulk === 'function') {
+                    await window.repopulateWindowFromBulk();
+                    console.log(`✅ IndividualNameDatabase loaded: ${window.individualNameDatabase.entries.size} entries`);
+                } else {
+                    throw new Error('IndividualName lookup is ON but repopulateWindowFromBulk() is not available. Open IndividualName Browser first.');
+                }
+            } else {
+                console.log(`✅ IndividualNameDatabase already loaded: ${window.individualNameDatabase.entries.size} entries`);
+            }
+        } else {
+            console.log('\n⚠️ IndividualName lookup is OFF - entities will create new IndividualName objects');
+        }
+
         // Track cases and their entities
         const caseEntityMap = new Map(); // case number -> [entities]
         const allEntities = []; // Collect all entities for Google Drive saving

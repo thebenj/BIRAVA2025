@@ -16,6 +16,7 @@
 
 const ENTITYGROUP_FILE_ID_STORAGE_KEY = 'birava_entityGroupFileId';
 const ENTITYGROUP_REFERENCE_FILE_ID_STORAGE_KEY = 'birava_entityGroupReferenceFileId';
+const ENTITYGROUP_STATUS_NOTES_STORAGE_KEY = 'birava_entityGroupStatusNotes';
 
 // =============================================================================
 // GLOBAL STATE MANAGEMENT
@@ -61,6 +62,9 @@ function initializeEntityGroupBrowser() {
 
     // Setup search handlers
     setupEntityGroupSearch();
+
+    // Setup status notes
+    setupEntityGroupStatusNotes();
 
     console.log("✅ EntityGroup Browser initialized");
 }
@@ -194,6 +198,18 @@ function setupEntityGroupButtons() {
     if (rebuildConsensusBtn) {
         rebuildConsensusBtn.addEventListener('click', rebuildConsensusEntities);
     }
+
+    // Build Collections Only button
+    const buildCollectionsBtn = document.getElementById('entityGroupBuildCollectionsBtn');
+    if (buildCollectionsBtn) {
+        buildCollectionsBtn.addEventListener('click', buildCollectionsOnly);
+    }
+
+    // Build Consensus Only button
+    const buildConsensusOnlyBtn = document.getElementById('entityGroupBuildConsensusOnlyBtn');
+    if (buildConsensusOnlyBtn) {
+        buildConsensusOnlyBtn.addEventListener('click', buildConsensusOnly);
+    }
 }
 
 /**
@@ -239,6 +255,49 @@ function setupEntityGroupSearch() {
     }
 }
 
+/**
+ * Setup status notes textarea with auto-save
+ */
+function setupEntityGroupStatusNotes() {
+    const notesTextarea = document.getElementById('entityGroupStatusNotes');
+    const lastSavedSpan = document.getElementById('entityGroupNotesLastSaved');
+
+    if (!notesTextarea) return;
+
+    // Load saved notes from localStorage
+    const savedData = localStorage.getItem(ENTITYGROUP_STATUS_NOTES_STORAGE_KEY);
+    if (savedData) {
+        try {
+            const parsed = JSON.parse(savedData);
+            notesTextarea.value = parsed.notes || '';
+            if (parsed.lastSaved && lastSavedSpan) {
+                lastSavedSpan.textContent = `(Last saved: ${new Date(parsed.lastSaved).toLocaleString()})`;
+            }
+        } catch (e) {
+            // Old format - just plain text
+            notesTextarea.value = savedData;
+        }
+    }
+
+    // Auto-save on input with debounce
+    let saveTimeout = null;
+    notesTextarea.addEventListener('input', () => {
+        if (saveTimeout) clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            const data = {
+                notes: notesTextarea.value,
+                lastSaved: new Date().toISOString()
+            };
+            localStorage.setItem(ENTITYGROUP_STATUS_NOTES_STORAGE_KEY, JSON.stringify(data));
+            if (lastSavedSpan) {
+                lastSavedSpan.textContent = `(Saved: ${new Date().toLocaleTimeString()})`;
+            }
+        }, 500); // Save 500ms after user stops typing
+    });
+
+    console.log("📝 Status notes loaded");
+}
+
 // =============================================================================
 // DATA LOADING
 // =============================================================================
@@ -271,17 +330,15 @@ async function loadEntityGroupDatabase() {
             alt: 'media'
         });
 
-        const data = JSON.parse(response.body);
+        // Deserialize using deserializeWithTypes for automatic type restoration
+        entityGroupBrowser.loadedDatabase = deserializeWithTypes(response.body);
 
         // Validate it's an EntityGroup database
-        if (!data.groups || !data.stats) {
+        if (!entityGroupBrowser.loadedDatabase.groups || !entityGroupBrowser.loadedDatabase.stats) {
             throw new Error('Invalid EntityGroup database format - missing groups or stats');
         }
 
-        // Deserialize to proper EntityGroupDatabase class instance (restores serialize() method)
-        entityGroupBrowser.loadedDatabase = EntityGroupDatabase.deserialize(data);
-
-        showEntityGroupStatus(`Loaded ${Object.keys(data.groups).length} EntityGroups successfully!`, 'success');
+        showEntityGroupStatus(`Loaded ${Object.keys(entityGroupBrowser.loadedDatabase.groups).length} EntityGroups successfully!`, 'success');
 
         // Display all groups
         applyEntityGroupFilters();
@@ -642,6 +699,108 @@ async function rebuildConsensusEntities() {
 
     } catch (error) {
         console.error('Error rebuilding consensus:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    } finally {
+        if (btn) btn.innerHTML = originalText;
+    }
+}
+
+/**
+ * Build member collections only (without rebuilding consensus entities)
+ */
+async function buildCollectionsOnly() {
+    // Check prerequisites
+    if (!entityGroupBrowser.loadedDatabase) {
+        showEntityGroupStatus('No EntityGroup database loaded. Load one first.', 'error');
+        return;
+    }
+
+    if (!window.unifiedEntityDatabase?.entities) {
+        showEntityGroupStatus('Unified entity database not loaded. Load it first.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('entityGroupBuildCollectionsBtn');
+    const originalText = btn?.innerHTML;
+
+    try {
+        if (btn) btn.innerHTML = '⏳ Building...';
+        showEntityGroupStatus('Building member collections...', 'loading');
+
+        // Build collections only (not consensus)
+        for (const group of entityGroupBrowser.loadedDatabase.getAllGroups()) {
+            if (group.hasMultipleMembers()) {
+                group.buildMemberCollections(window.unifiedEntityDatabase.entities);
+            }
+        }
+
+        // Record when collections were built
+        entityGroupBrowser.loadedDatabase.collectionsBuiltTimestamp = new Date().toISOString();
+
+        const multiMemberCount = entityGroupBrowser.loadedDatabase.stats?.multiMemberGroups ||
+            Object.values(entityGroupBrowser.loadedDatabase.groups)
+                .filter(g => g.memberKeys?.length > 1).length;
+
+        showEntityGroupStatus(
+            `Built member collections for ${multiMemberCount} multi-member groups. Save to preserve.`,
+            'success'
+        );
+
+        console.log(`✅ Built member collections for ${multiMemberCount} multi-member groups`);
+
+    } catch (error) {
+        console.error('Error building collections:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    } finally {
+        if (btn) btn.innerHTML = originalText;
+    }
+}
+
+/**
+ * Build consensus entities only (without rebuilding member collections)
+ */
+async function buildConsensusOnly() {
+    // Check prerequisites
+    if (!entityGroupBrowser.loadedDatabase) {
+        showEntityGroupStatus('No EntityGroup database loaded. Load one first.', 'error');
+        return;
+    }
+
+    if (!window.unifiedEntityDatabase?.entities) {
+        showEntityGroupStatus('Unified entity database not loaded. Load it first.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('entityGroupBuildConsensusOnlyBtn');
+    const originalText = btn?.innerHTML;
+
+    try {
+        if (btn) btn.innerHTML = '⏳ Building...';
+        showEntityGroupStatus('Building consensus entities...', 'loading');
+
+        // Build consensus only (not collections)
+        for (const group of entityGroupBrowser.loadedDatabase.getAllGroups()) {
+            if (group.hasMultipleMembers()) {
+                group.buildConsensusEntity(window.unifiedEntityDatabase.entities);
+            }
+        }
+
+        // Record when consensus was built
+        entityGroupBrowser.loadedDatabase.consensusBuiltTimestamp = new Date().toISOString();
+
+        const multiMemberCount = entityGroupBrowser.loadedDatabase.stats?.multiMemberGroups ||
+            Object.values(entityGroupBrowser.loadedDatabase.groups)
+                .filter(g => g.memberKeys?.length > 1).length;
+
+        showEntityGroupStatus(
+            `Built consensus entities for ${multiMemberCount} multi-member groups. Save to preserve.`,
+            'success'
+        );
+
+        console.log(`✅ Built consensus entities for ${multiMemberCount} multi-member groups`);
+
+    } catch (error) {
+        console.error('Error building consensus:', error);
         showEntityGroupStatus(`Error: ${error.message}`, 'error');
     } finally {
         if (btn) btn.innerHTML = originalText;

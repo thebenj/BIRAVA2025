@@ -65,6 +65,10 @@ const CLASS_REGISTRY = {
     'AliasedTermDatabase': typeof AliasedTermDatabase !== 'undefined' ? AliasedTermDatabase : null,
     'StreetNameDatabase': typeof StreetNameDatabase !== 'undefined' ? StreetNameDatabase : null,
 
+    // EntityGroup Classes
+    'EntityGroup': typeof EntityGroup !== 'undefined' ? EntityGroup : null,
+    'EntityGroupDatabase': typeof EntityGroupDatabase !== 'undefined' ? EntityGroupDatabase : null,
+
     // Built-in Classes
     'Map': Map,
     'Set': Set,

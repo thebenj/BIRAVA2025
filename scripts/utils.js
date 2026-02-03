@@ -225,9 +225,13 @@ function levenshteinSimilarity(str1, str2) {
     if (!str1 && !str2) return 1.0;  // Both empty = perfect match
     if (!str1 || !str2) return 0.0;  // One empty = no match
 
+    // Ensure inputs are strings (handles numbers, etc.)
+    const s1 = typeof str1 === 'string' ? str1 : String(str1);
+    const s2 = typeof str2 === 'string' ? str2 : String(str2);
+
     // Normalize to uppercase for case-insensitive comparison
-    const normalized1 = str1.toUpperCase();
-    const normalized2 = str2.toUpperCase();
+    const normalized1 = s1.toUpperCase();
+    const normalized2 = s2.toUpperCase();
 
     const distance = levenshteinDistance(normalized1, normalized2);
     const maxLength = Math.max(normalized1.length, normalized2.length);
@@ -1582,18 +1586,21 @@ function entityWeightedComparison(otherObject, detailed = false) {
     let nameDetailedResult = null;
     let contactInfoDetailedResult = null;
 
-    const hasNameData = thisEntity.name && otherEntity.name &&
-                        typeof thisEntity.name.compareTo === 'function';
+    const hasNameData = thisEntity.name && otherEntity.name;
     if (hasNameData) {
         try {
-            // Always get detailed result for name, extract score
-            const nameResult = thisEntity.name.compareTo(otherEntity.name, true);
-            if (typeof nameResult === 'number') {
-                nameSimilarity = nameResult;
-                nameDetailedResult = { overallSimilarity: nameResult };
-            } else {
-                nameSimilarity = nameResult.overallSimilarity;
-                nameDetailedResult = nameResult;
+            // Use safeNumericCompare for proper IndividualName handling
+            const nameResult = window.safeNumericCompare
+                ? window.safeNumericCompare(thisEntity.name, otherEntity.name)
+                : (typeof thisEntity.name.compareTo === 'function' ? thisEntity.name.compareTo(otherEntity.name, true) : null);
+            if (nameResult !== null) {
+                if (typeof nameResult === 'number') {
+                    nameSimilarity = nameResult;
+                    nameDetailedResult = { overallSimilarity: nameResult };
+                } else {
+                    nameSimilarity = nameResult.overallSimilarity;
+                    nameDetailedResult = nameResult;
+                }
             }
         } catch (nameError) {
             // nameSimilarity remains null - will be treated as missing data
@@ -3112,4 +3119,32 @@ if (typeof window !== 'undefined') {
     window.traceEntityComparison = traceEntityComparison;
 }
 */
+
+// =============================================================================
+// INDIVIDUALNAME RESOLUTION - Common lookup barrier for entity creation
+// =============================================================================
+
+/**
+ * Get existing IndividualName from database or use fallback.
+ * Common function for both Bloomerang and VisionAppraisal entity creation.
+ *
+ * @param {string} termToCheck - The name term to look up
+ * @param {function} createFallback - Function that returns an IndividualName if no match found
+ * @returns {IndividualName} Existing match from database or result of createFallback()
+ */
+function resolveIndividualName(termToCheck, createFallback) {
+    if (window.individualNameDatabase) {
+        const existing = window.individualNameDatabase.lookupExisting(termToCheck);
+        if (existing) {
+            return existing;
+        }
+    }
+    // No match found - execute fallback
+    return createFallback();
+}
+
+// Export for browser
+if (typeof window !== 'undefined') {
+    window.resolveIndividualName = resolveIndividualName;
+}
 

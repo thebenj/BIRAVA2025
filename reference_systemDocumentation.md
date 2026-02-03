@@ -2,7 +2,7 @@
 
 **Purpose**: Comprehensive technical guide to the BIRAVA2025 entity matching and contact discovery system
 
-**Last Updated**: January 29, 2026
+**Last Updated**: February 3, 2026
 
 ---
 
@@ -103,16 +103,18 @@ Entity (base)
   ├── Individual
   ├── CompositeHousehold
   ├── AggregateHousehold
-  └── NonHuman
-        ├── Business
-        └── LegalConstruct
+  └── NonHuman              ← Can be instantiated directly (Bloomerang organizations)
+        ├── Business        ← VisionAppraisal businesses
+        └── LegalConstruct  ← VisionAppraisal trusts, estates, etc.
 ```
+
+**Note**: NonHuman is both a parent class AND a concrete class. Bloomerang entities with entityType 'NonHuman' are instantiated directly as `new NonHuman()`. Business and LegalConstruct are used for VisionAppraisal-sourced entities where the distinction is made during name parsing.
 
 ### Entity Base Properties
 
 | Property | Type | Description |
 |----------|------|-------------|
-| locationIdentifier | String | Fire number or PID |
+| locationIdentifier | FireNumber or PID | Block Island location identifier (SimpleIdentifier subclasses) |
 | name | Name class | Entity name (type varies by entity type) |
 | contactInfo | ContactInfo | Email, phone, addresses |
 | otherInfo | OtherInfo | Non-contact information |
@@ -137,6 +139,14 @@ Entity (base)
 - Household members have `siblingKeys` array pointing to other members
 
 **Note**: Bloomerang households have BOTH `individuals[]` (object copies) and `individualKeys[]` (key-based navigation). Use `individualKeys[]` for database lookups to ensure current data. VisionAppraisal households only have `individuals[]`.
+
+### CompositeHousehold (Reserved for Future Use)
+
+CompositeHousehold exists in the hierarchy but is not currently instantiated. It was created in anticipation of a scenario where the system might need to infer a household's existence from individual data, rather than receiving household recognition from the source data.
+
+**Current state**: VisionAppraisal and Bloomerang both provide explicit household recognition where households exist, so there is no current need to deduce households from individual data. AggregateHousehold handles all current household scenarios.
+
+**Future use**: If a need arises to create households by inference (combining individuals that appear related), CompositeHousehold would be used. This class may require methods distinct from AggregateHousehold to handle the inference-based construction.
 
 ## 2.2 Info Class Hierarchy
 
@@ -197,7 +207,7 @@ Aliased (base)
 
 Block Island street names are managed as `StreetName` objects (extending `SimpleIdentifiers`) rather than simple strings. This enables alias-aware matching across different spellings (e.g., "CORN NECK ROAD" vs "CORN NECK RD").
 
-**Location**: `scripts/objectStructure/aliasClasses.js` (line 1060)
+**Location**: `scripts/objectStructure/aliasClasses.js`
 
 **Key Methods**:
 - `compareTo(otherStreet)` - Returns four-score object: `{ primary, homonym, synonym, candidate }`
@@ -206,7 +216,7 @@ Block Island street names are managed as `StreetName` objects (extending `Simple
 
 The `Address` class has a `biStreetName` property that links parsed street names to canonical `StreetName` objects for Block Island addresses.
 
-**Location**: `scripts/objectStructure/aliasClasses.js` (Address class, line 1631)
+**Location**: `scripts/objectStructure/aliasClasses.js` (Address class)
 
 **Behavior**:
 - Populated during address processing for Block Island addresses
@@ -256,6 +266,8 @@ CLASS_REGISTRY = {
     'AliasedTermDatabase': AliasedTermDatabase,  // Added January 2026
     'StreetNameDatabase': StreetNameDatabase,    // Added January 2026
     'IndividualNameDatabase': IndividualNameDatabase,  // Added January 2026
+    'EntityGroup': EntityGroup,                  // Added February 2026
+    'EntityGroupDatabase': EntityGroupDatabase,  // Added February 2026
     // ... additional classes
 }
 ```
@@ -283,7 +295,7 @@ Entity(locationIdentifier, name, propertyLocation = null, ownerAddress = null, a
 **Parameters**:
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| locationIdentifier | FireNumber/PID/ComplexIdentifier | Fire Number (preferred), PID (secondary), or ComplexIdentifier (fallback) |
+| locationIdentifier | FireNumber/PID | Fire Number (preferred) or PID (secondary); both are SimpleIdentifiers |
 | name | IdentifyingData | Contains IndividualName or HouseholdName |
 | propertyLocation | String | Raw address string for property location (VisionAppraisal) or null |
 | ownerAddress | String | Raw address string for owner mailing address (VisionAppraisal) or null |
@@ -421,6 +433,19 @@ entityGroupDatabase = {
 
 ### EntityGroup Structure
 
+**consensusEntity Construction** (via `buildConsensusEntity()`):
+The consensus entity synthesizes "best" values from all group members:
+- Only built for multi-member groups (single-member groups have `consensusEntity = null`)
+- Uses `AggregateHousehold` as the container type (superset of all entity properties)
+- **locationIdentifier**: Best primary selected via similarity scoring; others categorized as homonyms/synonyms/candidates
+- **name**: Best primary name selected; others categorized by alias thresholds
+- **contactInfo**: Deep property-level merging of all member contact data
+- **otherInfo**: Merged from all members
+- **legacyInfo**: Merged from all members
+- **individuals**: Deduplicated collection from all member AggregateHouseholds
+- **accountNumber**: Taken from first member that has one (Bloomerang entities)
+- Alias thresholds reference `MATCH_CRITERIA` (not hardcoded)
+
 ```javascript
 EntityGroup = {
     index: number,                    // Group index
@@ -430,9 +455,24 @@ EntityGroup = {
     consensusEntity: Entity,          // Synthesized best data from members
     hasBloomerangMember: boolean,     // True if any member from Bloomerang
     isProspect: boolean,              // True if NO Bloomerang members (new prospect)
-    isExistingDonor: boolean          // True if HAS Bloomerang members
+    isExistingDonor: boolean,         // True if HAS Bloomerang members
+    // Member collections (populated by buildMemberCollections) - Added February 2026
+    individualNames: {},              // Key: IndividualNameDatabase key → IndividualName
+    unrecognizedIndividualNames: {},  // Key: normalized primaryAlias.term → IndividualName
+    blockIslandPOBoxes: {},           // Key: PO Box identifier → POBox
+    blockIslandAddresses: {},         // Key: {fireNumber}:{streetNameDbKey} → Address
+    unrecognizedBIAddresses: {},      // Key: full address string → Address
+    offIslandAddresses: []            // Array of Address objects (with alias structure)
 }
 ```
+
+**Key Methods**:
+- `buildMemberCollections(entityDatabase)` - Aggregates unique identifiers from all member entities into the six collection properties. Only runs for multi-member groups.
+- `_getMemberEntities(entityDatabase)` - Shared helper retrieving member entity objects (used by both buildConsensusEntity and buildMemberCollections)
+
+**Purpose of Member Collections**:
+1. **Facilitate multi-source integration**: Enable inclusion of data from sources beyond VisionAppraisal and Bloomerang by providing structured containers for aggregated identifiers
+2. **Clarify individual-to-location relationships**: Improve understanding of the sometimes complex relationships between individuals and their locations/addresses within a group
 
 ### AliasedTermDatabase (Added January 2026)
 
@@ -475,10 +515,11 @@ Extends `AliasedTermDatabase` for individual names with alias support. Enables m
 - Index File: `1IcC5MiDfw23kmNFlriaaFYY9mtDoqxSC`
 - Object Folder: `1XdIipdWlRy7VKlOJiCt_G706JWqZZY4m`
 - Deleted Folder: `1Dk-hAeSEF96qsX-LoQyRZUHlYwOWKARt`
-- Bulk Database: `1r2G6Spg064KNbBzzKqIk131qAK0NDM9l`
+- Bulk Database: `1r2G6Spg064KNbBzzKqIk131qAK0NDM9l` - Single file containing the complete set of IndividualName objects created from EntityGroups; consolidates individual names into canonical entries using alias structures to capture variations
 
 **Key Methods**:
-- `lookupName(name, threshold)` - Find IndividualName by similarity
+- `lookupExisting(term)` - Entity creation lookup with high threshold (0.99); returns existing IndividualName if ANY alias category (primary, homonym, synonym, candidate) scores >= 0.99; used to reuse existing objects rather than creating duplicates
+- `lookupName(name, threshold=0.875)` - General-purpose similarity lookup with configurable threshold; used for finding "similar" names
 - `findByLastName(lastName)` - Find all entries matching a last name
 - `findByPattern(pattern)` - Find entries matching regex pattern
 
@@ -599,10 +640,23 @@ Google Sheets-based rules to correct algorithmic matching errors.
 
 ### compareTo Interface
 
-Every application class implements a `compareTo` method:
+Every application class implements a `compareTo` method. Return types vary by class:
+
+**Numeric return (0-1 similarity score)**:
+- `Address.compareTo()` - Returns numeric score
+- `AttributedTerm.compareTo()` - Returns numeric score
+- `Entity.compareTo(other, detailed=false)` - Returns numeric score
+- `ContactInfo.compareTo()` - Returns numeric score
+
+**Four-score return `{primary, homonym, synonym, candidate}`**:
+- `IndividualName.compareTo()` - Returns four-score object for alias-aware comparison
+- `StreetName.compareTo()` - Returns four-score object for alias-aware comparison
+
+**Detailed return (when `detailed=true`)**:
+- `Entity.compareTo(other, detailed=true)` - Returns `{overallSimilarity, components, checkSum, participants}`
 
 ```javascript
-entity.compareTo(otherEntity, options)  // Returns comparison result
+entity.compareTo(otherEntity, options)  // Returns comparison result (type varies)
 ```
 
 ### Multiple Entry Points
@@ -660,10 +714,32 @@ The collision database enhances matching accuracy for fire numbers with multiple
 **Case e Rationale**: For Bloomerang-vs-VA or secondary address comparisons at collision fire numbers, the fire number alone shouldn't drive matching.
 
 **Integration Points**:
-- `entityGroupBuilder.js` (line ~780): Checks case d for exclusion
-- `utils.js` `compareBlockIslandAddresses()` (line ~1046): Implements case e
+- `entityGroupBuilder.js`: Checks case d for exclusion
+- `utils.js` `compareBlockIslandAddresses()`: Implements case e
 
 **Location**: `scripts/fireNumberCollisionDatabase.js`
+
+### IndividualName Four-Score Comparison (Added February 2026)
+
+IndividualName uses a specialized comparison architecture to support both entity matching and database lookup:
+
+**Two Comparison Methods**:
+- `compareTo(other)` - Returns four-score object `{ primary, homonym, synonym, candidate }` for database lookup operations
+- `numericCompareTo(other)` - Returns single weighted score (0-1) for entity matching algorithms
+
+**safeNumericCompare() Helper**:
+Located in `scripts/objectStructure/aliasClasses.js`, handles polymorphic comparison calls:
+- For IndividualName: extracts `Math.max(primary, homonym, candidate)` from four-score return
+- For other classes: returns numeric score directly
+- Returns null for cross-type comparisons (e.g., IndividualName vs HouseholdName)
+
+**Database Lookup**:
+The `lookupExisting(name)` method in IndividualNameDatabase uses four-score comparison to find existing names before creating new ones. Match threshold: any category >= 0.99.
+
+**Common Function**:
+`resolveIndividualName(name)` in `scripts/utils.js` provides the standard lookup-or-create pattern used by both VisionAppraisal and Bloomerang entity creation.
+
+**Location**: `scripts/objectStructure/aliasClasses.js` (compareTo, numericCompareTo), `scripts/databases/individualNameDatabase.js` (lookupExisting), `scripts/utils.js` (resolveIndividualName)
 
 ## 3.5 Name Matching
 
@@ -1159,7 +1235,8 @@ Breaking these = Can't View/Export Data
 | File | Purpose |
 |------|---------|
 | `scripts/unifiedEntityBrowser.js` | Unified Entity Browser |
-| `scripts/entityGroupBrowser.js` | EntityGroup Browser + CSV Reports |
+| `scripts/entityGroupBrowser.js` | EntityGroup Browser + CSV Reports + Collections Report |
+| `scripts/export/csvReports.js` | CSV export functions including Collections Report (added Feb 2026) |
 | `scripts/entityRenderer.js` | Entity details popup windows |
 | `scripts/export/lightweightExporter.js` | Lightweight JSON export |
 | `scripts/streetNameBrowser.js` | StreetName alias management (added Jan 2026) |
@@ -1219,22 +1296,26 @@ Breaking these = Can't Use Alias-Aware Features
 
 ---
 
-**Document Version**: 2.1
+**Document Version**: 2.2
 **Created**: December 26, 2025
-**Last Updated**: January 27, 2026
+**Last Updated**: February 3, 2026
 
-**Version 2.1 Changes (January 27, 2026)**:
-- Fixed Entity Class Hierarchy: Added CompositeHousehold and NonHuman classes (Section 2.1)
-- Fixed Info Class Hierarchy: Removed non-existent IndividualOtherInfo (Section 2.2)
-- Fixed Address class line number from 1654 to 1631 (Section 2.3)
-- Added householdInformationWeightedComparison to calculator registry (Section 3.4)
-- Fixed verification.js path notation (root folder, not scripts/) (Section 8.3)
-- Removed archived dataSourceManager.js from Critical Files (Section 8.5)
+**Version 2.2 Changes (February 3, 2026)**:
+- EntityGroup collection properties documentation - 6 new properties for aggregating member data (Section 2.6)
+- EntityGroup/EntityGroupDatabase added to CLASS_REGISTRY (Section 2.4)
+- IndividualName four-score compareTo() architecture (Section 3.4)
+- IndividualName database lookup system with resolveIndividualName() (Section 3.4)
+- Collections Report CSV export added to Tier 5 (Section 8.5)
 
 **Version 2.1 Changes (January 2026)**:
 - Added IndividualNameDatabase documentation (Section 2.6)
 - Added IndividualNameDatabase files to Tier 6 Critical Files Reference (Section 8.6)
 - Updated CLASS_REGISTRY with IndividualNameDatabase (Section 2.4)
+- Fixed Entity Class Hierarchy: Added CompositeHousehold and NonHuman classes (Section 2.1)
+- Fixed Info Class Hierarchy: Removed non-existent IndividualOtherInfo (Section 2.2)
+- Added householdInformationWeightedComparison to calculator registry (Section 3.4)
+- Fixed verification.js path notation (root folder, not scripts/) (Section 8.3)
+- Removed archived dataSourceManager.js from Critical Files (Section 8.5)
 
 **Version 2.0 Changes (January 2026)**:
 - Added StreetName class and biStreetName property documentation (Section 2.3)

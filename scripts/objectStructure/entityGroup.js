@@ -55,6 +55,15 @@ class EntityGroup {
         // Construction metadata
         this.constructionPhase = null;  // Which phase created this group (1-5)
         this.constructionTimestamp = null;  // When this group was created
+
+        // Member collections (populated by buildMemberCollections for multi-member groups)
+        // These aggregate unique identifiers from all member entities
+        this.individualNames = {};              // Key: IndividualNameDatabase key, Value: IndividualName object
+        this.unrecognizedIndividualNames = {};  // Key: normalized primaryAlias.term, Value: IndividualName object
+        this.blockIslandPOBoxes = {};           // Key: PO Box identifier (e.g., "123", "A"), Value: POBox object
+        this.blockIslandAddresses = {};         // Key: {fireNumber}:{streetNameDbKey}, Value: Address object
+        this.unrecognizedBIAddresses = {};      // Key: full address string, Value: Address object
+        this.offIslandAddresses = [];           // Array of Address objects (with alias deduplication)
     }
 
     /**
@@ -124,10 +133,8 @@ class EntityGroup {
             return;
         }
 
-        // Retrieve all member entities from database
-        const members = this.memberKeys
-            .map(key => entityDatabase[key])
-            .filter(entity => entity != null);
+        // Retrieve all member entities from database (using shared helper)
+        const members = this._getMemberEntities(entityDatabase);
 
         if (members.length < 2) {
             console.warn(`EntityGroup ${this.index}: Expected multiple members but found ${members.length}`);
@@ -138,6 +145,400 @@ class EntityGroup {
         // Determine appropriate entity type for consensus
         // Use AggregateHousehold as it's the superset of all entity properties
         this.consensusEntity = this._synthesizeConsensus(members);
+    }
+
+    /**
+     * Build member collections by aggregating identifiers from all member entities
+     * Populates: individualNames, unrecognizedIndividualNames, blockIslandPOBoxes,
+     *            blockIslandAddresses, unrecognizedBIAddresses, offIslandAddresses
+     * @param {Object} entityDatabase - The keyed entity database (unifiedEntityDatabase.entities)
+     */
+    buildMemberCollections(entityDatabase) {
+        // Reset collections
+        this.individualNames = {};
+        this.unrecognizedIndividualNames = {};
+        this.blockIslandPOBoxes = {};
+        this.blockIslandAddresses = {};
+        this.unrecognizedBIAddresses = {};
+        this.offIslandAddresses = [];
+
+        // Get member entities
+        const members = this._getMemberEntities(entityDatabase);
+
+        // Collect all raw data from members
+        const allNames = [];
+        const allAddresses = [];
+        const allPOBoxes = [];
+
+        for (const entity of members) {
+            allNames.push(...this._collectNamesFromEntity(entity));
+            allAddresses.push(...this._collectAddressesFromEntity(entity));
+            const poBox = this._collectPOBoxFromEntity(entity);
+            if (poBox) allPOBoxes.push(poBox);
+        }
+
+        // =====================================================================
+        // NAMES: Pass 1 - Collect recognized names into individualNames
+        // =====================================================================
+        for (const name of allNames) {
+            if (this._isNameFromDatabase(name)) {
+                // Recognized name - add to individualNames if not already present
+                const normalizedKey = name.primaryAlias?.term?.trim().toUpperCase() || '';
+                if (normalizedKey && !this.individualNames[normalizedKey]) {
+                    this.individualNames[normalizedKey] = name;
+                }
+            }
+        }
+
+        // =====================================================================
+        // NAMES: Pass 2 - Process unrecognized names
+        // =====================================================================
+        for (const name of allNames) {
+            if (!this._isNameFromDatabase(name)) {
+                // Unrecognized - try to match to existing recognized names
+                const matched = this._tryMatchToExistingName(name);
+                if (!matched) {
+                    // No match - record in unrecognizedIndividualNames
+                    const normalizedKey = name.primaryAlias?.term?.trim().toUpperCase() || '';
+                    if (normalizedKey && !this.unrecognizedIndividualNames[normalizedKey]) {
+                        this.unrecognizedIndividualNames[normalizedKey] = name;
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
+        // PO BOXES: Exact keying
+        // =====================================================================
+        for (const poBox of allPOBoxes) {
+            const boxId = poBox.primaryAlias?.term || '';
+            if (boxId && !this.blockIslandPOBoxes[boxId]) {
+                this.blockIslandPOBoxes[boxId] = poBox;
+            }
+        }
+
+        // =====================================================================
+        // ADDRESSES: Classify and process (excluding PO Box addresses)
+        // =====================================================================
+        const biAddresses = [];
+        const offIslandAddressList = [];
+
+        for (const address of allAddresses) {
+            // Skip PO Box addresses - they're handled separately in blockIslandPOBoxes
+            const secUnitType = address.secUnitType?.term?.toUpperCase() || '';
+            if (secUnitType.includes('PO BOX') || secUnitType.includes('P.O. BOX') || secUnitType === 'PO' || secUnitType === 'BOX') {
+                continue;
+            }
+
+            // Check if Block Island address
+            const isBI = address.isBlockIslandAddress?.term === 'true' ||
+                         address.isBlockIslandAddress?.term === true ||
+                         address.zipCode?.term === '02807';
+
+            if (isBI) {
+                biAddresses.push(address);
+            } else {
+                offIslandAddressList.push(address);
+            }
+        }
+
+        // =====================================================================
+        // BI ADDRESSES: Pass 1 - Collect recognized addresses
+        // =====================================================================
+        for (const address of biAddresses) {
+            // Recognized if has biStreetName with a database key
+            const hasRecognizedStreet = address.biStreetName?.primaryAlias?.term;
+            if (hasRecognizedStreet) {
+                const fireNum = address.streetNumber?.term || '';
+                const streetKey = address.biStreetName.primaryAlias.term;
+                const compositeKey = `${fireNum}:${streetKey}`;
+                if (!this.blockIslandAddresses[compositeKey]) {
+                    this.blockIslandAddresses[compositeKey] = address;
+                }
+            }
+        }
+
+        // =====================================================================
+        // BI ADDRESSES: Pass 2 - Process unrecognized BI addresses
+        // =====================================================================
+        for (const address of biAddresses) {
+            const hasRecognizedStreet = address.biStreetName?.primaryAlias?.term;
+            if (!hasRecognizedStreet) {
+                // Unrecognized - try to match to existing recognized addresses
+                const matched = this._tryMatchToExistingBIAddress(address);
+                if (!matched) {
+                    // No match - record in unrecognizedBIAddresses
+                    const addressKey = address.toString() || `${address.streetNumber?.term || ''} ${address.streetName?.term || ''}`.trim();
+                    if (addressKey && !this.unrecognizedBIAddresses[addressKey]) {
+                        this.unrecognizedBIAddresses[addressKey] = address;
+                    }
+                }
+            }
+        }
+
+        // =====================================================================
+        // OFF-ISLAND ADDRESSES: Deduplicate with alias structure
+        // =====================================================================
+        this.offIslandAddresses = this._deduplicateWithAliasStructure(offIslandAddressList);
+    }
+
+    /**
+     * Retrieve all member entity objects from the database
+     * Shared helper used by both buildConsensusEntity() and buildMemberCollections()
+     * @param {Object} entityDatabase - The keyed entity database (unifiedEntityDatabase.entities)
+     * @returns {Array<Entity>} Array of member entity objects (excludes nulls)
+     * @private
+     */
+    _getMemberEntities(entityDatabase) {
+        return this.memberKeys
+            .map(key => entityDatabase[key])
+            .filter(entity => entity != null);
+    }
+
+    /**
+     * Collect all IndividualName objects from an entity
+     * Extracts names from entity.name.identifier (if IndividualName) and entity.individuals array
+     * @param {Entity} entity - Entity to extract names from
+     * @returns {Array<IndividualName>} Array of IndividualName objects
+     * @private
+     */
+    _collectNamesFromEntity(entity) {
+        const names = [];
+
+        // Check entity's own name - entity.name is directly the name object (IndividualName, HouseholdName, etc.)
+        if (entity.name && entity.name instanceof IndividualName) {
+            names.push(entity.name);
+        }
+
+        // Check individuals array (AggregateHousehold entities have this)
+        // Each individual has a .name property that is directly an IndividualName
+        if (entity.individuals && Array.isArray(entity.individuals)) {
+            for (const individual of entity.individuals) {
+                if (individual.name && individual.name instanceof IndividualName) {
+                    names.push(individual.name);
+                }
+            }
+        }
+
+        return names;
+    }
+
+    /**
+     * Collect all Address objects from an entity (excluding PO Boxes)
+     * Extracts addresses from entity.contactInfo.primaryAddress and secondaryAddress array
+     * @param {Entity} entity - Entity to extract addresses from
+     * @returns {Array<Address>} Array of Address objects
+     * @private
+     */
+    _collectAddressesFromEntity(entity) {
+        const addresses = [];
+
+        if (!entity.contactInfo) {
+            return addresses;
+        }
+
+        // Collect primary address
+        if (entity.contactInfo.primaryAddress) {
+            addresses.push(entity.contactInfo.primaryAddress);
+        }
+
+        // Collect secondary addresses
+        if (entity.contactInfo.secondaryAddress && Array.isArray(entity.contactInfo.secondaryAddress)) {
+            addresses.push(...entity.contactInfo.secondaryAddress);
+        }
+
+        return addresses;
+    }
+
+    /**
+     * Collect PO Box from an entity
+     * Extracts PO Box from entity.contactInfo.poBox
+     * @param {Entity} entity - Entity to extract PO Box from
+     * @returns {PoBox|null} PoBox object or null if none
+     * @private
+     */
+    _collectPOBoxFromEntity(entity) {
+        if (!entity.contactInfo || !entity.contactInfo.poBox) {
+            return null;
+        }
+        return entity.contactInfo.poBox;
+    }
+
+    /**
+     * Check if an IndividualName originated from the IndividualNameDatabase
+     * Checks the sourceMap for 'INDIVIDUAL_NAME_DATABASE_BUILDER' marker
+     * @param {IndividualName} name - Name to check
+     * @returns {boolean} True if name is from the database
+     * @private
+     */
+    _isNameFromDatabase(name) {
+        const sourceMap = name?.primaryAlias?.sourceMap;
+        if (sourceMap instanceof Map) {
+            return sourceMap.has('INDIVIDUAL_NAME_DATABASE_BUILDER');
+        }
+        return false;
+    }
+
+    /**
+     * Try to match an unrecognized name to an existing recognized name in this.individualNames
+     * If matched, adds to the existing name's alternatives (homonyms or candidates)
+     * @param {IndividualName} name - The unrecognized name to match
+     * @returns {boolean} True if matched to an existing name, false otherwise
+     * @private
+     */
+    _tryMatchToExistingName(name) {
+        // Get thresholds - these MUST be available, throw if not
+        if (typeof window === 'undefined' || !window.getIndividualNameHomonymThreshold || !window.getIndividualNameSynonymThreshold) {
+            throw new Error('_tryMatchToExistingName requires window.getIndividualNameHomonymThreshold and window.getIndividualNameSynonymThreshold to be defined');
+        }
+
+        const homonymThreshold = window.getIndividualNameHomonymThreshold();
+        const synonymThreshold = window.getIndividualNameSynonymThreshold();
+
+        // Find BEST match across all existing names (not first match)
+        let bestMatch = null;
+        let bestScore = 0;
+
+        for (const [key, existingName] of Object.entries(this.individualNames)) {
+            // IndividualName.compareTo() returns {primary, homonym, synonym, candidate}
+            const scores = name.compareTo(existingName);
+            const maxScore = Math.max(scores.primary, scores.homonym, scores.synonym, scores.candidate);
+
+            if (maxScore > bestScore) {
+                bestScore = maxScore;
+                bestMatch = existingName;
+            }
+        }
+
+        // Apply threshold logic to best match
+        if (bestMatch && bestScore >= homonymThreshold) {
+            // Add to homonyms (memory-resident only)
+            if (!bestMatch.alternatives) bestMatch.alternatives = {};
+            if (!bestMatch.alternatives.homonyms) bestMatch.alternatives.homonyms = [];
+            bestMatch.alternatives.homonyms.push(name);
+            return true;
+        } else if (bestMatch && bestScore >= synonymThreshold) {
+            // Add to candidates (promoted because same EntityGroup = corroborating evidence)
+            if (!bestMatch.alternatives) bestMatch.alternatives = {};
+            if (!bestMatch.alternatives.candidates) bestMatch.alternatives.candidates = [];
+            bestMatch.alternatives.candidates.push(name);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Try to match an unrecognized BI address to an existing recognized address in this.blockIslandAddresses
+     * If matched, adds to the existing address's alternatives (homonyms or candidates)
+     * @param {Address} address - The unrecognized BI address to match
+     * @returns {boolean} True if matched to an existing address, false otherwise
+     * @private
+     */
+    _tryMatchToExistingBIAddress(address) {
+        // Get thresholds from MATCH_CRITERIA - these MUST be available, throw if not
+        if (typeof window === 'undefined' || !window.MATCH_CRITERIA) {
+            throw new Error('_tryMatchToExistingBIAddress requires window.MATCH_CRITERIA to be defined');
+        }
+        if (!window.MATCH_CRITERIA.trueMatch?.contactInfoAlone || !window.MATCH_CRITERIA.nearMatch?.contactInfoAlone) {
+            throw new Error('_tryMatchToExistingBIAddress requires MATCH_CRITERIA.trueMatch.contactInfoAlone and MATCH_CRITERIA.nearMatch.contactInfoAlone');
+        }
+
+        const homonymThreshold = window.MATCH_CRITERIA.trueMatch.contactInfoAlone;
+        const synonymThreshold = window.MATCH_CRITERIA.nearMatch.contactInfoAlone;
+
+        // Find BEST match across all existing addresses (not first match)
+        let bestMatch = null;
+        let bestScore = 0;
+
+        for (const [key, existingAddress] of Object.entries(this.blockIslandAddresses)) {
+            // Address.compareTo() returns a numeric score
+            const score = address.compareTo(existingAddress);
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestMatch = existingAddress;
+            }
+        }
+
+        // Apply threshold logic to best match
+        if (bestMatch && bestScore >= homonymThreshold) {
+            // Add to homonyms (memory-resident only)
+            if (!bestMatch.alternatives) bestMatch.alternatives = {};
+            if (!bestMatch.alternatives.homonyms) bestMatch.alternatives.homonyms = [];
+            bestMatch.alternatives.homonyms.push(address);
+            return true;
+        } else if (bestMatch && bestScore >= synonymThreshold) {
+            // Add to candidates (promoted because same EntityGroup = corroborating evidence)
+            if (!bestMatch.alternatives) bestMatch.alternatives = {};
+            if (!bestMatch.alternatives.candidates) bestMatch.alternatives.candidates = [];
+            bestMatch.alternatives.candidates.push(address);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Deduplicate addresses using alias structure
+     * First address becomes primary, subsequent addresses are compared and either:
+     * - Added to an existing address's homonyms/candidates if they match
+     * - Added as a new primary entry if they don't match any existing
+     * @param {Array<Address>} addresses - Array of addresses to deduplicate
+     * @returns {Array<Address>} Deduplicated array with alias structure populated
+     * @private
+     */
+    _deduplicateWithAliasStructure(addresses) {
+        if (!addresses || addresses.length === 0) return [];
+        if (addresses.length === 1) return addresses;
+
+        // Get thresholds from MATCH_CRITERIA - these MUST be available, throw if not
+        if (typeof window === 'undefined' || !window.MATCH_CRITERIA) {
+            throw new Error('_deduplicateWithAliasStructure requires window.MATCH_CRITERIA to be defined');
+        }
+        if (!window.MATCH_CRITERIA.trueMatch?.contactInfoAlone || !window.MATCH_CRITERIA.nearMatch?.contactInfoAlone) {
+            throw new Error('_deduplicateWithAliasStructure requires MATCH_CRITERIA.trueMatch.contactInfoAlone and MATCH_CRITERIA.nearMatch.contactInfoAlone');
+        }
+
+        const homonymThreshold = window.MATCH_CRITERIA.trueMatch.contactInfoAlone;
+        const synonymThreshold = window.MATCH_CRITERIA.nearMatch.contactInfoAlone;
+
+        const unique = [];
+
+        for (const address of addresses) {
+            if (!address) continue;
+
+            // Find BEST match across all existing unique addresses (not first match)
+            let bestMatch = null;
+            let bestScore = 0;
+
+            for (const existing of unique) {
+                const score = address.compareTo(existing);
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = existing;
+                }
+            }
+
+            // Apply threshold logic to best match
+            if (bestMatch && bestScore >= homonymThreshold) {
+                // Add to homonyms
+                if (!bestMatch.alternatives) bestMatch.alternatives = {};
+                if (!bestMatch.alternatives.homonyms) bestMatch.alternatives.homonyms = [];
+                bestMatch.alternatives.homonyms.push(address);
+            } else if (bestMatch && bestScore >= synonymThreshold) {
+                // Add to candidates (promoted)
+                if (!bestMatch.alternatives) bestMatch.alternatives = {};
+                if (!bestMatch.alternatives.candidates) bestMatch.alternatives.candidates = [];
+                bestMatch.alternatives.candidates.push(address);
+            } else {
+                // No match above threshold - add as new unique entry
+                unique.push(address);
+            }
+        }
+
+        return unique;
     }
 
     /**
@@ -275,13 +676,11 @@ class EntityGroup {
                 if (i === j) continue;
 
                 try {
-                    // Use compareTo if available
-                    if (typeof values[i].compareTo === 'function') {
-                        const score = values[i].compareTo(values[j]);
-                        if (typeof score === 'number') {
-                            totalScore += score;
-                            comparisons++;
-                        }
+                    // Use safeNumericCompare for proper handling of IndividualName vs other types
+                    const score = window.safeNumericCompare(values[i], values[j]);
+                    if (score !== null) {
+                        totalScore += score;
+                        comparisons++;
                     }
                 } catch (e) {
                     // Skip comparison errors
@@ -631,11 +1030,10 @@ class EntityGroup {
 
             for (const existing of unique) {
                 try {
-                    // Compare names if both have compareTo
-                    if (individual.name && existing.name &&
-                        typeof individual.name.compareTo === 'function') {
-                        const similarity = individual.name.compareTo(existing.name);
-                        if (similarity >= NAME_SIMILARITY_THRESHOLD) {
+                    // Compare names using safeNumericCompare
+                    if (individual.name && existing.name) {
+                        const similarity = window.safeNumericCompare(individual.name, existing.name);
+                        if (similarity !== null && similarity >= NAME_SIMILARITY_THRESHOLD) {
                             isDuplicate = true;
                             break;
                         }
@@ -653,67 +1051,6 @@ class EntityGroup {
         return unique;
     }
 
-    /**
-     * Serialize EntityGroup for storage
-     * @returns {Object} JSON-serializable object
-     */
-    serialize() {
-        // Note: serializeWithTypes returns a STRING, but we need an OBJECT for proper nesting
-        // Parse it back to an object to avoid double-serialization when the parent is JSON.stringify'd
-        let consensusEntityObj = null;
-        if (this.consensusEntity) {
-            const serializedString = serializeWithTypes(this.consensusEntity);
-            consensusEntityObj = JSON.parse(serializedString);
-        }
-
-        return {
-            type: 'EntityGroup',
-            index: this.index,
-            foundingMemberKey: this.foundingMemberKey,
-            memberKeys: this.memberKeys.slice(),
-            nearMissKeys: this.nearMissKeys.slice(),
-            hasBloomerangMember: this.hasBloomerangMember,
-            consensusEntity: consensusEntityObj,
-            constructionPhase: this.constructionPhase,
-            constructionTimestamp: this.constructionTimestamp
-        };
-    }
-
-    /**
-     * Deserialize EntityGroup from stored data
-     * @param {Object} data - Serialized EntityGroup data
-     * @returns {EntityGroup} Reconstructed EntityGroup instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'EntityGroup') {
-            throw new Error('Invalid EntityGroup serialization format');
-        }
-
-        const group = new EntityGroup(data.index, data.foundingMemberKey);
-
-        // Restore member keys (founding member already added in constructor)
-        group.memberKeys = data.memberKeys.slice();
-        group.nearMissKeys = data.nearMissKeys.slice();
-        group.hasBloomerangMember = data.hasBloomerangMember;
-        group.constructionPhase = data.constructionPhase;
-        group.constructionTimestamp = data.constructionTimestamp;
-
-        // Deserialize consensus entity if present
-        if (data.consensusEntity) {
-            group.consensusEntity = deserializeWithTypes(JSON.stringify(data.consensusEntity));
-        }
-
-        return group;
-    }
-
-    /**
-     * Factory method for deserialization
-     * @param {Object} data - Serialized data object
-     * @returns {EntityGroup} Reconstructed instance
-     */
-    static fromSerializedData(data) {
-        return EntityGroup.deserialize(data);
-    }
 }
 
 
@@ -940,76 +1277,16 @@ class EntityGroupDatabase {
     }
 
     /**
-     * Build all consensus entities for groups with multiple members
+     * Build all consensus entities and member collections for groups with multiple members
      * @param {Object} entityDatabase - The keyed entity database (unifiedEntityDatabase.entities)
      */
     buildAllConsensusEntities(entityDatabase) {
         for (const group of this.getAllGroups()) {
             if (group.hasMultipleMembers()) {
+                group.buildMemberCollections(entityDatabase);
                 group.buildConsensusEntity(entityDatabase);
             }
         }
-    }
-
-    /**
-     * Serialize EntityGroupDatabase for storage
-     * @returns {Object} JSON-serializable object
-     */
-    serialize() {
-        const serializedGroups = {};
-        for (const [index, group] of Object.entries(this.groups)) {
-            serializedGroups[index] = group.serialize();
-        }
-
-        return {
-            type: 'EntityGroupDatabase',
-            version: '1.0',
-            groups: serializedGroups,
-            nextIndex: this.nextIndex,
-            assignedEntityKeys: Array.from(this.assignedEntityKeys),
-            constructionConfig: this.constructionConfig,
-            constructionTimestamp: this.constructionTimestamp,
-            constructionComplete: this.constructionComplete,
-            consensusBuiltTimestamp: this.consensusBuiltTimestamp || null,
-            stats: this.stats
-        };
-    }
-
-    /**
-     * Deserialize EntityGroupDatabase from stored data
-     * @param {Object} data - Serialized EntityGroupDatabase data
-     * @returns {EntityGroupDatabase} Reconstructed instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'EntityGroupDatabase') {
-            throw new Error('Invalid EntityGroupDatabase serialization format');
-        }
-
-        const db = new EntityGroupDatabase();
-
-        // Restore groups
-        for (const [index, groupData] of Object.entries(data.groups)) {
-            db.groups[index] = EntityGroup.deserialize(groupData);
-        }
-
-        db.nextIndex = data.nextIndex;
-        db.assignedEntityKeys = new Set(data.assignedEntityKeys);
-        db.constructionConfig = data.constructionConfig;
-        db.constructionTimestamp = data.constructionTimestamp;
-        db.constructionComplete = data.constructionComplete;
-        db.consensusBuiltTimestamp = data.consensusBuiltTimestamp || null;
-        db.stats = data.stats;
-
-        return db;
-    }
-
-    /**
-     * Factory method for deserialization
-     * @param {Object} data - Serialized data object
-     * @returns {EntityGroupDatabase} Reconstructed instance
-     */
-    static fromSerializedData(data) {
-        return EntityGroupDatabase.deserialize(data);
     }
 
     /**

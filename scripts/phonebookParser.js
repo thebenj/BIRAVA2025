@@ -857,8 +857,10 @@ function parsePhonebookNameWithCase31(nameString) {
 
     // Check if Case31Validator is available
     if (typeof Case31Validator === 'undefined') {
-        // Fallback to simple parsing if Case31Validator not loaded
-        return parseNameSimple(nameString);
+        // PRESERVED CODE - commented out as cautious step during recursion fix investigation
+        // Previously fell back to simple parsing if Case31Validator not loaded:
+        // return parseNameSimple(nameString);
+        throw new Error('parsePhonebookNameWithCase31: Case31Validator is not defined - this dependency must be loaded');
     }
 
     try {
@@ -870,10 +872,12 @@ function parsePhonebookNameWithCase31(nameString) {
         if (typeof VisionAppraisalNameParser === 'undefined' ||
             !VisionAppraisalNameParser.caseDefinitions ||
             !VisionAppraisalNameParser.caseDefinitions[caseType]) {
-            // Fallback with case type info
-            const simple = parseNameSimple(nameString);
-            simple.caseType = caseType;
-            return simple;
+            // PRESERVED CODE - commented out as cautious step during recursion fix investigation
+            // Previously fell back to simple parsing with case type info:
+            // const simple = parseNameSimple(nameString);
+            // simple.caseType = caseType;
+            // return simple;
+            throw new Error(`parsePhonebookNameWithCase31: VisionAppraisalNameParser missing or no case definition for case type "${caseType}"`);
         }
 
         // Build mock record for processor
@@ -896,11 +900,56 @@ function parsePhonebookNameWithCase31(nameString) {
         return extractNameComponentsFromEntity(entity, caseType, nameString);
 
     } catch (error) {
-        result.parseError = error.message;
-        // Fallback to simple parsing on error
-        const simple = parseNameSimple(nameString);
-        simple.parseError = error.message;
-        return simple;
+        // PRESERVED CODE - commented out as cautious step during recursion fix investigation
+        // Previously fell back to simple parsing on error:
+        // result.parseError = error.message;
+        // const simple = parseNameSimple(nameString);
+        // simple.parseError = error.message;
+        // return simple;
+        throw new Error(`parsePhonebookNameWithCase31: Error processing "${nameString}": ${error.message}`);
+    }
+}
+
+/**
+ * Get name components directly from Case31 system WITHOUT creating entities.
+ * This function calls the case processor with returnComponentsOnly=true to get
+ * parsed name components without triggering entity creation (avoiding recursion).
+ *
+ * @param {string} nameString - The name string to parse
+ * @returns {Object|null} Object with {firstName, lastName, otherNames, fullName} or null if case doesn't support component return
+ */
+function getNameComponentsFromCase31(nameString) {
+    if (!nameString || !nameString.trim()) {
+        return null;
+    }
+
+    // Check dependencies
+    if (typeof Case31Validator === 'undefined') {
+        throw new Error('getNameComponentsFromCase31: Case31Validator is not defined');
+    }
+    if (typeof VisionAppraisalNameParser === 'undefined' || !VisionAppraisalNameParser.caseDefinitions) {
+        throw new Error('getNameComponentsFromCase31: VisionAppraisalNameParser is not defined');
+    }
+
+    try {
+        // Detect case type
+        const caseType = Case31Validator.detectCase(nameString);
+        const caseDefinition = VisionAppraisalNameParser.caseDefinitions[caseType];
+
+        if (!caseDefinition || typeof caseDefinition.processor !== 'function') {
+            return null; // No case definition found
+        }
+
+        // Parse words and call processor with returnComponentsOnly=true
+        const words = Case31Validator.parseWords(nameString.trim().toUpperCase());
+        const result = caseDefinition.processor.call(VisionAppraisalNameParser, words, null, 0, true);
+
+        // result will be {firstName, lastName, otherNames, fullName} for Individual cases, or null for others
+        return result;
+
+    } catch (error) {
+        console.warn(`getNameComponentsFromCase31: Error parsing "${nameString}": ${error.message}`);
+        return null;
     }
 }
 
@@ -1419,4 +1468,5 @@ if (typeof window !== 'undefined') {
     window.PhonebookLineClassifier = PhonebookLineClassifier;
     window.viewLineTypeDistribution = viewLineTypeDistribution;
     window.viewRecordsByLineType = viewRecordsByLineType;
+    window.getNameComponentsFromCase31 = getNameComponentsFromCase31;
 }

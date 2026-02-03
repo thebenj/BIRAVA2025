@@ -106,6 +106,66 @@ class IndividualNameDatabase extends AliasedTermDatabase {
     }
 
     /**
+     * Look up an existing IndividualName that matches with score >= 0.99
+     * in any alias category (primary, homonym, synonym, candidate).
+     *
+     * Used during entity creation to reuse existing IndividualName objects
+     * rather than creating duplicates.
+     *
+     * @param {string} term - Name to look up
+     * @returns {IndividualName|null} Existing match if score >= 0.99, null otherwise
+     * @throws {Error} If database is not properly loaded
+     */
+    lookupExisting(term) {
+        // MIGRATION BYPASS: Control externally via window.BYPASS_INDIVIDUALNAME_LOOKUP
+        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = true to force legacy code path
+        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = false to enable actual lookup
+        const CODE_DEFAULT = true;  // Default if window variable not set
+        const bypassValue = (typeof window !== 'undefined' && typeof window.BYPASS_INDIVIDUALNAME_LOOKUP === 'boolean')
+            ? window.BYPASS_INDIVIDUALNAME_LOOKUP
+            : CODE_DEFAULT;
+
+        // Check bypass FIRST - if bypassing, return null without checking database
+        if (bypassValue) {
+            return null; // Forces legacy code path for migration testing
+        }
+
+        if (!this.entries || this.entries.size === 0) {
+            throw new Error('IndividualNameDatabase not loaded or empty');
+        }
+
+        const normalized = this._normalizeKey(term);
+
+        // Fast path: exact match in variation cache
+        if (this._variationCache.has(normalized)) {
+            const primaryKey = this._variationCache.get(normalized);
+            return this.entries.get(primaryKey)?.object || null;
+        }
+
+        // Slow path: similarity matching using compareTo()
+        const MATCH_THRESHOLD = 0.99;
+
+        for (const [, entry] of this.entries) {
+            const obj = entry.object;
+
+            if (typeof obj.compareTo === 'function') {
+                const scores = obj.compareTo(term);
+
+                if (typeof scores === 'object') {
+                    if (scores.primary >= MATCH_THRESHOLD ||
+                        scores.homonym >= MATCH_THRESHOLD ||
+                        scores.synonym >= MATCH_THRESHOLD ||
+                        scores.candidate >= MATCH_THRESHOLD) {
+                        return obj;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Find all individuals that match a last name
      * @param {string} lastName - Last name to search for
      * @returns {Array<IndividualName>} Matching IndividualName objects

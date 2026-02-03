@@ -2873,3 +2873,320 @@ window.generateEntityGroupRows = generateEntityGroupRows;
 window.extractAllNamesFromEntity = extractAllNamesFromEntity;
 window.extractGroupLastNames = extractGroupLastNames;
 window.extractGroupFirstNames = extractGroupFirstNames;
+
+// =============================================================================
+// COLLECTIONS REPORT
+// =============================================================================
+
+/**
+ * Headers for the Collections Report
+ * Reuses name/address columns for both consensus and collection data
+ */
+const COLLECTIONS_REPORT_HEADERS = [
+    'GroupIndex',       // 0: Group identifier
+    'RowType',          // 1: 'consensus' or 'collection'
+    'RowNum',           // 2: Collection row number (1, 2, 3...)
+    'Name',             // 3: Consensus name OR individualName
+    'NameKey',          // 4: Database key for individualName
+    'UnrecogName',      // 5: Unrecognized individual name (if any)
+    'FireNum',          // 6: Fire number (consensus OR blockIslandAddress)
+    'Street',           // 7: Street name (consensus OR blockIslandAddress)
+    'City',             // 8: City
+    'State',            // 9: State
+    'Zip',              // 10: Zip code
+    'UnrecogBIAddr',    // 11: Unrecognized BI address (full string)
+    'OffIslandAddr',    // 12: Off-island address (full formatted)
+    'POBox'             // 13: PO Box identifier
+];
+
+/**
+ * Format an IndividualName for display
+ * @param {Object} name - IndividualName object
+ * @returns {string} Formatted name string
+ */
+function formatIndividualName(name) {
+    if (!name) return '';
+    if (name.completeName) return cleanVATags(name.completeName);
+    if (name.primaryAlias?.term) return cleanVATags(name.primaryAlias.term);
+    return '';
+}
+
+/**
+ * Format a Block Island address for display
+ * @param {Object} address - Address object with biStreetName
+ * @returns {Object} {fireNum, street, city, state, zip}
+ */
+function formatBIAddress(address) {
+    if (!address) return { fireNum: '', street: '', city: '', state: '', zip: '' };
+
+    const fireNum = address.streetNumber || '';
+    const street = address.biStreetName?.primaryAlias?.term || address.streetName || '';
+    const city = address.city || 'Block Island';
+    const state = address.state || 'RI';
+    const zip = address.zipCode || '02807';
+
+    return { fireNum, street, city, state, zip };
+}
+
+/**
+ * Format an off-island address as a single string
+ * @param {Object} address - Address object
+ * @returns {string} Formatted address string
+ */
+function formatOffIslandAddress(address) {
+    if (!address) return '';
+
+    const parts = [];
+    if (address.streetNumber) parts.push(address.streetNumber);
+    if (address.streetName) parts.push(address.streetName);
+    if (address.streetType) parts.push(address.streetType);
+
+    const line1 = parts.join(' ');
+    const line2Parts = [];
+    if (address.city) line2Parts.push(address.city);
+    if (address.state) line2Parts.push(address.state);
+    if (address.zipCode) line2Parts.push(address.zipCode);
+
+    const line2 = line2Parts.join(', ');
+
+    return line1 && line2 ? `${line1}, ${line2}` : (line1 || line2);
+}
+
+/**
+ * Generate all rows for a single EntityGroup's collections report
+ * @param {Object} group - EntityGroup object
+ * @returns {Array<Array>} Array of row arrays
+ */
+function generateCollectionsReportRows(group) {
+    const rows = [];
+
+    // 1. Consensus row
+    const consensusEntity = group.consensusEntity;
+    const consensusRow = new Array(COLLECTIONS_REPORT_HEADERS.length).fill('');
+
+    consensusRow[0] = group.index;                              // GroupIndex
+    consensusRow[1] = 'consensus';                              // RowType
+    consensusRow[2] = '';                                       // RowNum (empty for consensus)
+    consensusRow[3] = assembleMailName(consensusEntity);        // Name
+    consensusRow[4] = '';                                       // NameKey (empty for consensus)
+    consensusRow[5] = '';                                       // UnrecogName
+
+    // Consensus address
+    const primaryAddr = consensusEntity?.contactInfo?.primaryAddress;
+    if (primaryAddr) {
+        const addrComp = formatBIAddress(primaryAddr);
+        consensusRow[6] = addrComp.fireNum;                     // FireNum
+        consensusRow[7] = addrComp.street;                      // Street
+        consensusRow[8] = addrComp.city;                        // City
+        consensusRow[9] = addrComp.state;                       // State
+        consensusRow[10] = addrComp.zip;                        // Zip
+    }
+
+    consensusRow[11] = '';                                      // UnrecogBIAddr
+    consensusRow[12] = '';                                      // OffIslandAddr
+
+    // Consensus PO Box
+    const poBox = consensusEntity?.contactInfo?.poBox;
+    consensusRow[13] = poBox?.primaryAlias?.term || '';         // POBox
+
+    rows.push(consensusRow);
+
+    // 2. Collection rows - get arrays from each collection
+    const indivNames = Object.entries(group.individualNames || {});
+    const unrecogNames = Object.entries(group.unrecognizedIndividualNames || {});
+    const poBoxes = Object.entries(group.blockIslandPOBoxes || {});
+    const biAddresses = Object.entries(group.blockIslandAddresses || {});
+    const unrecogBIAddrs = Object.entries(group.unrecognizedBIAddresses || {});
+    const offIslandAddrs = group.offIslandAddresses || [];
+
+    // Determine max collection size
+    const maxRows = Math.max(
+        indivNames.length,
+        unrecogNames.length,
+        poBoxes.length,
+        biAddresses.length,
+        unrecogBIAddrs.length,
+        offIslandAddrs.length
+    );
+
+    // Generate collection rows
+    for (let i = 0; i < maxRows; i++) {
+        const collRow = new Array(COLLECTIONS_REPORT_HEADERS.length).fill('');
+
+        collRow[0] = group.index;                               // GroupIndex
+        collRow[1] = 'collection';                              // RowType
+        collRow[2] = i + 1;                                     // RowNum (1-based)
+
+        // individualNames (reuse Name column)
+        if (i < indivNames.length) {
+            const [key, name] = indivNames[i];
+            collRow[3] = formatIndividualName(name);            // Name
+            collRow[4] = key;                                   // NameKey
+        }
+
+        // unrecognizedIndividualNames
+        if (i < unrecogNames.length) {
+            const [key, name] = unrecogNames[i];
+            collRow[5] = formatIndividualName(name);            // UnrecogName
+        }
+
+        // blockIslandAddresses (reuse address columns)
+        if (i < biAddresses.length) {
+            const [key, address] = biAddresses[i];
+            const addrComp = formatBIAddress(address);
+            collRow[6] = addrComp.fireNum;                      // FireNum
+            collRow[7] = addrComp.street;                       // Street
+            collRow[8] = addrComp.city;                         // City
+            collRow[9] = addrComp.state;                        // State
+            collRow[10] = addrComp.zip;                         // Zip
+        }
+
+        // unrecognizedBIAddresses
+        if (i < unrecogBIAddrs.length) {
+            const [key, address] = unrecogBIAddrs[i];
+            collRow[11] = key;                                  // UnrecogBIAddr (key is the full address string)
+        }
+
+        // offIslandAddresses
+        if (i < offIslandAddrs.length) {
+            const address = offIslandAddrs[i];
+            collRow[12] = formatOffIslandAddress(address);      // OffIslandAddr
+        }
+
+        // blockIslandPOBoxes
+        if (i < poBoxes.length) {
+            const [key, poBox] = poBoxes[i];
+            collRow[13] = key;                                  // POBox (key is the box identifier)
+        }
+
+        rows.push(collRow);
+    }
+
+    return rows;
+}
+
+/**
+ * Export Collections Report to CSV
+ * @param {Object} groupDatabase - EntityGroupDatabase
+ * @returns {Object} {csv, stats}
+ */
+function exportCollectionsReport(groupDatabase) {
+    const groups = Object.values(groupDatabase.groups || {});
+
+    // Filter to multi-member groups only
+    const multiMemberGroups = groups.filter(g =>
+        g.memberKeys && g.memberKeys.length > 1
+    );
+
+    // Build header row
+    const headerRow = COLLECTIONS_REPORT_HEADERS.map(h => csvEscape(h)).join(',');
+
+    // Generate all rows
+    const allRows = [];
+    for (const group of multiMemberGroups) {
+        const groupRows = generateCollectionsReportRows(group);
+        allRows.push(...groupRows);
+    }
+
+    // Build CSV
+    const dataRows = allRows.map(row => row.map(v => csvEscape(v)).join(','));
+    const csv = [headerRow, ...dataRows].join('\n');
+
+    return {
+        csv,
+        stats: {
+            groupCount: multiMemberGroups.length,
+            rowCount: allRows.length
+        }
+    };
+}
+
+/**
+ * Download Collections Report (triggered from UI)
+ */
+function downloadCollectionsReport() {
+    const db = entityGroupBrowser.loadedDatabase;
+    if (!db) {
+        throw new Error('EntityGroup database not loaded');
+    }
+
+    if (!window.unifiedEntityDatabase?.entities) {
+        throw new Error('Unified Entity Database not loaded');
+    }
+
+    // Ensure consensus entities and collections are built
+    if (typeof ensureConsensusBuilt === 'function') {
+        ensureConsensusBuilt(db, window.unifiedEntityDatabase.entities);
+    }
+
+    showEntityGroupStatus('Generating Collections Report...', 'loading');
+
+    try {
+        const result = exportCollectionsReport(db);
+
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const filename = `collections-report-${dateStr}.csv`;
+
+        const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showEntityGroupStatus(
+            `Collections Report downloaded: ${result.stats.groupCount} groups, ${result.stats.rowCount} rows`,
+            'success'
+        );
+    } catch (error) {
+        console.error('Collections Report error:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    }
+}
+
+/**
+ * Run Collections Report - wrapper that loads databases if needed
+ * Called from UI button. Loads databases from Google Drive if not already loaded.
+ */
+async function runCollectionsReport() {
+    try {
+        // Step 1: Check if unified entity database is loaded, load if not
+        if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+            showEntityGroupStatus('Loading Unified Entity Database...', 'loading');
+            await loadUnifiedDatabaseForEntityGroups();
+
+            if (!window.unifiedEntityDatabase || !window.unifiedEntityDatabase.entities) {
+                showEntityGroupStatus('Failed to load Unified Entity Database', 'error');
+                return;
+            }
+        }
+
+        // Step 2: Check if EntityGroup database is loaded, load if not
+        if (!entityGroupBrowser.loadedDatabase) {
+            showEntityGroupStatus('Loading EntityGroup database...', 'loading');
+            await loadEntityGroupDatabase();
+
+            if (!entityGroupBrowser.loadedDatabase) {
+                showEntityGroupStatus('Failed to load EntityGroup database', 'error');
+                return;
+            }
+        }
+
+        // Step 3: Run the report
+        downloadCollectionsReport();
+
+    } catch (error) {
+        console.error('Collections Report error:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    }
+}
+
+// Export Collections Report functions
+window.COLLECTIONS_REPORT_HEADERS = COLLECTIONS_REPORT_HEADERS;
+window.generateCollectionsReportRows = generateCollectionsReportRows;
+window.exportCollectionsReport = exportCollectionsReport;
+window.downloadCollectionsReport = downloadCollectionsReport;
+window.runCollectionsReport = runCollectionsReport;

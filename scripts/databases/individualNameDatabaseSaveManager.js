@@ -2179,7 +2179,7 @@ async function syncDevToOriginal() {
     console.log(`DEV entries: ${results.devCount}`);
     console.log(`INDEX entries: ${results.indexCount}`);
     console.log(`Original entries before: ${results.originalCount}`);
-    console.log(`FileIds added from INDEX: ${fileIdsAdded}`);
+    console.log(`FileIds added from INDEX: ${results.devCount}`);
     console.log(`Keys with special chars restored: ${results.keysRestored}`);
     console.log(`New entries (no original counterpart): ${results.newKeys}`);
     console.log(`Total synced to Original: ${results.totalSynced}`);

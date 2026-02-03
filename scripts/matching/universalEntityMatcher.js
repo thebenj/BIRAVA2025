@@ -137,12 +137,14 @@ function compareIndividualToEntityDirect(individual, entity) {
         const name2Type = entity.name.constructor?.name;
 
         if (name1Type === name2Type) {
-            // Same type - use native compareTo
-            try {
-                const nameResult = individual.name.compareTo(entity.name);
+            // Same type - use safeNumericCompare for proper IndividualName handling
+            const nameResult = window.safeNumericCompare
+                ? window.safeNumericCompare(individual.name, entity.name)
+                : null;
+            if (nameResult !== null) {
                 nameScore = typeof nameResult === 'number' ? nameResult : (nameResult?.overallSimilarity || 0);
                 nameComparisonMethod = 'native';
-            } catch (e) {
+            } else {
                 // Fallback to cross-type comparison
                 nameScore = crossTypeNameComparison(individual.name, entity.name);
                 nameComparisonMethod = 'cross-type-fallback';
@@ -318,12 +320,14 @@ function compareSameLocationEntities(entity1, entity2) {
         const name2Type = name2.constructor?.name;
 
         if (name1Type === name2Type) {
-            // Same type - use native compareTo
-            try {
-                const nameResult = name1.compareTo(name2);
+            // Same type - use safeNumericCompare for proper IndividualName handling
+            const nameResult = window.safeNumericCompare
+                ? window.safeNumericCompare(name1, name2)
+                : null;
+            if (nameResult !== null) {
                 nameScore = typeof nameResult === 'number' ? nameResult : (nameResult?.overallSimilarity || nameResult?.similarity || 0);
                 nameComparisonMethod = 'native';
-            } catch (e) {
+            } else {
                 // Fallback to cross-type comparison
                 nameScore = (typeof crossTypeNameComparison === 'function')
                     ? crossTypeNameComparison(name1, name2)

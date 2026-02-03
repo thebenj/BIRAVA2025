@@ -582,15 +582,12 @@ class Aliased {
                 }
 
                 try {
-                    if (typeof aliasedObjects[i].compareTo === 'function') {
-                        const score = aliasedObjects[i].compareTo(aliasedObjects[j]);
-                        if (typeof score === 'number') {
-                            totalScore += score;
-                            comparisons++;
-                            similarityScores[i][j] = score;
-                        } else {
-                            similarityScores[i][j] = 0;
-                        }
+                    // Use safeNumericCompare for proper handling of IndividualName vs other types
+                    const score = safeNumericCompare(aliasedObjects[i], aliasedObjects[j]);
+                    if (score !== null) {
+                        totalScore += score;
+                        comparisons++;
+                        similarityScores[i][j] = score;
                     } else {
                         similarityScores[i][j] = 0;
                     }
@@ -777,6 +774,25 @@ class Aliased {
             return genericObjectCompareTo(this, other, ['alternatives'], detailed);
         } else {
             // Clear error message if dependency missing
+            throw new Error('genericObjectCompareTo utility not available - ensure utils.js is loaded first');
+        }
+    }
+
+    /**
+     * Numeric comparison returning a single weighted score (0-1).
+     * Uses genericObjectCompareTo with this object's comparisonWeights.
+     *
+     * This method provides consistent numeric comparison across all Aliased subclasses,
+     * while allowing subclasses to override compareTo() for alias-based comparison.
+     *
+     * @param {Aliased|string} other - Object or string to compare
+     * @param {boolean} [returnDetails=false] - If true, return detailed breakdown
+     * @returns {number} Weighted similarity score (0-1)
+     */
+    numericCompareTo(other, returnDetails = false) {
+        if (typeof genericObjectCompareTo === 'function') {
+            return genericObjectCompareTo(this, other, ['alternatives'], returnDetails);
+        } else {
             throw new Error('genericObjectCompareTo utility not available - ensure utils.js is loaded first');
         }
     }
@@ -1328,9 +1344,262 @@ class IndividualName extends ComplexIdentifiers {
         };
         // comparisonCalculator already set to defaultWeightedComparison in constructor inheritance
     }
+
+    /**
+     * Four-score alias comparison for IndividualName.
+     * Returns scores for each alias category like StreetName.compareTo().
+     *
+     * Uses the same weighted comparison logic as numericCompareTo() (via defaultWeightedComparison)
+     * which includes:
+     * - Component comparison with levenshteinSimilarity
+     * - Missing-different-fields adjustment
+     * - Permutation-based comparison
+     * - Returns max of weighted and permutation scores
+     *
+     * @param {IndividualName|string|Object} other - IndividualName, name string, or object with name components
+     * @returns {Object} Four-score object { primary, homonym, synonym, candidate }
+     *   - Scores are 0-1 similarity values
+     *   - -1 indicates category has no entries to compare against
+     *   - synonym is always 0 (synonyms represent different relationship type)
+     */
+    compareTo(other) {
+        const result = { primary: 0, homonym: -1, synonym: 0, candidate: -1 };
+
+        // Helper: Parse a string or extract components from an object
+        const getComponents = (input) => {
+            if (!input) return null;
+
+            if (typeof input === 'string') {
+                // Parse string using Case31 system (without entity creation to avoid recursion)
+                if (typeof getNameComponentsFromCase31 === 'function') {
+                    const parsed = getNameComponentsFromCase31(input);
+                    if (parsed) {
+                        // Only return components for Individual entity types
+                        // Non-individuals (Business, AggregateHousehold, LegalConstruct) should not match
+                        if (parsed.entityType && parsed.entityType !== 'Individual') {
+                            return null;
+                        }
+                        return {
+                            firstName: parsed.firstName || '',
+                            lastName: parsed.lastName || '',
+                            otherNames: parsed.otherNames || ''
+                        };
+                    }
+                    // parsed is null - fall through to simple parsing
+                }
+                // Fallback: simple space-based parsing (last word = lastName, rest = firstName)
+                const parts = input.trim().toUpperCase().split(/\s+/);
+                if (parts.length === 1) {
+                    return { firstName: '', lastName: parts[0], otherNames: '' };
+                } else if (parts.length === 2) {
+                    return { firstName: parts[0], lastName: parts[1], otherNames: '' };
+                } else {
+                    return {
+                        firstName: parts[0],
+                        lastName: parts[parts.length - 1],
+                        otherNames: parts.slice(1, -1).join(' ')
+                    };
+                }
+            } else if (input.firstName !== undefined || input.lastName !== undefined) {
+                // Object with name components
+                return {
+                    firstName: input.firstName || '',
+                    lastName: input.lastName || '',
+                    otherNames: input.otherNames || ''
+                };
+            } else if (input.primaryAlias?.term) {
+                // IndividualName or similar - recurse with the term
+                return getComponents(input.primaryAlias.term);
+            }
+
+            return null;
+        };
+
+        // Helper: Compare two component sets using defaultWeightedComparison
+        const compareComponents = (comp1, comp2) => {
+            if (!comp1 || !comp2) return 0;
+
+            // Create temp object with comparisonWeights for defaultWeightedComparison
+            const tempObj = {
+                firstName: comp1.firstName || '',
+                lastName: comp1.lastName || '',
+                otherNames: comp1.otherNames || '',
+                comparisonWeights: { lastName: 0.5, firstName: 0.4, otherNames: 0.1 }
+            };
+
+            const otherObj = {
+                firstName: comp2.firstName || '',
+                lastName: comp2.lastName || '',
+                otherNames: comp2.otherNames || ''
+            };
+
+            // Call defaultWeightedComparison with tempObj as 'this'
+            if (typeof defaultWeightedComparison === 'function') {
+                return defaultWeightedComparison.call(tempObj, otherObj, false);
+            }
+
+            // Fallback: simple levenshtein on full names
+            const fullName1 = [comp1.firstName, comp1.otherNames, comp1.lastName].filter(Boolean).join(' ');
+            const fullName2 = [comp2.firstName, comp2.otherNames, comp2.lastName].filter(Boolean).join(' ');
+            return typeof levenshteinSimilarity === 'function'
+                ? levenshteinSimilarity(fullName1, fullName2)
+                : (fullName1.toUpperCase() === fullName2.toUpperCase() ? 1.0 : 0.0);
+        };
+
+        // Helper: Get components from an AttributedTerm alias
+        const getAliasComponents = (alias) => {
+            if (!alias) return null;
+            const term = alias.term || alias;
+            return getComponents(term);
+        };
+
+        // Get this IndividualName's components (use stored fields directly)
+        const thisComponents = {
+            firstName: this.firstName || '',
+            lastName: this.lastName || '',
+            otherNames: this.otherNames || ''
+        };
+
+        // Determine input type and collect aliases to compare against
+        let otherAliases = []; // Array of component objects to compare against
+
+        if (typeof other === 'string') {
+            // CASE 1: String input - parse and compare to all of this's aliases
+            const otherComp = getComponents(other);
+            if (otherComp) {
+                otherAliases = [otherComp];
+            }
+        } else if (other?.constructor?.name === 'IndividualName') {
+            // CASE 2: IndividualName input - collect all of other's aliases (except synonyms)
+            // Add primary
+            otherAliases.push({
+                firstName: other.firstName || '',
+                lastName: other.lastName || '',
+                otherNames: other.otherNames || ''
+            });
+
+            // Add homonyms
+            if (other.alternatives?.homonyms) {
+                for (const h of other.alternatives.homonyms) {
+                    const comp = getAliasComponents(h);
+                    if (comp) otherAliases.push(comp);
+                }
+            }
+
+            // Add candidates
+            if (other.alternatives?.candidates) {
+                for (const c of other.alternatives.candidates) {
+                    const comp = getAliasComponents(c);
+                    if (comp) otherAliases.push(comp);
+                }
+            }
+            // Note: synonyms are intentionally excluded
+        } else if (other?.firstName !== undefined || other?.lastName !== undefined) {
+            // CASE 3: Object with name components
+            otherAliases = [getComponents(other)];
+        } else if (other?.primaryAlias?.term) {
+            // CASE 4: Object with primaryAlias (duck typing)
+            const comp = getComponents(other.primaryAlias.term);
+            if (comp) otherAliases = [comp];
+        }
+
+        // If no valid aliases to compare, return default result
+        if (otherAliases.length === 0) {
+            return result;
+        }
+
+        // Calculate PRIMARY score: Compare this's primary to all other's aliases, take best
+        result.primary = 0;
+        for (const otherComp of otherAliases) {
+            const score = compareComponents(thisComponents, otherComp);
+            result.primary = Math.max(result.primary, score);
+        }
+
+        // Calculate HOMONYM score: Compare each of this's homonyms to all other's aliases, take best
+        const homonyms = this.alternatives?.homonyms || [];
+        if (homonyms.length > 0) {
+            result.homonym = 0;
+            for (const thisHomonym of homonyms) {
+                const thisComp = getAliasComponents(thisHomonym);
+                if (!thisComp) continue;
+
+                for (const otherComp of otherAliases) {
+                    const score = compareComponents(thisComp, otherComp);
+                    result.homonym = Math.max(result.homonym, score);
+                }
+            }
+        }
+        // else result.homonym stays -1 (no homonyms)
+
+        // SYNONYM score is always 0 (synonyms represent a different relationship type)
+        result.synonym = 0;
+
+        // Calculate CANDIDATE score: Compare each of this's candidates to all other's aliases, take best
+        const candidates = this.alternatives?.candidates || [];
+        if (candidates.length > 0) {
+            result.candidate = 0;
+            for (const thisCandidate of candidates) {
+                const thisComp = getAliasComponents(thisCandidate);
+                if (!thisComp) continue;
+
+                for (const otherComp of otherAliases) {
+                    const score = compareComponents(thisComp, otherComp);
+                    result.candidate = Math.max(result.candidate, score);
+                }
+            }
+        }
+        // else result.candidate stays -1 (no candidates)
+
+        return result;
+    }
 }
 
 // Weighted comparison initialization is now handled directly in the IndividualName constructor above
+
+/**
+ * Safe numeric comparison that returns a single similarity score (0-1).
+ *
+ * Handles IndividualName's four-score return format by extracting the best score
+ * from {primary, homonym, synonym, candidate}. All other objects return numeric
+ * scores directly from compareTo().
+ *
+ * Returns null for cross-type comparisons (e.g., IndividualName vs HouseholdName)
+ * since comparing different name types is not semantically meaningful.
+ *
+ * @param {Object} obj1 - First object to compare
+ * @param {Object} obj2 - Second object to compare
+ * @returns {number|null} Similarity score (0-1), or null if comparison not possible
+ */
+function safeNumericCompare(obj1, obj2) {
+    if (!obj1 || !obj2) return null;
+
+    // Return null for cross-type comparisons - different types are not comparable
+    if (obj1.constructor !== obj2.constructor) {
+        return null;
+    }
+
+    try {
+        if (typeof obj1.compareTo === 'function') {
+            const result = obj1.compareTo(obj2);
+
+            // Handle four-score return format (IndividualName)
+            // Extract best of primary, homonym, candidate (synonym is always 0 for IndividualName)
+            if (typeof result === 'object' && result !== null && 'primary' in result) {
+                return Math.max(result.primary, result.homonym, result.candidate);
+            }
+
+            // Numeric return (all other Aliased classes)
+            return result;
+        }
+    } catch (e) {
+        console.warn('safeNumericCompare error:', e);
+    }
+
+    return null;
+}
+
+// Expose globally for use in entityGroup.js
+window.safeNumericCompare = safeNumericCompare;
 
 /**
  * HouseholdName class - subclass of ComplexIdentifiers for household names
