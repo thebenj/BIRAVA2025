@@ -130,6 +130,15 @@ async function buildEntityGroupDatabase(options = {}) {
         log(`Built consensus for ${groupDb.stats.multiMemberGroups} multi-member groups`);
     }
 
+    // Build CollectiveContactInfo for all groups (preferred + alternatives per contact modality)
+    // Runs independently of consensus - aggregates raw member contact data
+    log('\n--- Building CollectiveContactInfo ---');
+    for (const group of groupDb.getAllGroups()) {
+        group.buildCollectiveContactInfo(entityDb);
+    }
+    groupDb.contactInfoBuiltTimestamp = new Date().toISOString();
+    log(`Built CollectiveContactInfo for ${groupDb.stats.totalGroups} groups`);
+
     log('\n=== ENTITY GROUP CONSTRUCTION COMPLETE ===');
     log(groupDb.getSummary());
 

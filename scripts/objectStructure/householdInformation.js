@@ -220,65 +220,6 @@ class HouseholdInformation {
     }
 
     /**
-     * Deserialize a plain object back to HouseholdInformation instance
-     * @param {Object} data - Serialized data
-     * @returns {HouseholdInformation} Reconstructed HouseholdInformation instance
-     */
-    static deserialize(data) {
-        // Handle null/undefined
-        if (!data) {
-            return HouseholdInformation.createDefault();
-        }
-
-        // Accept data with type='HouseholdInformation' OR plain objects with householdInformation fields
-        // This supports both new serialized format and legacy data
-        if (data.type && data.type !== 'HouseholdInformation') {
-            throw new Error('Invalid HouseholdInformation serialization format');
-        }
-
-        const instance = new HouseholdInformation(
-            data.isInHousehold || false,
-            data.householdName || '',
-            data.isHeadOfHousehold || false,
-            data.householdIdentifier || ''
-        );
-
-        // Restore comparison properties if present
-        if (data.comparisonWeights) {
-            instance.comparisonWeights = data.comparisonWeights;
-        }
-        if (data.comparisonCalculatorName) {
-            instance.comparisonCalculatorName = data.comparisonCalculatorName;
-            if (typeof resolveComparisonCalculator === 'function') {
-                instance.comparisonCalculator = resolveComparisonCalculator(data.comparisonCalculatorName);
-            }
-        }
-
-        // Restore cross-reference properties if present
-        if (data.parentKey !== undefined) {
-            instance.parentKey = data.parentKey;
-        }
-        if (data.siblingKeys !== undefined) {
-            instance.siblingKeys = Array.isArray(data.siblingKeys) ? data.siblingKeys : [];
-        }
-        if (data.entityGroupIndex !== undefined) {
-            instance.entityGroupIndex = data.entityGroupIndex;
-        }
-
-        return instance;
-    }
-
-    /**
-     * Factory method for deserialization - creates instance via deserialize
-     * This is the preferred entry point for deserializeWithTypes to use
-     * @param {Object} data - Serialized data object
-     * @returns {HouseholdInformation} Reconstructed instance
-     */
-    static fromSerializedData(data) {
-        return HouseholdInformation.deserialize(data);
-    }
-
-    /**
      * Create a default HouseholdInformation instance (not in household)
      * @returns {HouseholdInformation} Default instance with isInHousehold=false
      */
@@ -351,21 +292,6 @@ class ParentDescription {
         this.index = index;
     }
 
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * Properties are iterated automatically by deserializeWithTypes
-     * @param {Object} data - Serialized data object
-     * @returns {ParentDescription} Reconstructed instance
-     */
-    static fromSerializedData(data) {
-        if (!data) return null;
-        return new ParentDescription(
-            data.entityType,
-            data.entityKey,
-            data.dataSource,
-            data.index
-        );
-    }
 }
 
 /**
@@ -418,23 +344,6 @@ class ParticipantDescription {
         return this;
     }
 
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * Properties are iterated automatically by deserializeWithTypes
-     * Note: entityKey and parentDescription will be deserialized by deserializeWithTypes
-     * before this method is called (they have their own fromSerializedData methods)
-     * @param {Object} data - Serialized data object
-     * @returns {ParticipantDescription} Reconstructed instance
-     */
-    static fromSerializedData(data) {
-        if (!data) return null;
-        return new ParticipantDescription(
-            data.entityType,
-            data.entityKey,         // Already deserialized by deserializeWithTypes if it's a class
-            data.dataSource,
-            data.parentDescription  // Already deserialized by deserializeWithTypes
-        );
-    }
 }
 
 /**
@@ -452,21 +361,6 @@ class ComparisonParticipants {
         this.other = other || new ParticipantDescription();
     }
 
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * Properties are iterated automatically by deserializeWithTypes
-     * Note: self and other will be deserialized by deserializeWithTypes
-     * before this method is called (they have their own fromSerializedData methods)
-     * @param {Object} data - Serialized data object
-     * @returns {ComparisonParticipants} Reconstructed instance
-     */
-    static fromSerializedData(data) {
-        if (!data) return null;
-        return new ComparisonParticipants(
-            data.self,   // Already deserialized by deserializeWithTypes
-            data.other   // Already deserialized by deserializeWithTypes
-        );
-    }
 }
 
 // Export for use in other modules

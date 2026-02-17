@@ -64,6 +64,13 @@ class EntityGroup {
         this.blockIslandAddresses = {};         // Key: {fireNumber}:{streetNameDbKey}, Value: Address object
         this.unrecognizedBIAddresses = {};      // Key: full address string, Value: Address object
         this.offIslandAddresses = [];           // Array of Address objects (with alias deduplication)
+
+        // CollectiveContactInfo — preferred + alternatives for each contact modality
+        // Populated by buildCollectiveContactInfo() after member collections are built
+        this.collectiveMailingAddress = null;   // CollectiveMailingAddress instance
+        this.collectivePhone = null;            // CollectivePhone instance
+        this.collectivePOBox = null;            // CollectivePOBox instance
+        this.collectiveEmail = null;            // CollectiveEmail instance
     }
 
     /**
@@ -145,6 +152,128 @@ class EntityGroup {
         // Determine appropriate entity type for consensus
         // Use AggregateHousehold as it's the superset of all entity properties
         this.consensusEntity = this._synthesizeConsensus(members);
+    }
+
+    /**
+     * Build CollectiveContactInfo for all four contact modalities.
+     * Collects items from member entities, creates subclass instances,
+     * and calls populateFromMembers() on each.
+     * @param {Object} entityDatabase - The keyed entity database (unifiedEntityDatabase.entities)
+     */
+    buildCollectiveContactInfo(entityDatabase) {
+        const members = this._getMemberEntities(entityDatabase);
+        if (members.length === 0) return;
+
+        // Build thresholds from MATCH_CRITERIA (needed by address and email clustering)
+        const thresholds = this._buildAliasThresholds();
+
+        // Collect all contact items from members
+        const allAddresses = [];
+        const allPhones = [];
+        const allPOBoxes = [];
+        const allEmails = [];
+
+        for (const entity of members) {
+            // Addresses: primary + secondary (same as _collectAddressesFromEntity)
+            allAddresses.push(...this._collectAddressesFromEntity(entity));
+
+            if (entity.contactInfo) {
+                // Phone: SimpleIdentifiers from contactInfo.phone
+                if (entity.contactInfo.phone) {
+                    allPhones.push(entity.contactInfo.phone);
+                }
+
+                // PO Box: SimpleIdentifiers from contactInfo.poBox
+                if (entity.contactInfo.poBox) {
+                    allPOBoxes.push(entity.contactInfo.poBox);
+                }
+
+                // Email: SimpleIdentifiers from contactInfo.email
+                if (entity.contactInfo.email) {
+                    allEmails.push(entity.contactInfo.email);
+                }
+            }
+        }
+
+        // Build each CollectiveContactInfo subclass
+        if (allAddresses.length > 0) {
+            this.collectiveMailingAddress = new CollectiveMailingAddress();
+            this.collectiveMailingAddress.populateFromMembers(allAddresses, thresholds);
+        }
+
+        if (allPhones.length > 0) {
+            this.collectivePhone = new CollectivePhone();
+            this.collectivePhone.populateFromMembers(allPhones, thresholds);
+        }
+
+        if (allPOBoxes.length > 0) {
+            this.collectivePOBox = new CollectivePOBox();
+            this.collectivePOBox.populateFromMembers(allPOBoxes, thresholds);
+        }
+
+        if (allEmails.length > 0) {
+            this.collectiveEmail = new CollectiveEmail();
+            this.collectiveEmail.populateFromMembers(allEmails, thresholds);
+        }
+
+        // Apply any manual overrides from the override database
+        this._applyContactPreferenceOverrides();
+    }
+
+    /**
+     * Check the contact preference override database and apply any overrides
+     * for this group's member keys. Called at the end of buildCollectiveContactInfo().
+     */
+    _applyContactPreferenceOverrides() {
+        // Guard: override database must be loaded
+        if (!window.contactPreferenceOverrideDatabase || !window.contactPreferenceOverrideDatabase.metadata.loaded) {
+            return;
+        }
+
+        const overrides = window.getOverridesForEntityKeys(this.memberKeys);
+        if (overrides.length === 0) return;
+
+        const propertyMap = {
+            'mailingAddress': 'collectiveMailingAddress',
+            'phone': 'collectivePhone',
+            'poBox': 'collectivePOBox',
+            'email': 'collectiveEmail'
+        };
+
+        // Group by contact type; if multiple overrides for same type, most recent wins
+        const byType = {};
+        for (const override of overrides) {
+            const existing = byType[override.contactType];
+            if (!existing || override.dateSet > existing.dateSet) {
+                byType[override.contactType] = override;
+            }
+        }
+
+        for (const [contactType, override] of Object.entries(byType)) {
+            const property = propertyMap[contactType];
+            if (!property || !this[property]) continue;
+
+            const collective = this[property];
+
+            // Deserialize the stored preferred value
+            let preferredValue = null;
+            try {
+                if (override.preferredValue) {
+                    const json = typeof override.preferredValue === 'string'
+                        ? override.preferredValue
+                        : JSON.stringify(override.preferredValue);
+                    preferredValue = window.deserializeWithTypes(json);
+                }
+            } catch (e) {
+                console.warn(`[EntityGroup._applyContactPreferenceOverrides] Failed to deserialize override for ${contactType}:`, e);
+                continue;
+            }
+
+            if (preferredValue) {
+                collective.applyOverride(preferredValue, override.anchorEntityKey);
+                console.log(`[EntityGroup ${this.index}] Applied ${contactType} override anchored to ${override.anchorEntityKey}`);
+            }
+        }
     }
 
     /**
@@ -614,21 +743,19 @@ class EntityGroup {
             return {
                 name: {
                     homonym: mc.trueMatch.nameAlone,        // 0.875
-                    synonym: mc.nearMatch.nameAlone,        // 0.845
-                    candidate: 0.5                          // Floor
+                    synonym: mc.nearMatch.nameAlone         // 0.845
                 },
                 contactInfo: {
                     homonym: mc.trueMatch.contactInfoAlone, // 0.87
-                    synonym: mc.nearMatch.contactInfoAlone, // 0.85
-                    candidate: 0.5                          // Floor
+                    synonym: mc.nearMatch.contactInfoAlone  // 0.85
                 }
             };
         }
 
         // Fallback defaults if MATCH_CRITERIA not available
         return {
-            name: { homonym: 0.875, synonym: 0.845, candidate: 0.5 },
-            contactInfo: { homonym: 0.87, synonym: 0.85, candidate: 0.5 }
+            name: { homonym: 0.875, synonym: 0.845 },
+            contactInfo: { homonym: 0.87, synonym: 0.85 }
         };
     }
 

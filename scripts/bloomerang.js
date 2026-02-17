@@ -2288,8 +2288,9 @@ function createContactInfo(fields, fieldMap, rowIndex, accountNumber, dataSource
     // Only create contact info entry if email address is provided and non-empty
     const email = (fields[fieldMap.email] || '').trim();
     if (email) {
-        // Create SimpleIdentifiers with AttributedTerm for email (no IndicativeData wrapper)
-        const emailTerm = new AttributedTerm(email, dataSource, rowIndex, accountNumber);
+        // Create SimpleIdentifiers with EmailTerm for email (no IndicativeData wrapper)
+        // EmailTerm provides domain-aware compareTo() for alias categorization
+        const emailTerm = new EmailTerm(email, dataSource, rowIndex, accountNumber);
         contactInfo.email = new SimpleIdentifiers(emailTerm);
         hasContactData = true;
     }
@@ -2348,7 +2349,7 @@ async function createContactInfoEnhanced(fields, fieldMap, rowIndex, accountNumb
     // Process existing contact fields (email, biPoBox) - using SimpleIdentifiers (no IndicativeData wrapper)
     const email = (fields[fieldMap.email] || '').trim();
     if (email) {
-        const emailTerm = new AttributedTerm(email, dataSource, rowIndex, accountNumber);
+        const emailTerm = new EmailTerm(email, dataSource, rowIndex, accountNumber);
         contactInfo.email = new SimpleIdentifiers(emailTerm);
         hasContactData = true;
     }
@@ -2994,12 +2995,13 @@ async function inspectProcessedRecords(recordNumbers) {
                 attributedTermsPresent: false
             };
 
-            // Check for AttributedTerm presence
+            // Check for AttributedTerm presence (check .primaryAlias inside SimpleIdentifiers wrapper;
+            // use instanceof to match AttributedTerm and all subclasses like EmailTerm, FireNumberTerm)
             if (processedEntity.contactInfo) {
                 dataIntegrityCheck.attributedTermsPresent = !!(
-                    (processedEntity.contactInfo.email && processedEntity.contactInfo.email.constructor.name === 'AttributedTerm') ||
-                    (processedEntity.contactInfo.biStreet && processedEntity.contactInfo.biStreet.constructor.name === 'AttributedTerm') ||
-                    (processedEntity.contactInfo.biPOBox && processedEntity.contactInfo.biPOBox.constructor.name === 'AttributedTerm')
+                    (processedEntity.contactInfo.email && processedEntity.contactInfo.email.primaryAlias instanceof AttributedTerm) ||
+                    (processedEntity.contactInfo.biStreet && processedEntity.contactInfo.biStreet.primaryAlias instanceof AttributedTerm) ||
+                    (processedEntity.contactInfo.biPOBox && processedEntity.contactInfo.biPOBox.primaryAlias instanceof AttributedTerm)
                 );
             } else {
                 dataIntegrityCheck.attributedTermsPresent = false;

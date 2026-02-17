@@ -89,114 +89,6 @@ class Info {
         return summary;
     }
 
-    /**
-     * Deserialize an object based on its actual type property
-     * Uses CLASS_REGISTRY to look up the appropriate class and call its deserialize method
-     * @param {Object} data - Serialized data with a 'type' property
-     * @returns {*} Deserialized class instance, or original data if no matching class
-     */
-    static deserializeByType(data) {
-        if (!data || typeof data !== 'object') {
-            return data;
-        }
-
-        // If already a class instance (not a plain object), return as-is
-        if (data.constructor && data.constructor.name !== 'Object') {
-            return data;
-        }
-
-        // Look up class by type property
-        const typeName = data.type;
-        if (!typeName) {
-            return data; // No type property, return as-is
-        }
-
-        const registry = typeof CLASS_REGISTRY !== 'undefined' ? CLASS_REGISTRY :
-                         (typeof window !== 'undefined' ? window.CLASS_REGISTRY : null);
-
-        if (!registry) {
-            console.warn('deserializeByType: CLASS_REGISTRY not available');
-            return data;
-        }
-
-        const TypeClass = registry[typeName];
-        if (!TypeClass) {
-            console.warn(`deserializeByType: No class found for type '${typeName}'`);
-            return data;
-        }
-
-        // Use fromSerializedData if available (preferred), otherwise deserialize
-        if (typeof TypeClass.fromSerializedData === 'function') {
-            return TypeClass.fromSerializedData(data);
-        } else if (typeof TypeClass.deserialize === 'function') {
-            return TypeClass.deserialize(data);
-        }
-
-        console.warn(`deserializeByType: Class '${typeName}' has no deserialize method`);
-        return data;
-    }
-
-    /**
-     * Generic deserialize method for Info subclasses
-     * Uses constructor (initialization logic runs) then copies additional properties
-     * @param {Object} data - Serialized data
-     * @param {Function} constructorClass - Constructor function for the specific subclass
-     * @returns {Info} Reconstructed Info subclass instance
-     */
-    static deserializeBase(data, constructorClass) {
-        if (data.type !== constructorClass.name) {
-            throw new Error(`Invalid ${constructorClass.name} serialization format`);
-        }
-
-        // Create instance via constructor - initialization logic runs!
-        const instance = new constructorClass();
-
-        Object.keys(data).forEach(key => {
-            if (key !== 'type' && data[key] !== null && data[key] !== undefined) {
-                if (key === 'comparisonCalculator') {
-                    // Skip - function reference, will be resolved from name
-                } else if (key === 'comparisonCalculatorName') {
-                    // Restore calculator name and resolve to function
-                    instance.comparisonCalculatorName = data[key];
-                    instance.comparisonCalculator = resolveComparisonCalculator(data[key]);
-                } else if (key === 'comparisonWeights') {
-                    // Restore weights directly (plain object)
-                    instance.comparisonWeights = data[key];
-                } else if (key === 'subdivision') {
-                    // Subdivision is a plain object {pid: serializedEntityJSON, ...}
-                    // Restore directly (contains JSON strings, not objects)
-                    instance.subdivision = data[key];
-                } else if (key === 'householdInformation') {
-                    // HouseholdInformation object - deserialize to class instance
-                    instance[key] = HouseholdInformation.deserialize(data[key]);
-                } else if (key === 'primaryAddress') {
-                    // Deserialize based on actual type in data (typically Aliased wrapping Address)
-                    instance[key] = Info.deserializeByType(data[key]);
-                } else if (key === 'secondaryAddress' || key === 'secondaryAddresses') {
-                    // Array of address objects - deserialize each based on its actual type
-                    instance[key] = data[key].map(addr => addr ? Info.deserializeByType(addr) : null);
-                } else {
-                    // Other properties (email, phone, poBox, etc.) - pass through directly
-                    // These are NOT wrapped in IndicativeData - they're direct values or already-deserialized objects
-                    instance[key] = data[key];
-                }
-            }
-        });
-
-        return instance;
-    }
-
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * This is the preferred entry point for deserializeWithTypes to use
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {Info} Reconstructed instance (Info or subclass)
-     */
-    static fromSerializedData(data) {
-        // 'this' refers to the actual class called, enabling polymorphic deserialization
-        return Info.deserializeBase(data, this);
-    }
 }
 
 /**
@@ -398,26 +290,6 @@ class ContactInfo extends Info {
         };
     }
 
-    /**
-     * Deserialize ContactInfo from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {ContactInfo} Reconstructed ContactInfo instance
-     */
-    static deserialize(data) {
-        return Info.deserializeBase(data, ContactInfo);
-    }
-
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * This is the preferred entry point for deserializeWithTypes to use
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {ContactInfo} Reconstructed instance (ContactInfo or subclass)
-     */
-    static fromSerializedData(data) {
-        // 'this' refers to the actual class called, enabling polymorphic deserialization
-        return this.deserialize(data);
-    }
 }
 
 /**
@@ -528,16 +400,6 @@ class OtherInfo extends Info {
         return this.subdivision ? Object.keys(this.subdivision).length : 0;
     }
 
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {OtherInfo} Reconstructed instance (OtherInfo or subclass)
-     */
-    static fromSerializedData(data) {
-        // 'this' refers to the actual class called, enabling polymorphic deserialization
-        return Info.deserializeBase(data, this);
-    }
 }
 
 /**
@@ -553,24 +415,6 @@ class HouseholdOtherInfo extends OtherInfo {
         // These will be populated based on requirements specifications
     }
 
-    /**
-     * Deserialize HouseholdOtherInfo from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {HouseholdOtherInfo} Reconstructed HouseholdOtherInfo instance
-     */
-    static deserialize(data) {
-        return Info.deserializeBase(data, HouseholdOtherInfo);
-    }
-
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {HouseholdOtherInfo} Reconstructed instance
-     */
-    static fromSerializedData(data) {
-        return this.deserialize(data);
-    }
 }
 
 /**
@@ -661,27 +505,547 @@ class LegacyInfo extends Info {
         };
     }
 
-    /**
-     * Deserialize LegacyInfo from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {LegacyInfo} Reconstructed LegacyInfo instance
-     */
-    static deserialize(data) {
-        return Info.deserializeBase(data, LegacyInfo);
+}
+
+/**
+ * CollectiveContactInfo - Base class for EntityGroup contact pathway management
+ *
+ * Models a contact unit's (EntityGroup's) full inventory of contact options for
+ * a single modality (mailing address, phone, PO box, or email). Holds a preferred
+ * option and an array of alternatives, with support for manual overrides.
+ *
+ * Independent of the Info/ContactInfo hierarchy. ContactInfo models one source
+ * record's contact data; CollectiveContactInfo models a contact unit's aggregated
+ * contact pathways across all member entities.
+ *
+ * Subclasses: CollectiveMailingAddress, CollectivePhone, CollectivePOBox, CollectiveEmail
+ */
+class CollectiveContactInfo {
+    constructor() {
+        this.preferred = null;              // Aliased (or subclass): the chosen best contact option
+        this.alternatives = [];             // Array of Aliased: other known contact options
+        this.preferredSource = 'algorithmic'; // 'algorithmic' or 'manual'
+        this.overrideAnchorKey = null;      // Entity key anchoring a manual override, or null
     }
 
     /**
-     * Factory method for deserialization - creates instance via constructor
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {LegacyInfo} Reconstructed instance
+     * Set the preferred contact option
+     * @param {Aliased} aliasedObject - The contact option to set as preferred
      */
-    static fromSerializedData(data) {
-        return this.deserialize(data);
+    setPreferred(aliasedObject) {
+        this.preferred = aliasedObject;
+    }
+
+    /**
+     * Add a contact option to alternatives (skips if duplicate of preferred)
+     * @param {Aliased} aliasedObject - The contact option to add
+     */
+    addAlternative(aliasedObject) {
+        if (this.preferred && aliasedObject.primaryAlias.term === this.preferred.primaryAlias.term) {
+            return; // Don't add duplicate of preferred
+        }
+        this.alternatives.push(aliasedObject);
+    }
+
+    /**
+     * Check whether this collective has any contact option
+     * @returns {boolean} True if preferred is non-null
+     */
+    hasContact() {
+        return this.preferred !== null;
+    }
+
+    /**
+     * Get all contact options (preferred first, then alternatives)
+     * @returns {Array<Aliased>} Array with preferred (if any) followed by alternatives
+     */
+    getAllOptions() {
+        if (!this.preferred) {
+            return [...this.alternatives];
+        }
+        return [this.preferred, ...this.alternatives];
+    }
+
+    /**
+     * Get the term string of the preferred contact option
+     * @returns {string|null} The preferred option's primaryAlias.term, or null
+     */
+    getPreferredTerm() {
+        if (this.preferred && this.preferred.primaryAlias) {
+            return this.preferred.primaryAlias.term;
+        }
+        return null;
+    }
+
+    /**
+     * Populate preferred and alternatives from member entity contact items.
+     * Base implementation: first item becomes preferred, rest become alternatives.
+     * Subclasses override with type-specific comparison/deduplication logic.
+     * @param {Array<Aliased>} memberItems - Contact items collected from member entities
+     * @param {Object} thresholds - Match criteria thresholds for deduplication
+     */
+    populateFromMembers(memberItems, thresholds) {
+        this.preferred = null;
+        this.alternatives = [];
+        this.preferredSource = 'algorithmic';
+        this.overrideAnchorKey = null;
+
+        if (!memberItems || memberItems.length === 0) {
+            return;
+        }
+
+        // Base implementation: first item preferred, rest alternatives
+        this.preferred = memberItems[0];
+        for (let i = 1; i < memberItems.length; i++) {
+            this.alternatives.push(memberItems[i]);
+        }
+    }
+
+    /**
+     * Apply a manual override: move current preferred to alternatives, install new preferred
+     * @param {Aliased} newPreferred - The contact option to install as preferred
+     * @param {string} anchorKey - Entity key to anchor this override to
+     */
+    applyOverride(newPreferred, anchorKey) {
+        // Save the algorithmic state before overriding (for clearOverride restoration)
+        if (this.preferredSource === 'algorithmic') {
+            this._algorithmicPreferred = this.preferred;
+            this._algorithmicAlternatives = [...this.alternatives];
+        }
+
+        // Move current preferred to alternatives if it exists
+        if (this.preferred) {
+            this.alternatives.push(this.preferred);
+        }
+
+        // Remove newPreferred from alternatives if it was there
+        this.alternatives = this.alternatives.filter(
+            alt => alt.primaryAlias.term !== newPreferred.primaryAlias.term
+        );
+
+        this.preferred = newPreferred;
+        this.preferredSource = 'manual';
+        this.overrideAnchorKey = anchorKey;
+    }
+
+    /**
+     * Clear manual override and revert to algorithmic selection.
+     * Restores the saved algorithmic preferred/alternatives from before the override was applied.
+     */
+    clearOverride() {
+        if (this.preferredSource !== 'manual') {
+            return; // Nothing to clear
+        }
+
+        // Restore saved algorithmic state if available
+        if (this._algorithmicPreferred) {
+            this.preferred = this._algorithmicPreferred;
+            this.alternatives = this._algorithmicAlternatives || [];
+        } else {
+            // Fallback: no saved state, just pick first from all options
+            const allOptions = this.getAllOptions();
+            this.preferred = allOptions.length > 0 ? allOptions[0] : null;
+            this.alternatives = allOptions.slice(1);
+        }
+
+        this.preferredSource = 'algorithmic';
+        this.overrideAnchorKey = null;
+        this._algorithmicPreferred = null;
+        this._algorithmicAlternatives = null;
+    }
+
+}
+
+/**
+ * CollectiveMailingAddress - Address-specific CollectiveContactInfo subclass
+ *
+ * Holds Address objects (ComplexIdentifiers subclass) as preferred/alternatives.
+ * Uses Address.compareTo() for deduplication and popularity-scored ranking
+ * adapted from EntityGroup._deduplicateAddresses().
+ */
+class CollectiveMailingAddress extends CollectiveContactInfo {
+    constructor() {
+        super();
+    }
+
+    /**
+     * Populate from member entity addresses. No synthetic objects created.
+     * Clusters addresses by synonym threshold using Address.compareTo(),
+     * then selects the representative (first member) from the largest cluster
+     * as preferred. Remaining cluster representatives become alternatives.
+     * @param {Array<Address>} memberItems - Address objects from member entities
+     * @param {Object} thresholds - Must include thresholds.contactInfo.synonym
+     */
+    populateFromMembers(memberItems, thresholds) {
+        this.preferred = null;
+        this.alternatives = [];
+        this.preferredSource = 'algorithmic';
+        this.overrideAnchorKey = null;
+
+        if (!memberItems || memberItems.length === 0) {
+            return;
+        }
+
+        if (memberItems.length === 1) {
+            this.preferred = memberItems[0];
+            return;
+        }
+
+        // Thresholds required — no fallback
+        if (!thresholds || !thresholds.contactInfo ||
+            typeof thresholds.contactInfo.synonym !== 'number') {
+            throw new Error('CollectiveMailingAddress.populateFromMembers requires thresholds.contactInfo.synonym');
+        }
+        const synonymThreshold = thresholds.contactInfo.synonym;
+
+        // Cluster addresses by synonym threshold using Address.compareTo()
+        const clusters = []; // Array of {representative: Address, members: Array<Address>}
+
+        for (const address of memberItems) {
+            if (!address) continue;
+
+            let foundCluster = false;
+            for (const cluster of clusters) {
+                try {
+                    if (typeof address.compareTo === 'function') {
+                        const similarity = address.compareTo(cluster.representative);
+                        if (similarity >= synonymThreshold) {
+                            cluster.members.push(address);
+                            foundCluster = true;
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    // Skip comparison errors — treat as non-matching
+                }
+            }
+
+            if (!foundCluster) {
+                clusters.push({ representative: address, members: [address] });
+            }
+        }
+
+        // Largest cluster → preferred (representative), rest → alternatives (sorted by size descending)
+        clusters.sort((a, b) => b.members.length - a.members.length);
+
+        this.preferred = clusters[0].representative;
+        for (let i = 1; i < clusters.length; i++) {
+            this.alternatives.push(clusters[i].representative);
+        }
+    }
+}
+
+/**
+ * CollectivePhone - Phone-specific CollectiveContactInfo subclass
+ *
+ * Holds SimpleIdentifiers objects for phone numbers as preferred/alternatives.
+ * Deduplicates using normalized phone comparison: strips punctuation and
+ * handles 401-466 area code presence/absence as equivalent.
+ */
+class CollectivePhone extends CollectiveContactInfo {
+    constructor() {
+        super();
+    }
+
+    /**
+     * Normalize a phone number for comparison.
+     * Strips all non-digit characters, then removes leading '1' country code,
+     * then removes '401466' area code prefix if present (Block Island local).
+     * @param {string} phone - Raw phone string
+     * @returns {string} Normalized digit string for comparison
+     * @static
+     */
+    static normalizePhone(phone) {
+        if (!phone || typeof phone !== 'string') return '';
+
+        // Strip all non-digit characters
+        let digits = phone.replace(/\D/g, '');
+
+        // Remove leading country code '1' if 11 digits
+        if (digits.length === 11 && digits.startsWith('1')) {
+            digits = digits.substring(1);
+        }
+
+        return digits;
+    }
+
+    /**
+     * Check if two phone numbers are equivalent after normalization.
+     * Also treats numbers with/without 401466 prefix as equivalent
+     * (e.g., "466-1234" matches "401-466-1234").
+     * @param {string} phoneA - First phone string
+     * @param {string} phoneB - Second phone string
+     * @returns {boolean} True if phones are equivalent
+     * @static
+     */
+    static phonesAreEquivalent(phoneA, phoneB) {
+        const a = CollectivePhone.normalizePhone(phoneA);
+        const b = CollectivePhone.normalizePhone(phoneB);
+
+        if (a === b) return true;
+        if (!a || !b) return false;
+
+        // Handle 401466 area code: 7-digit local vs 10-digit with area code
+        // "4661234" (7 digits) should match "4014661234" (10 digits)
+        if (a.length === 7 && b.length === 10 && b.startsWith('401') && b.substring(3) === a) return true;
+        if (b.length === 7 && a.length === 10 && a.startsWith('401') && a.substring(3) === b) return true;
+
+        return false;
+    }
+
+    /**
+     * Populate from member entity phone SimpleIdentifiers. No synthetic objects created.
+     * Groups by normalization equivalence, picks the most complete (longest normalized)
+     * actual member object as representative. Ranks by frequency, tie-breaks by source priority.
+     * @param {Array<SimpleIdentifiers>} memberItems - Phone SimpleIdentifiers from member entities
+     * @param {Object} thresholds - Not used for phone comparison (normalization-based)
+     */
+    populateFromMembers(memberItems, thresholds) {
+        this.preferred = null;
+        this.alternatives = [];
+        this.preferredSource = 'algorithmic';
+        this.overrideAnchorKey = null;
+
+        if (!memberItems || memberItems.length === 0) {
+            return;
+        }
+
+        if (memberItems.length === 1) {
+            this.preferred = memberItems[0];
+            return;
+        }
+
+        // Group by normalized phone equivalence
+        const groups = []; // Array of {representative: SimpleIdentifiers, members: Array<SimpleIdentifiers>}
+
+        for (const item of memberItems) {
+            if (!item || !item.primaryAlias) continue;
+
+            const term = item.primaryAlias.term;
+            let matched = false;
+
+            for (const group of groups) {
+                if (CollectivePhone.phonesAreEquivalent(term, group.representative.primaryAlias.term)) {
+                    group.members.push(item);
+                    // Update representative if this member has a more complete (longer) form
+                    const currentNorm = CollectivePhone.normalizePhone(group.representative.primaryAlias.term);
+                    const newNorm = CollectivePhone.normalizePhone(term);
+                    if (newNorm.length > currentNorm.length) {
+                        group.representative = item;
+                    }
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched) {
+                groups.push({ representative: item, members: [item] });
+            }
+        }
+
+        // Rank by frequency (group size), tie-break by source priority
+        groups.sort((a, b) => {
+            if (b.members.length !== a.members.length) {
+                return b.members.length - a.members.length;
+            }
+            return CollectivePhone._sourcePriority(b.representative) -
+                   CollectivePhone._sourcePriority(a.representative);
+        });
+
+        this.preferred = groups[0].representative;
+        for (let i = 1; i < groups.length; i++) {
+            this.alternatives.push(groups[i].representative);
+        }
+    }
+
+    /**
+     * Get source priority for tie-breaking: Bloomerang (3) > Phonebook (2) > other (1).
+     * @param {SimpleIdentifiers} item - Phone SimpleIdentifiers to check
+     * @returns {number} Priority value (higher = preferred)
+     * @static
+     * @private
+     */
+    static _sourcePriority(item) {
+        if (!item || !item.primaryAlias || !item.primaryAlias.sourceMap || !item.primaryAlias.sourceMap[0]) return 0;
+        const source = item.primaryAlias.sourceMap[0].source;
+        if (typeof source === 'string') {
+            if (source.includes('BLOOMERANG')) return 3;
+            if (source.includes('PHONEBOOK')) return 2;
+        }
+        return 1;
+    }
+}
+
+/**
+ * CollectivePOBox - PO Box-specific CollectiveContactInfo subclass
+ *
+ * Holds SimpleIdentifiers objects for PO Box numbers as preferred/alternatives.
+ * Uses exact identifier matching for deduplication (PO Box numbers are discrete values).
+ */
+class CollectivePOBox extends CollectiveContactInfo {
+    constructor() {
+        super();
+    }
+
+    /**
+     * Populate from member entity PO Box SimpleIdentifiers with exact-match deduplication.
+     * Most frequently occurring PO Box becomes preferred.
+     * @param {Array<SimpleIdentifiers>} memberItems - PO Box SimpleIdentifiers from member entities
+     * @param {Object} thresholds - Not used for PO Box comparison (exact matching)
+     */
+    populateFromMembers(memberItems, thresholds) {
+        this.preferred = null;
+        this.alternatives = [];
+        this.preferredSource = 'algorithmic';
+        this.overrideAnchorKey = null;
+
+        if (!memberItems || memberItems.length === 0) {
+            return;
+        }
+
+        if (memberItems.length === 1) {
+            this.preferred = memberItems[0];
+            return;
+        }
+
+        // Deduplicate by case-insensitive term match, tracking count
+        const groups = []; // Array of {representative: SimpleIdentifiers, count: number}
+
+        for (const item of memberItems) {
+            if (!item || !item.primaryAlias) continue;
+
+            const term = item.primaryAlias.term;
+            const termLower = (typeof term === 'string') ? term.toLowerCase() : '';
+            let matched = false;
+
+            for (const group of groups) {
+                const groupTerm = group.representative.primaryAlias.term;
+                const groupLower = (typeof groupTerm === 'string') ? groupTerm.toLowerCase() : '';
+                if (termLower === groupLower) {
+                    group.count++;
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched) {
+                groups.push({ representative: item, count: 1 });
+            }
+        }
+
+        // Sort by count descending
+        groups.sort((a, b) => b.count - a.count);
+
+        this.preferred = groups[0].representative;
+        for (let i = 1; i < groups.length; i++) {
+            this.alternatives.push(groups[i].representative);
+        }
+    }
+}
+
+/**
+ * CollectiveEmail - Email-specific CollectiveContactInfo subclass
+ *
+ * Holds SimpleIdentifiers objects for email addresses as preferred/alternatives.
+ * Uses EmailTerm.compareTo() (domain-aware) for clustering and Aliased.createConsensus()
+ * for alias preservation within clusters.
+ */
+class CollectiveEmail extends CollectiveContactInfo {
+    constructor() {
+        super();
+    }
+
+    /**
+     * Populate from member entity email SimpleIdentifiers. No synthetic objects created.
+     * Clusters emails by synonym threshold using EmailTerm.compareTo() (domain-aware),
+     * then selects the representative (first member) from the largest cluster as preferred.
+     * Tie-breaks by source priority (Bloomerang > Phonebook > other).
+     * @param {Array<SimpleIdentifiers>} memberItems - Email SimpleIdentifiers (primaryAlias is EmailTerm)
+     * @param {Object} thresholds - Must include thresholds.contactInfo.synonym
+     */
+    populateFromMembers(memberItems, thresholds) {
+        this.preferred = null;
+        this.alternatives = [];
+        this.preferredSource = 'algorithmic';
+        this.overrideAnchorKey = null;
+
+        if (!memberItems || memberItems.length === 0) {
+            return;
+        }
+
+        if (memberItems.length === 1) {
+            this.preferred = memberItems[0];
+            return;
+        }
+
+        // Thresholds required — no fallback
+        if (!thresholds || !thresholds.contactInfo ||
+            typeof thresholds.contactInfo.synonym !== 'number') {
+            throw new Error('CollectiveEmail.populateFromMembers requires thresholds.contactInfo.synonym');
+        }
+        const synonymThreshold = thresholds.contactInfo.synonym;
+
+        // Cluster emails by synonym threshold using EmailTerm.compareTo()
+        const clusters = []; // Array of {representative: SimpleIdentifiers, members: Array<SimpleIdentifiers>}
+
+        for (const item of memberItems) {
+            if (!item || !item.primaryAlias) continue;
+
+            let foundCluster = false;
+            for (const cluster of clusters) {
+                try {
+                    const similarity = item.primaryAlias.compareTo(cluster.representative.primaryAlias);
+                    if (typeof similarity === 'number' && similarity >= synonymThreshold) {
+                        cluster.members.push(item);
+                        foundCluster = true;
+                        break;
+                    }
+                } catch (e) {
+                    // Skip comparison errors — treat as non-matching
+                }
+            }
+
+            if (!foundCluster) {
+                clusters.push({ representative: item, members: [item] });
+            }
+        }
+
+        // Largest cluster → preferred, rest → alternatives
+        // Tie-break by source priority (Bloomerang > Phonebook > other)
+        clusters.sort((a, b) => {
+            if (b.members.length !== a.members.length) {
+                return b.members.length - a.members.length;
+            }
+            return CollectiveEmail._sourcePriority(b.representative) -
+                   CollectiveEmail._sourcePriority(a.representative);
+        });
+
+        this.preferred = clusters[0].representative;
+        for (let i = 1; i < clusters.length; i++) {
+            this.alternatives.push(clusters[i].representative);
+        }
+    }
+
+    /**
+     * Get source priority for tie-breaking: Bloomerang (3) > Phonebook (2) > other (1).
+     * @param {SimpleIdentifiers|Aliased} item - Email Aliased object to check
+     * @returns {number} Priority value (higher = preferred)
+     * @static
+     * @private
+     */
+    static _sourcePriority(item) {
+        if (!item || !item.primaryAlias || !item.primaryAlias.sourceMap || !item.primaryAlias.sourceMap[0]) return 0;
+        const source = item.primaryAlias.sourceMap[0].source;
+        if (typeof source === 'string') {
+            if (source.includes('BLOOMERANG')) return 3;
+            if (source.includes('PHONEBOOK')) return 2;
+        }
+        return 1;
     }
 }
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Info, ContactInfo, OtherInfo, HouseholdOtherInfo, LegacyInfo };
+    module.exports = { Info, ContactInfo, OtherInfo, HouseholdOtherInfo, LegacyInfo,
+        CollectiveContactInfo, CollectiveMailingAddress, CollectivePhone, CollectivePOBox, CollectiveEmail };
 }

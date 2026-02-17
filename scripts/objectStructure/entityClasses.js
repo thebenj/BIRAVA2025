@@ -496,71 +496,6 @@ class Entity {
     }
 
     /**
-     * Deserialize Entity from JSON object
-     * Uses constructor (initialization logic runs) then iterates over properties
-     * @param {Object} data - Serialized data
-     * @returns {Entity} Reconstructed Entity instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'Entity') {
-            throw new Error('Invalid Entity serialization format');
-        }
-
-        // Create entity via constructor with core identifying properties
-        // Constructor runs initialization logic
-        const entity = new Entity(data.locationIdentifier, data.name, null, null, data.accountNumber);
-
-        // Iterate over all properties in serialized data and assign to entity
-        Object.keys(data).forEach(key => {
-            if (key === 'type' || key === 'locationIdentifier' || key === 'name' || key === 'accountNumber') {
-                // Skip - already handled by constructor or metadata only
-                return;
-            }
-            if (key === 'comparisonCalculator') {
-                // Skip - function reference, resolve from name instead
-                return;
-            }
-            if (data[key] === null || data[key] === undefined) {
-                entity[key] = null;
-                return;
-            }
-
-            // Special handling for known complex types
-            if (key === 'comparisonCalculatorName') {
-                entity.comparisonCalculatorName = data[key];
-                entity.comparisonCalculator = resolveComparisonCalculator(data[key]);
-            } else if (key === 'contactInfo') {
-                // ContactInfo - already deserialized by bottom-up reviver or needs deserialization
-                entity.contactInfo = data[key];
-            } else if (key === 'otherInfo') {
-                // OtherInfo - already deserialized by bottom-up reviver or needs deserialization
-                entity.otherInfo = data[key];
-            } else if (key === 'legacyInfo') {
-                // LegacyInfo - already deserialized by bottom-up reviver or needs deserialization
-                entity.legacyInfo = data[key];
-            } else {
-                // All other properties - direct assignment
-                entity[key] = data[key];
-            }
-        });
-
-        return entity;
-    }
-
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * This is the preferred entry point for deserializeWithTypes to use
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {Entity} Reconstructed instance (Entity or subclass)
-     */
-    static fromSerializedData(data) {
-        // 'this' refers to the actual class called (Individual, AggregateHousehold, etc.)
-        // not necessarily Entity, enabling polymorphic deserialization
-        return this.deserialize(data);
-    }
-
-    /**
      * Generate summary string for file naming
      * @returns {string} Summary suitable for filenames
      */
@@ -578,35 +513,6 @@ class Entity {
         return `${entityType}_${nameStr}_${locationStr}`.substring(0, 100); // Limit length for filesystem
     }
 
-    /**
-     * Universal entity deserializer - determines type and calls appropriate deserializer
-     * @param {Object} data - Serialized entity data
-     * @returns {Entity} Reconstructed entity instance of appropriate type
-     */
-    static deserializeAny(data) {
-        if (!data || !data.type) {
-            throw new Error('Invalid entity data: missing type information');
-        }
-
-        switch (data.type) {
-            case 'Entity':
-                return Entity.deserialize(data);
-            case 'Individual':
-                return Individual.deserialize(data);
-            case 'CompositeHousehold':
-                return CompositeHousehold.deserialize(data);
-            case 'AggregateHousehold':
-                return AggregateHousehold.deserialize(data);
-            case 'NonHuman':
-                return NonHuman.deserialize(data);
-            case 'Business':
-                return Business.deserialize(data);
-            case 'LegalConstruct':
-                return LegalConstruct.deserialize(data);
-            default:
-                throw new Error(`Unknown entity type: ${data.type}`);
-        }
-    }
 }
 
 /**
@@ -641,49 +547,6 @@ class Individual extends Entity {
         this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
     }
 
-    /**
-     * Deserialize Individual from JSON object
-     * Iterates over all properties in serialized data (no hardcoded property list)
-     * @param {Object} data - Serialized data
-     * @returns {Individual} Reconstructed Individual instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'Individual') {
-            throw new Error('Invalid Individual serialization format');
-        }
-
-        // Create Individual with constructor parameters
-        const individual = new Individual(data.locationIdentifier, data.name, null, null, data.accountNumber);
-
-        // Iterate over all properties in serialized data
-        Object.keys(data).forEach(key => {
-            // Skip type marker and constructor parameters (already handled)
-            if (key === 'type' || key === 'locationIdentifier' || key === 'name' || key === 'accountNumber') {
-                return;
-            }
-            // Skip function references that cannot be serialized
-            if (key === 'comparisonCalculator') {
-                return;
-            }
-
-            // Handle null/undefined
-            if (data[key] === null || data[key] === undefined) {
-                individual[key] = null;
-                return;
-            }
-
-            // Handle comparison calculator name - resolve to function
-            if (key === 'comparisonCalculatorName') {
-                individual.comparisonCalculatorName = data[key];
-                individual.comparisonCalculator = resolveComparisonCalculator(data[key]);
-            } else {
-                // All other properties - already deserialized by deserializeWithTypes bottom-up processing
-                individual[key] = data[key];
-            }
-        });
-
-        return individual;
-    }
 }
 
 /**
@@ -697,49 +560,6 @@ class CompositeHousehold extends Entity {
         // Inherited this.name should contain IdentifyingData(HouseholdName)
     }
 
-    /**
-     * Deserialize CompositeHousehold from JSON object
-     * Iterates over all properties in serialized data (no hardcoded property list)
-     * @param {Object} data - Serialized data
-     * @returns {CompositeHousehold} Reconstructed CompositeHousehold instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'CompositeHousehold') {
-            throw new Error('Invalid CompositeHousehold serialization format');
-        }
-
-        // Create CompositeHousehold with constructor parameters
-        const household = new CompositeHousehold(data.locationIdentifier, data.name, null, null, data.accountNumber);
-
-        // Iterate over all properties in serialized data
-        Object.keys(data).forEach(key => {
-            // Skip type marker and constructor parameters (already handled)
-            if (key === 'type' || key === 'locationIdentifier' || key === 'name' || key === 'accountNumber') {
-                return;
-            }
-            // Skip function references that cannot be serialized
-            if (key === 'comparisonCalculator') {
-                return;
-            }
-
-            // Handle null/undefined
-            if (data[key] === null || data[key] === undefined) {
-                household[key] = null;
-                return;
-            }
-
-            // Handle comparison calculator name - resolve to function
-            if (key === 'comparisonCalculatorName') {
-                household.comparisonCalculatorName = data[key];
-                household.comparisonCalculator = resolveComparisonCalculator(data[key]);
-            } else {
-                // All other properties - already deserialized by deserializeWithTypes bottom-up processing
-                household[key] = data[key];
-            }
-        });
-
-        return household;
-    }
 }
 
 /**
@@ -791,68 +611,6 @@ class AggregateHousehold extends Entity {
         };
         this.comparisonCalculatorName = 'entityWeightedComparison';
         this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
-    }
-
-    /**
-     * Deserialize AggregateHousehold from JSON object
-     * Iterates over all properties in serialized data (no hardcoded property list)
-     * @param {Object} data - Serialized data
-     * @returns {AggregateHousehold} Reconstructed AggregateHousehold instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'AggregateHousehold') {
-            throw new Error('Invalid AggregateHousehold serialization format');
-        }
-
-        // Create AggregateHousehold with constructor parameters
-        const household = new AggregateHousehold(data.locationIdentifier, data.name, null, null, data.accountNumber);
-
-        // Iterate over all properties in serialized data
-        Object.keys(data).forEach(key => {
-            // Skip type marker and constructor parameters (already handled)
-            if (key === 'type' || key === 'locationIdentifier' || key === 'name' || key === 'accountNumber') {
-                return;
-            }
-            // Skip function references that cannot be serialized
-            if (key === 'comparisonCalculator') {
-                return;
-            }
-
-            // Handle null/undefined
-            if (data[key] === null || data[key] === undefined) {
-                household[key] = null;
-                return;
-            }
-
-            // Handle comparison calculator name - resolve to function
-            if (key === 'comparisonCalculatorName') {
-                household.comparisonCalculatorName = data[key];
-                household.comparisonCalculator = resolveComparisonCalculator(data[key]);
-            } else if (key === 'individuals') {
-                // Special handling for individuals array - may already be deserialized instances
-                household.individuals = data.individuals.map(individualData => {
-                    // Check if already deserialized by JSON.parse reviver (bottom-up processing)
-                    if (individualData instanceof Individual) {
-                        return individualData; // Already an instance, pass through
-                    }
-                    if (individualData instanceof Entity) {
-                        return individualData; // Already an Entity subclass instance
-                    }
-                    // Raw data - deserialize based on type
-                    switch (individualData.type) {
-                        case 'Individual':
-                            return Individual.deserialize(individualData);
-                        default:
-                            return Entity.deserialize(individualData);
-                    }
-                });
-            } else {
-                // All other properties - already deserialized by deserializeWithTypes bottom-up processing
-                household[key] = data[key];
-            }
-        });
-
-        return household;
     }
 
     /**
@@ -975,49 +733,6 @@ class NonHuman extends Entity {
         super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
     }
 
-    /**
-     * Deserialize NonHuman from JSON object
-     * Iterates over all properties in serialized data (no hardcoded property list)
-     * @param {Object} data - Serialized data
-     * @returns {NonHuman} Reconstructed NonHuman instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'NonHuman') {
-            throw new Error('Invalid NonHuman serialization format');
-        }
-
-        // Create NonHuman with constructor parameters
-        const nonHuman = new NonHuman(data.locationIdentifier, data.name, null, null, data.accountNumber);
-
-        // Iterate over all properties in serialized data
-        Object.keys(data).forEach(key => {
-            // Skip type marker and constructor parameters (already handled)
-            if (key === 'type' || key === 'locationIdentifier' || key === 'name' || key === 'accountNumber') {
-                return;
-            }
-            // Skip function references that cannot be serialized
-            if (key === 'comparisonCalculator') {
-                return;
-            }
-
-            // Handle null/undefined
-            if (data[key] === null || data[key] === undefined) {
-                nonHuman[key] = null;
-                return;
-            }
-
-            // Handle comparison calculator name - resolve to function
-            if (key === 'comparisonCalculatorName') {
-                nonHuman.comparisonCalculatorName = data[key];
-                nonHuman.comparisonCalculator = resolveComparisonCalculator(data[key]);
-            } else {
-                // All other properties - already deserialized by deserializeWithTypes bottom-up processing
-                nonHuman[key] = data[key];
-            }
-        });
-
-        return nonHuman;
-    }
 }
 
 /**
@@ -1029,49 +744,6 @@ class Business extends NonHuman {
         super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
     }
 
-    /**
-     * Deserialize Business from JSON object
-     * Iterates over all properties in serialized data (no hardcoded property list)
-     * @param {Object} data - Serialized data
-     * @returns {Business} Reconstructed Business instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'Business') {
-            throw new Error('Invalid Business serialization format');
-        }
-
-        // Create Business with constructor parameters
-        const business = new Business(data.locationIdentifier, data.name, null, null, data.accountNumber);
-
-        // Iterate over all properties in serialized data
-        Object.keys(data).forEach(key => {
-            // Skip type marker and constructor parameters (already handled)
-            if (key === 'type' || key === 'locationIdentifier' || key === 'name' || key === 'accountNumber') {
-                return;
-            }
-            // Skip function references that cannot be serialized
-            if (key === 'comparisonCalculator') {
-                return;
-            }
-
-            // Handle null/undefined
-            if (data[key] === null || data[key] === undefined) {
-                business[key] = null;
-                return;
-            }
-
-            // Handle comparison calculator name - resolve to function
-            if (key === 'comparisonCalculatorName') {
-                business.comparisonCalculatorName = data[key];
-                business.comparisonCalculator = resolveComparisonCalculator(data[key]);
-            } else {
-                // All other properties - already deserialized by deserializeWithTypes bottom-up processing
-                business[key] = data[key];
-            }
-        });
-
-        return business;
-    }
 }
 
 /**
@@ -1083,49 +755,6 @@ class LegalConstruct extends NonHuman {
         super(locationIdentifier, name, propertyLocation, ownerAddress, accountNumber);
     }
 
-    /**
-     * Deserialize LegalConstruct from JSON object
-     * Iterates over all properties in serialized data (no hardcoded property list)
-     * @param {Object} data - Serialized data
-     * @returns {LegalConstruct} Reconstructed LegalConstruct instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'LegalConstruct') {
-            throw new Error('Invalid LegalConstruct serialization format');
-        }
-
-        // Create LegalConstruct with constructor parameters
-        const legalConstruct = new LegalConstruct(data.locationIdentifier, data.name, null, null, data.accountNumber);
-
-        // Iterate over all properties in serialized data
-        Object.keys(data).forEach(key => {
-            // Skip type marker and constructor parameters (already handled)
-            if (key === 'type' || key === 'locationIdentifier' || key === 'name' || key === 'accountNumber') {
-                return;
-            }
-            // Skip function references that cannot be serialized
-            if (key === 'comparisonCalculator') {
-                return;
-            }
-
-            // Handle null/undefined
-            if (data[key] === null || data[key] === undefined) {
-                legalConstruct[key] = null;
-                return;
-            }
-
-            // Handle comparison calculator name - resolve to function
-            if (key === 'comparisonCalculatorName') {
-                legalConstruct.comparisonCalculatorName = data[key];
-                legalConstruct.comparisonCalculator = resolveComparisonCalculator(data[key]);
-            } else {
-                // All other properties - already deserialized by deserializeWithTypes bottom-up processing
-                legalConstruct[key] = data[key];
-            }
-        });
-
-        return legalConstruct;
-    }
 }
 
 // Export classes for use in other modules

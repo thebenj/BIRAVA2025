@@ -69,6 +69,13 @@ const CLASS_REGISTRY = {
     'EntityGroup': typeof EntityGroup !== 'undefined' ? EntityGroup : null,
     'EntityGroupDatabase': typeof EntityGroupDatabase !== 'undefined' ? EntityGroupDatabase : null,
 
+    // CollectiveContactInfo Classes
+    'CollectiveContactInfo': typeof CollectiveContactInfo !== 'undefined' ? CollectiveContactInfo : null,
+    'CollectiveMailingAddress': typeof CollectiveMailingAddress !== 'undefined' ? CollectiveMailingAddress : null,
+    'CollectivePhone': typeof CollectivePhone !== 'undefined' ? CollectivePhone : null,
+    'CollectivePOBox': typeof CollectivePOBox !== 'undefined' ? CollectivePOBox : null,
+    'CollectiveEmail': typeof CollectiveEmail !== 'undefined' ? CollectiveEmail : null,
+
     // Built-in Classes
     'Map': Map,
     'Set': Set,
@@ -209,14 +216,14 @@ function deserializeWithTypes(jsonString, classRegistry = CLASS_REGISTRY) {
                 // Handle custom classes
                 const ClassConstructor = classRegistry[className];
                 if (ClassConstructor) {
-                    // PREFERRED: Use fromSerializedData if available (constructor-based deserialization)
-                    // This ensures constructor initialization logic runs
+                    // OVERRIDE: If a class defines fromSerializedData, use it (rare — most classes should NOT)
+                    // The generic path below is the project standard for all classes.
                     if (typeof ClassConstructor.fromSerializedData === 'function') {
                         return ClassConstructor.fromSerializedData(value);
                     }
 
-                    // FALLBACK: Create instance without calling constructor (legacy approach)
-                    // NOTE: This means constructor initialization code does NOT run
+                    // STANDARD: Create instance and copy properties — the project-endorsed approach
+                    // All nested objects are already class instances (reviver processes bottom-up)
                     const instance = Object.create(ClassConstructor.prototype);
 
                     // Copy all properties except type

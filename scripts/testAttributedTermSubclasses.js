@@ -82,14 +82,14 @@ function testFireNumberTerm() {
         console.log(`Fire Number "${fn}": isValid=${term.isValidFireNumber()}, extracted=${term.extractFireNumber()}`);
     });
 
-    // Test serialization
+    // Test serialization (generic round-trip via serializeWithTypes/deserializeWithTypes)
     const testTerm = new FireNumberTerm(148, "BLOOMERANG_CSV", 1, "TEST_148");
-    const serialized = testTerm.serialize();
-    const deserialized = FireNumberTerm.deserialize(serialized);
+    const serialized = serializeWithTypes(testTerm);
+    const deserialized = deserializeWithTypes(serialized);
     console.log("Serialization test:", {
         original: testTerm.toString(),
-        serialized: serialized.type,
         deserialized: deserialized.toString(),
+        isCorrectClass: deserialized instanceof FireNumberTerm,
         match: testTerm.toString() === deserialized.toString()
     });
 
@@ -121,14 +121,14 @@ function testAccountNumberTerm() {
         console.log(`Account "${acc}": isValid=${term.isValidAccount()}, extracted=${term.extractAccountNumber()}`);
     });
 
-    // Test serialization
+    // Test serialization (generic round-trip via serializeWithTypes/deserializeWithTypes)
     const testTerm = new AccountNumberTerm("2029", "BLOOMERANG_CSV", 1, "TEST_2029");
-    const serialized = testTerm.serialize();
-    const deserialized = AccountNumberTerm.deserialize(serialized);
+    const serialized = serializeWithTypes(testTerm);
+    const deserialized = deserializeWithTypes(serialized);
     console.log("Serialization test:", {
         original: testTerm.toString(),
-        serialized: serialized.type,
         deserialized: deserialized.toString(),
+        isCorrectClass: deserialized instanceof AccountNumberTerm,
         match: testTerm.toString() === deserialized.toString()
     });
 
@@ -161,14 +161,14 @@ function testEmailTerm() {
         console.log(`Email "${email}": isValid=${term.isValidEmail()}, domain=${term.extractDomain()}`);
     });
 
-    // Test serialization
+    // Test serialization (generic round-trip via serializeWithTypes/deserializeWithTypes)
     const testTerm = new EmailTerm("test@example.com", "BLOOMERANG_CSV", 1, "TEST_EMAIL");
-    const serialized = testTerm.serialize();
-    const deserialized = EmailTerm.deserialize(serialized);
+    const serialized = serializeWithTypes(testTerm);
+    const deserialized = deserializeWithTypes(serialized);
     console.log("Serialization test:", {
         original: testTerm.toString(),
-        serialized: serialized.type,
         deserialized: deserialized.toString(),
+        isCorrectClass: deserialized instanceof EmailTerm,
         match: testTerm.toString() === deserialized.toString()
     });
 

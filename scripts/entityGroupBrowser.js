@@ -157,6 +157,12 @@ function setupEntityGroupButtons() {
         detailsBtn.addEventListener('click', viewSelectedGroupDetails);
     }
 
+    // Explore Group button
+    const exploreBtn = document.getElementById('entityGroupExploreBtn');
+    if (exploreBtn) {
+        exploreBtn.addEventListener('click', exploreSelectedGroup);
+    }
+
     // Export button
     const exportBtn = document.getElementById('entityGroupExportBtn');
     if (exportBtn) {
@@ -209,6 +215,12 @@ function setupEntityGroupButtons() {
     const buildConsensusOnlyBtn = document.getElementById('entityGroupBuildConsensusOnlyBtn');
     if (buildConsensusOnlyBtn) {
         buildConsensusOnlyBtn.addEventListener('click', buildConsensusOnly);
+    }
+
+    // Build CollectiveContactInfo button
+    const buildContactInfoBtn = document.getElementById('entityGroupBuildContactInfoBtn');
+    if (buildContactInfoBtn) {
+        buildContactInfoBtn.addEventListener('click', buildCollectiveContactInfoOnly);
     }
 }
 
@@ -342,6 +354,11 @@ async function loadEntityGroupDatabase() {
 
         // Display all groups
         applyEntityGroupFilters();
+
+        // Load contact preference overrides (needed for override browser)
+        if (typeof loadOverrideBrowserDatabase === 'function') {
+            loadOverrideBrowserDatabase();
+        }
 
     } catch (error) {
         console.error('❌ Error loading EntityGroup database:', error);
@@ -512,6 +529,11 @@ async function buildNewEntityGroupDatabase() {
 
         // Display all groups
         applyEntityGroupFilters();
+
+        // Load contact preference overrides (needed for override browser)
+        if (typeof loadOverrideBrowserDatabase === 'function') {
+            loadOverrideBrowserDatabase();
+        }
 
     } catch (error) {
         console.error('❌ Error building EntityGroup database:', error);
@@ -801,6 +823,50 @@ async function buildConsensusOnly() {
 
     } catch (error) {
         console.error('Error building consensus:', error);
+        showEntityGroupStatus(`Error: ${error.message}`, 'error');
+    } finally {
+        if (btn) btn.innerHTML = originalText;
+    }
+}
+
+/**
+ * Build CollectiveContactInfo only (without rebuilding collections or consensus)
+ */
+async function buildCollectiveContactInfoOnly() {
+    // Check prerequisites
+    if (!entityGroupBrowser.loadedDatabase) {
+        showEntityGroupStatus('No EntityGroup database loaded. Load one first.', 'error');
+        return;
+    }
+
+    if (!window.unifiedEntityDatabase?.entities) {
+        showEntityGroupStatus('Unified entity database not loaded. Load it first.', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('entityGroupBuildContactInfoBtn');
+    const originalText = btn?.innerHTML;
+
+    try {
+        if (btn) btn.innerHTML = '⏳ Building...';
+        showEntityGroupStatus('Building CollectiveContactInfo...', 'loading');
+
+        // Build CollectiveContactInfo for all groups
+        for (const group of entityGroupBrowser.loadedDatabase.getAllGroups()) {
+            group.buildCollectiveContactInfo(window.unifiedEntityDatabase.entities);
+        }
+
+        const groupCount = entityGroupBrowser.loadedDatabase.getAllGroups().length;
+
+        showEntityGroupStatus(
+            `Built CollectiveContactInfo for ${groupCount} groups. Save to preserve.`,
+            'success'
+        );
+
+        console.log(`✅ Built CollectiveContactInfo for ${groupCount} groups`);
+
+    } catch (error) {
+        console.error('Error building CollectiveContactInfo:', error);
         showEntityGroupStatus(`Error: ${error.message}`, 'error');
     } finally {
         if (btn) btn.innerHTML = originalText;
@@ -1257,6 +1323,299 @@ function viewSelectedGroupDetails() {
             viewConsensusEntityDetails(group.consensusEntity, group.index);
         });
     }
+}
+
+/**
+ * Open recursive object explorer for the currently selected EntityGroup
+ */
+function exploreSelectedGroup() {
+    if (!entityGroupBrowser.selectedGroup) {
+        showEntityGroupStatus('Please select an EntityGroup first', 'error');
+        return;
+    }
+
+    openObjectExplorer(entityGroupBrowser.selectedGroup, `EntityGroup #${entityGroupBrowser.selectedGroup.index}`);
+}
+
+/**
+ * Open a modal with a recursive, collapsible tree explorer for any object.
+ * Each property can be expanded/collapsed. Primitives show inline.
+ * Arrays and objects show type, count, and expand to reveal children.
+ * @param {*} obj - The object to explore
+ * @param {string} title - Modal title
+ */
+function openObjectExplorer(obj, title) {
+    // Remove any existing explorer modal
+    const existing = document.getElementById('objectExplorerModal');
+    if (existing) existing.remove();
+
+    const modalOverlay = document.createElement('div');
+    modalOverlay.id = 'objectExplorerModal';
+    modalOverlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;justify-content:center;align-items:center;';
+    modalOverlay.addEventListener('click', (e) => {
+        if (e.target === modalOverlay) modalOverlay.remove();
+    });
+
+    const modalBox = document.createElement('div');
+    modalBox.style.cssText = 'background:#1e1e2e;color:#cdd6f4;padding:0;border-radius:10px;max-width:850px;width:90%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.5);font-family:monospace;font-size:13px;';
+
+    // Header
+    const header = document.createElement('div');
+    header.style.cssText = 'padding:14px 20px;background:#313244;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #45475a;';
+    header.innerHTML = `<span style="font-weight:700;font-size:15px;color:#cba6f7;">${title}</span>`;
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'background:#45475a;color:#cdd6f4;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:14px;';
+    closeBtn.addEventListener('click', () => modalOverlay.remove());
+    header.appendChild(closeBtn);
+
+    // Content area
+    const content = document.createElement('div');
+    content.style.cssText = 'padding:12px 16px;overflow-y:auto;flex:1;';
+
+    const tree = buildExplorerNode(obj, 0, new Set());
+    content.appendChild(tree);
+
+    // Add blinking animation for circular reference warnings
+    const style = document.createElement('style');
+    style.textContent = '@keyframes circularBlink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }';
+    modalBox.appendChild(style);
+
+    modalBox.appendChild(header);
+    modalBox.appendChild(content);
+    modalOverlay.appendChild(modalBox);
+    document.body.appendChild(modalOverlay);
+}
+
+/**
+ * Build a DOM tree node for the recursive explorer.
+ * @param {*} value - The value to render
+ * @param {number} depth - Current nesting depth (for indentation)
+ * @param {Set} seen - Set of already-visited object references (cycle detection)
+ * @returns {HTMLElement}
+ */
+function buildExplorerNode(value, depth, seen) {
+    // Skip functions entirely
+    if (typeof value === 'function') return null;
+
+    // --- INLINE VALUES: return a span (no block break) ---
+
+    if (value === null || value === undefined) {
+        const s = document.createElement('span');
+        s.innerHTML = `<span style="color:#f38ba8;font-style:italic;">${value === null ? 'null' : 'undefined'}</span>`;
+        return s;
+    }
+
+    if (typeof value !== 'object') {
+        const s = document.createElement('span');
+        if (typeof value === 'string') {
+            const display = value.length > 120 ? value.substring(0, 120) + '...' : value;
+            s.innerHTML = `<span style="color:#a6e3a1;">"${escapeHtml(display)}"</span>`;
+        } else if (typeof value === 'number') {
+            s.innerHTML = `<span style="color:#fab387;">${value}</span>`;
+        } else if (typeof value === 'boolean') {
+            s.innerHTML = `<span style="color:#89dceb;">${value}</span>`;
+        } else {
+            s.innerHTML = `<span style="color:#9399b2;">${String(value)}</span>`;
+        }
+        return s;
+    }
+
+    // Cycle detection — highlight alarmingly
+    if (seen.has(value)) {
+        const s = document.createElement('span');
+        s.innerHTML = `<span style="background:#ff0000;color:#ffffff;font-weight:900;font-size:14px;padding:2px 8px;border-radius:4px;border:3px solid #ffff00;animation:circularBlink 0.5s infinite;">⚠️ CIRCULAR REFERENCE ⚠️</span>`;
+        return s;
+    }
+    seen.add(value);
+
+    // --- EXPANDABLE VALUES: return a div with toggle + children ---
+
+    const container = document.createElement('div');
+    container.style.cssText = 'margin:1px 0;';
+
+    // Helper to build an expandable section
+    function makeExpandable(labelHtml, buildChildren) {
+        const toggle = document.createElement('span');
+        toggle.style.cssText = 'cursor:pointer;user-select:none;';
+        toggle.innerHTML = `<span style="color:#89b4fa;">▶</span> ${labelHtml}`;
+
+        const childContainer = document.createElement('div');
+        childContainer.style.cssText = 'display:none;margin-left:18px;border-left:1px solid #45475a;padding-left:10px;';
+
+        let expanded = false;
+        let built = false;
+        toggle.addEventListener('click', () => {
+            expanded = !expanded;
+            if (!built) {
+                buildChildren(childContainer);
+                built = true;
+            }
+            childContainer.style.display = expanded ? 'block' : 'none';
+            toggle.querySelector('span').textContent = expanded ? '▼' : '▶';
+        });
+
+        container.appendChild(toggle);
+        container.appendChild(childContainer);
+    }
+
+    // Helper to render a keyed property row (inline for simple, block for expandable)
+    function renderPropertyRow(parent, keyHtml, val) {
+        if (typeof val === 'function') return;
+        if (isInlineValue(val)) {
+            const row = document.createElement('div');
+            row.style.cssText = 'margin:1px 0;';
+            const node = buildExplorerNode(val, depth + 1, new Set(seen));
+            row.innerHTML = `${keyHtml}`;
+            if (node) row.appendChild(node);
+            parent.appendChild(row);
+        } else {
+            // Expandable: build child node, prepend key to its toggle line
+            const node = buildExplorerNode(val, depth + 1, new Set(seen));
+            if (!node) return;
+            // Prepend the key label before the toggle arrow
+            const firstChild = node.querySelector('span');
+            if (firstChild) {
+                const keyPrefix = document.createElement('span');
+                keyPrefix.innerHTML = keyHtml;
+                firstChild.insertBefore(keyPrefix, firstChild.firstChild);
+            }
+            parent.appendChild(node);
+        }
+    }
+
+    // Map
+    if (value instanceof Map) {
+        const size = value.size;
+        if (size === 0) {
+            container.innerHTML = `<span style="color:#cba6f7;">Map</span> <span style="color:#9399b2;font-style:italic;">(empty)</span>`;
+        } else {
+            makeExpandable(
+                `<span style="color:#cba6f7;">Map</span> <span style="color:#9399b2;">(${size} entries)</span>`,
+                (parent) => {
+                    for (const [k, v] of value) {
+                        renderPropertyRow(parent,
+                            `<span style="color:#f9e2af;">${escapeHtml(String(k))}</span><span style="color:#9399b2;">: </span>`, v);
+                    }
+                }
+            );
+        }
+        seen.delete(value);
+        return container;
+    }
+
+    // Set
+    if (value instanceof Set) {
+        const size = value.size;
+        if (size === 0) {
+            container.innerHTML = `<span style="color:#cba6f7;">Set</span> <span style="color:#9399b2;font-style:italic;">(empty)</span>`;
+        } else {
+            makeExpandable(
+                `<span style="color:#cba6f7;">Set</span> <span style="color:#9399b2;">(${size} items)</span>`,
+                (parent) => {
+                    let idx = 0;
+                    for (const item of value) {
+                        renderPropertyRow(parent,
+                            `<span style="color:#9399b2;">[${idx}]: </span>`, item);
+                        idx++;
+                    }
+                }
+            );
+        }
+        seen.delete(value);
+        return container;
+    }
+
+    // Array
+    if (Array.isArray(value)) {
+        if (value.length === 0) {
+            container.innerHTML = `<span style="color:#9399b2;">[] <span style="font-style:italic;">(empty)</span></span>`;
+        } else {
+            const itemTypes = summarizeArrayTypes(value);
+            makeExpandable(
+                `<span style="color:#cba6f7;">Array</span> <span style="color:#9399b2;">(${value.length}) ${itemTypes}</span>`,
+                (parent) => {
+                    for (let i = 0; i < value.length; i++) {
+                        renderPropertyRow(parent,
+                            `<span style="color:#9399b2;">[${i}]: </span>`, value[i]);
+                    }
+                }
+            );
+        }
+        seen.delete(value);
+        return container;
+    }
+
+    // Object (including class instances) — filter out function-valued properties
+    const className = value.constructor?.name || 'Object';
+    const keys = Object.keys(value).filter(k => typeof value[k] !== 'function');
+
+    if (keys.length === 0) {
+        container.innerHTML = `<span style="color:#cba6f7;">${escapeHtml(className)}</span> <span style="color:#9399b2;">{} <span style="font-style:italic;">(empty)</span></span>`;
+        seen.delete(value);
+        return container;
+    }
+
+    makeExpandable(
+        `<span style="color:#cba6f7;">${escapeHtml(className)}</span> <span style="color:#9399b2;">(${keys.length} props)</span>`,
+        (parent) => {
+            for (const key of keys) {
+                renderPropertyRow(parent,
+                    `<span style="color:#f9e2af;">${escapeHtml(key)}</span><span style="color:#9399b2;">: </span>`, value[key]);
+            }
+        }
+    );
+
+    seen.delete(value);
+    return container;
+}
+
+/**
+ * Check if a value should render inline (not expandable)
+ */
+function isInlineValue(val) {
+    if (val === null || val === undefined) return true;
+    if (typeof val !== 'object') return true;
+    if (typeof val === 'function') return true;
+    // Empty array/object also inline
+    if (Array.isArray(val) && val.length === 0) return true;
+    if (val instanceof Map && val.size === 0) return true;
+    if (val instanceof Set && val.size === 0) return true;
+    const keys = Object.keys(val).filter(k => typeof val[k] !== 'function');
+    if (keys.length === 0) return true;
+    return false;
+}
+
+/**
+ * Summarize the types found in an array for the collapsed preview.
+ * @param {Array} arr
+ * @returns {string} e.g. "[Address, Address, SimpleIdentifiers]"
+ */
+function summarizeArrayTypes(arr) {
+    const types = arr.map(item => {
+        if (item === null) return 'null';
+        if (item === undefined) return 'undefined';
+        if (typeof item !== 'object') return typeof item;
+        return item.constructor?.name || 'Object';
+    });
+    // If all same type, show compact form
+    const unique = [...new Set(types)];
+    if (unique.length === 1) {
+        return `[${unique[0]} ×${arr.length}]`;
+    }
+    if (types.length <= 6) {
+        return `[${types.join(', ')}]`;
+    }
+    return `[${types.slice(0, 5).join(', ')}, ...]`;
+}
+
+/**
+ * Escape HTML special characters for safe rendering.
+ * @param {string} str
+ * @returns {string}
+ */
+function escapeHtml(str) {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /**

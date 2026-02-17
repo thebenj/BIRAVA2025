@@ -22,27 +22,6 @@ const DATA_SOURCES = Object.freeze({
 });
 
 /**
- * Helper function for deserialize methods to handle both raw data and already-transformed instances
- * JSON.parse reviver (used by deserializeWithTypes) processes bottom-up, so nested objects
- * may already be class instances when parent's deserialize is called.
- *
- * @param {*} value - The value to deserialize (may already be an instance)
- * @param {Function} TargetClass - The expected class type
- * @param {Function} deserializeFn - Function to deserialize raw data (defaults to TargetClass.deserialize)
- * @returns {*} The class instance (either passed through or deserialized)
- */
-function ensureDeserialized(value, TargetClass, deserializeFn = null) {
-    if (value === null || value === undefined) {
-        return value;
-    }
-    if (value instanceof TargetClass) {
-        return value; // Already transformed by reviver
-    }
-    // Raw data - needs deserialization
-    return deserializeFn ? deserializeFn(value) : TargetClass.deserialize(value);
-}
-
-/**
  * AttributedTerm class - represents a term with source attribution information
  * All terms require source attribution for data lineage and conflict resolution
  */
@@ -125,70 +104,10 @@ class AttributedTerm {
         return this.fieldName;
     }
 
-    /**
-     * Deserialize AttributedTerm from JSON object
-     * Uses constructor (initialization logic runs)
-     * Expects sourceMap to be a Map (restored by deserializeWithTypes)
-     * @param {Object} data - Serialized data with sourceMap as Map
-     * @returns {AttributedTerm} Reconstructed AttributedTerm instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'AttributedTerm') {
-            throw new Error('Invalid AttributedTerm serialization format');
-        }
-
-        // sourceMap should be a Map (restored by deserializeWithTypes)
-        if (!(data.sourceMap instanceof Map)) {
-            throw new Error('AttributedTerm.deserialize expects sourceMap to be a Map (use deserializeWithTypes)');
-        }
-
-        // Get first entry from Map to create instance
-        const entries = Array.from(data.sourceMap.entries());
-        if (entries.length === 0) {
-            throw new Error('AttributedTerm has no source entries');
-        }
-
-        const [firstSource, firstInfo] = entries[0];
-
-        // Recreate with first source entry - constructor runs!
-        const term = new AttributedTerm(
-            data.term,
-            firstSource,
-            firstInfo.index,
-            firstInfo.identifier,
-            data.fieldName || null
-        );
-
-        // Add remaining source entries
-        for (let i = 1; i < entries.length; i++) {
-            const [source, info] = entries[i];
-            term.addAdditionalSource(source, info.index, info.identifier);
-        }
-
-        // Restore comparison properties from serialized data if present
-        if (data.comparisonCalculatorName) {
-            term.comparisonCalculatorName = data.comparisonCalculatorName;
-            term.comparisonCalculator = window.resolveComparisonCalculator(data.comparisonCalculatorName);
-        }
-        if (data.comparisonWeights) {
-            term.comparisonWeights = data.comparisonWeights;
-        }
-
-        return term;
-    }
-
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * This is the preferred entry point for deserializeWithTypes to use
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {AttributedTerm} Reconstructed instance (AttributedTerm or subclass)
-     */
-    static fromSerializedData(data) {
-        // 'this' refers to the actual class called (FireNumberTerm, EmailTerm, etc.)
-        // not necessarily AttributedTerm, enabling polymorphic deserialization
-        return this.deserialize(data);
-    }
+    // AttributedTerm and all subclasses (FireNumberTerm, AccountNumberTerm, EmailTerm)
+    // use the generic fallback in deserializeWithTypes: Object.create(Class.prototype) +
+    // property copy. No custom deserialize/fromSerializedData needed — the generic system
+    // restores sourceMap as a Map, term, fieldName, and comparisonCalculator automatically.
 
     /**
      * Generic pattern matching against the term value
@@ -378,23 +297,9 @@ class Aliases {
         this.candidates = dedupeArray(this.candidates);
     }
 
-    /**
-     * Deserialize Aliases from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {Aliases} Reconstructed Aliases instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'Aliases') {
-            throw new Error('Invalid Aliases serialization format');
-        }
-
-        const aliases = new Aliases();
-        aliases.homonyms = data.homonyms.map(termData => AttributedTerm.deserialize(termData));
-        aliases.synonyms = data.synonyms.map(termData => AttributedTerm.deserialize(termData));
-        aliases.candidates = data.candidates.map(termData => AttributedTerm.deserialize(termData));
-
-        return aliases;
-    }
+    // Deserialization: uses generic fallback in deserializeWithTypes.
+    // By the time the reviver reaches Aliases, the homonyms/synonyms/candidates
+    // arrays already contain restored AttributedTerm instances (bottom-up processing).
 }
 
 /**
@@ -500,48 +405,6 @@ class Aliased {
     // }
 
     /**
-     * Deserialize Aliased from JSON object
-     * Uses constructor (initialization logic runs)
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {Aliased} Reconstructed Aliased instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'Aliased') {
-            throw new Error('Invalid Aliased serialization format');
-        }
-
-        // Constructor runs! Handle already-transformed instances from bottom-up reviver
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const aliased = new Aliased(primaryAlias);
-        aliased.alternatives = ensureDeserialized(data.alternatives, Aliases);
-
-        // Restore comparison properties from serialized data if present
-        if (data.comparisonCalculatorName) {
-            aliased.comparisonCalculatorName = data.comparisonCalculatorName;
-            aliased.comparisonCalculator = window.resolveComparisonCalculator(data.comparisonCalculatorName);
-        }
-        if (data.comparisonWeights) {
-            aliased.comparisonWeights = data.comparisonWeights;
-        }
-
-        return aliased;
-    }
-
-    /**
-     * Factory method for deserialization - creates instance via constructor
-     * This is the preferred entry point for deserializeWithTypes to use
-     * Uses 'this' for polymorphic dispatch so subclasses use their own deserialize
-     * @param {Object} data - Serialized data object
-     * @returns {Aliased} Reconstructed instance (Aliased or subclass)
-     */
-    static fromSerializedData(data) {
-        // 'this' refers to the actual class called (FireNumber, PID, etc.)
-        // not necessarily Aliased, enabling polymorphic deserialization
-        return this.deserialize(data);
-    }
-
-    /**
      * Static factory method: create a consensus Aliased from multiple Aliased objects
      * Selects the best primary (highest average similarity to others) and categorizes
      * the remaining primaries into homonyms, synonyms, or candidates based on thresholds.
@@ -551,7 +414,6 @@ class Aliased {
      * @param {Object} thresholds - Categorization thresholds
      * @param {number} thresholds.homonym - Minimum similarity for homonym (e.g., 0.875)
      * @param {number} thresholds.synonym - Minimum similarity for synonym (e.g., 0.845)
-     * @param {number} thresholds.candidate - (Unused) No minimum for candidates - all variants below synonym become candidates
      * @returns {Aliased|null} New Aliased instance with populated alternatives, or null if empty input
      */
     static createConsensus(aliasedObjects, thresholds) {
@@ -561,8 +423,7 @@ class Aliased {
         // Default thresholds if not provided
         const t = {
             homonym: thresholds?.homonym ?? 0.875,
-            synonym: thresholds?.synonym ?? 0.845,
-            candidate: thresholds?.candidate ?? 0.5
+            synonym: thresholds?.synonym ?? 0.845
         };
 
         // Step 1: Find the best primary (highest average similarity to all others)
@@ -661,7 +522,6 @@ class Aliased {
      * @param {Object} thresholds - Categorization thresholds
      * @param {number} thresholds.homonym - Minimum similarity for homonym (e.g., 0.875)
      * @param {number} thresholds.synonym - Minimum similarity for synonym (e.g., 0.845)
-     * @param {number} thresholds.candidate - (Unused) No minimum for candidates - all variants below synonym become candidates
      */
     mergeAlternatives(otherObjects, thresholds) {
         if (!otherObjects || otherObjects.length === 0) return;
@@ -669,8 +529,7 @@ class Aliased {
         // Default thresholds if not provided
         const t = {
             homonym: thresholds?.homonym ?? 0.875,
-            synonym: thresholds?.synonym ?? 0.845,
-            candidate: thresholds?.candidate ?? 0.5
+            synonym: thresholds?.synonym ?? 0.845
         };
 
         for (const otherObject of otherObjects) {
@@ -807,23 +666,6 @@ class SimpleIdentifiers extends Aliased {
         super(primaryAlias);
     }
 
-    /**
-     * Deserialize SimpleIdentifiers from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {SimpleIdentifiers} Reconstructed SimpleIdentifiers instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'SimpleIdentifiers') {
-            throw new Error('Invalid SimpleIdentifiers serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const identifier = new SimpleIdentifiers(primaryAlias);
-        identifier.alternatives = ensureDeserialized(data.alternatives, Aliases);
-
-        return identifier;
-    }
 }
 
 /**
@@ -837,22 +679,6 @@ class NonHumanName extends SimpleIdentifiers {
         super(primaryAlias);
     }
 
-    /**
-     * Deserialize NonHumanName from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {NonHumanName} Reconstructed NonHumanName instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'NonHumanName') {
-            throw new Error('Invalid NonHumanName serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const identifier = new NonHumanName(primaryAlias);
-        identifier.alternatives = ensureDeserialized(data.alternatives, Aliases);
-
-        return identifier;
-    }
 }
 
 /**
@@ -864,63 +690,6 @@ class IndicativeData {
     constructor(identifier) {
         // identifier should be either SimpleIdentifiers or ComplexIdentifiers instance
         this.identifier = identifier;
-    }
-
-    /**
-     * Deserialize IndicativeData from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {IndicativeData} Reconstructed IndicativeData instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'IndicativeData') {
-            throw new Error('Invalid IndicativeData serialization format');
-        }
-
-        // Determine identifier type and deserialize appropriately
-        const identifier = this._deserializeIdentifier(data.identifier);
-        return new IndicativeData(identifier);
-    }
-
-    /**
-     * Helper method to deserialize identifier based on type
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} identifierData - Serialized identifier data or already-transformed instance
-     * @returns {SimpleIdentifiers|ComplexIdentifiers} Reconstructed identifier
-     * @private
-     */
-    static _deserializeIdentifier(identifierData) {
-        // Handle already-transformed instances (from deserializeWithTypes bottom-up processing)
-        // Check if it's already one of the identifier types
-        if (identifierData instanceof SimpleIdentifiers ||
-            identifierData instanceof ComplexIdentifiers ||
-            identifierData instanceof Aliased) {
-            return identifierData;
-        }
-
-        // Raw data - needs deserialization based on type
-        switch (identifierData.type) {
-            case 'SimpleIdentifiers':
-                return SimpleIdentifiers.deserialize(identifierData);
-            case 'FireNumber':
-                return FireNumber.deserialize(identifierData);
-            case 'PID':
-                return PID.deserialize(identifierData);
-            case 'PoBox':
-                return PoBox.deserialize(identifierData);
-            case 'StreetName':
-                return StreetName.deserialize(identifierData);
-            case 'ComplexIdentifiers':
-                return ComplexIdentifiers.deserialize(identifierData);
-            case 'IndividualName':
-                return IndividualName.deserialize(identifierData);
-            case 'HouseholdName':
-                return HouseholdName.deserialize(identifierData);
-            case 'Address':
-                return Address.deserialize(identifierData);
-            default:
-                throw new Error(`Unknown identifier type: ${identifierData.type}`);
-        }
     }
 
     /**
@@ -944,21 +713,6 @@ class IdentifyingData {
     }
 
     /**
-     * Deserialize IdentifyingData from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {IdentifyingData} Reconstructed IdentifyingData instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'IdentifyingData') {
-            throw new Error('Invalid IdentifyingData serialization format');
-        }
-
-        // Use the same helper method as IndicativeData
-        const identifier = IndicativeData._deserializeIdentifier(data.identifier);
-        return new IdentifyingData(identifier);
-    }
-
-    /**
      * Returns the string representation of this IdentifyingData
      * @returns {string} The contained identifier's string representation
      */
@@ -978,23 +732,6 @@ class FireNumber extends SimpleIdentifiers {
         super(primaryAlias);
     }
 
-    /**
-     * Deserialize FireNumber from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {FireNumber} Reconstructed FireNumber instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'FireNumber') {
-            throw new Error('Invalid FireNumber serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const fireNumber = new FireNumber(primaryAlias);
-        fireNumber.alternatives = ensureDeserialized(data.alternatives, Aliases);
-
-        return fireNumber;
-    }
 }
 
 /**
@@ -1006,23 +743,6 @@ class PoBox extends SimpleIdentifiers {
         super(primaryAlias);
     }
 
-    /**
-     * Deserialize PoBox from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {PoBox} Reconstructed PoBox instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'PoBox') {
-            throw new Error('Invalid PoBox serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const poBox = new PoBox(primaryAlias);
-        poBox.alternatives = ensureDeserialized(data.alternatives, Aliases);
-
-        return poBox;
-    }
 }
 
 /**
@@ -1036,23 +756,6 @@ class PID extends SimpleIdentifiers {
         super(primaryAlias);
     }
 
-    /**
-     * Deserialize PID from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {PID} Reconstructed PID instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'PID') {
-            throw new Error('Invalid PID serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const pid = new PID(primaryAlias);
-        pid.alternatives = ensureDeserialized(data.alternatives, Aliases);
-
-        return pid;
-    }
 }
 
 /**
@@ -1181,23 +884,6 @@ class StreetName extends SimpleIdentifiers {
                scores.candidate === 1.0;
     }
 
-    /**
-     * Deserialize StreetName from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {StreetName} Reconstructed StreetName instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'StreetName') {
-            throw new Error('Invalid StreetName serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const streetName = new StreetName(primaryAlias);
-        streetName.alternatives = ensureDeserialized(data.alternatives, Aliases);
-
-        return streetName;
-    }
 }
 
 /**
@@ -1207,24 +893,6 @@ class StreetName extends SimpleIdentifiers {
 class ComplexIdentifiers extends Aliased {
     constructor(primaryAlias) {
         super(primaryAlias);
-    }
-
-    /**
-     * Deserialize ComplexIdentifiers from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {ComplexIdentifiers} Reconstructed ComplexIdentifiers instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'ComplexIdentifiers') {
-            throw new Error('Invalid ComplexIdentifiers serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const identifier = new ComplexIdentifiers(primaryAlias);
-        identifier.alternatives = ensureDeserialized(data.alternatives, Aliases);
-
-        return identifier;
     }
 
     // compareTo() method inherited from Aliased class
@@ -1298,37 +966,6 @@ class IndividualName extends ComplexIdentifiers {
             default:
                 return this.completeName;
         }
-    }
-
-    /**
-     * Deserialize IndividualName from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {IndividualName} Reconstructed IndividualName instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'IndividualName') {
-            throw new Error('Invalid IndividualName serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const individualName = new IndividualName(
-            primaryAlias,
-            data.title,
-            data.firstName,
-            data.otherNames,
-            data.lastName,
-            data.suffix
-        );
-
-        individualName.alternatives = ensureDeserialized(data.alternatives, Aliases);
-        individualName.termOfAddress = data.termOfAddress;
-
-        // comparisonWeights already set by constructor calling initializeWeightedComparison()
-        // comparisonCalculator already set by Aliased constructor
-        // Do NOT overwrite with values from disk
-
-        return individualName;
     }
 
     /**
@@ -1672,27 +1309,6 @@ class HouseholdName extends ComplexIdentifiers {
         return this.memberNames.some(member => member.completeName === completeName);
     }
 
-    /**
-     * Deserialize HouseholdName from JSON object
-     * Handles both raw data and already-transformed instances (from deserializeWithTypes)
-     * @param {Object} data - Serialized data
-     * @returns {HouseholdName} Reconstructed HouseholdName instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'HouseholdName') {
-            throw new Error('Invalid HouseholdName serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const householdName = new HouseholdName(primaryAlias, data.fullHouseholdName || data.fullName);  // Support both old and new format
-
-        householdName.alternatives = ensureDeserialized(data.alternatives, Aliases);
-        householdName.memberNames = data.memberNames.map(memberData =>
-            ensureDeserialized(memberData, IndividualName)
-        );
-
-        return householdName;
-    }
 }
 
 /**
@@ -1732,26 +1348,7 @@ class FireNumberTerm extends AttributedTerm {
         return numeric > 0 && numeric < 3500 && numeric.toString().length <= 4;
     }
 
-    /**
-     * Deserialize FireNumberTerm from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {FireNumberTerm} Reconstructed FireNumberTerm instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'FireNumberTerm') {
-            throw new Error('Invalid FireNumberTerm serialization format');
-        }
-
-        const firstSource = data.sourceMap[0];
-        const term = new FireNumberTerm(data.term, firstSource.source, firstSource.index, firstSource.identifier);
-
-        for (let i = 1; i < data.sourceMap.length; i++) {
-            const sourceData = data.sourceMap[i];
-            term.addAdditionalSource(sourceData.source, sourceData.index, sourceData.identifier);
-        }
-
-        return term;
-    }
+    // Deserialization: uses generic fallback in deserializeWithTypes (see AttributedTerm comment)
 }
 
 /**
@@ -1791,26 +1388,7 @@ class AccountNumberTerm extends AttributedTerm {
         return /[a-zA-Z0-9]/.test(termStr);
     }
 
-    /**
-     * Deserialize AccountNumberTerm from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {AccountNumberTerm} Reconstructed AccountNumberTerm instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'AccountNumberTerm') {
-            throw new Error('Invalid AccountNumberTerm serialization format');
-        }
-
-        const firstSource = data.sourceMap[0];
-        const term = new AccountNumberTerm(data.term, firstSource.source, firstSource.index, firstSource.identifier);
-
-        for (let i = 1; i < data.sourceMap.length; i++) {
-            const sourceData = data.sourceMap[i];
-            term.addAdditionalSource(sourceData.source, sourceData.index, sourceData.identifier);
-        }
-
-        return term;
-    }
+    // Deserialization: uses generic fallback in deserializeWithTypes (see AttributedTerm comment)
 }
 
 /**
@@ -1871,25 +1449,55 @@ class EmailTerm extends AttributedTerm {
     }
 
     /**
-     * Deserialize EmailTerm from JSON object
-     * @param {Object} data - Serialized data
-     * @returns {EmailTerm} Reconstructed EmailTerm instance
+     * Domain-aware email comparison.
+     * Splits email into local part and domain:
+     *   - Domain: exact match (case-insensitive) → 1.0 or 0.0
+     *   - Local part: fuzzy match via levenshteinSimilarity (case-insensitive)
+     *   - Combined: (localSimilarity × 0.8) + (domainSimilarity × 0.2)
+     * Falls back to parent AttributedTerm.compareTo() if other is not an EmailTerm.
+     * Adapted from contactInfoWeightedComparison() in utils.js.
+     * @param {AttributedTerm} other - Other term to compare against
+     * @returns {number} Similarity score 0-1
      */
-    static deserialize(data) {
-        if (data.type !== 'EmailTerm') {
-            throw new Error('Invalid EmailTerm serialization format');
+    compareTo(other) {
+        if (!other || !(other instanceof AttributedTerm)) {
+            throw new Error('Cannot compare EmailTerm with non-AttributedTerm object');
         }
 
-        const firstSource = data.sourceMap[0];
-        const term = new EmailTerm(data.term, firstSource.source, firstSource.index, firstSource.identifier);
-
-        for (let i = 1; i < data.sourceMap.length; i++) {
-            const sourceData = data.sourceMap[i];
-            term.addAdditionalSource(sourceData.source, sourceData.index, sourceData.identifier);
+        // Fall back to parent for non-EmailTerm comparisons
+        if (!(other instanceof EmailTerm)) {
+            return super.compareTo(other);
         }
 
-        return term;
+        // Both null/undefined terms
+        if (!this.term && !other.term) return 1.0;
+        if (!this.term || !other.term) return 0.0;
+
+        const thisLower = this.term.toLowerCase();
+        const otherLower = other.term.toLowerCase();
+
+        const thisAtIndex = thisLower.lastIndexOf('@');
+        const otherAtIndex = otherLower.lastIndexOf('@');
+
+        // Malformed emails (no @) — fall back to full string comparison
+        if (thisAtIndex <= 0 || otherAtIndex <= 0) {
+            return levenshteinSimilarity(thisLower, otherLower);
+        }
+
+        const thisLocal = thisLower.substring(0, thisAtIndex);
+        const thisDomain = thisLower.substring(thisAtIndex + 1);
+        const otherLocal = otherLower.substring(0, otherAtIndex);
+        const otherDomain = otherLower.substring(otherAtIndex + 1);
+
+        // Domain: exact match only
+        const domainSimilarity = (thisDomain === otherDomain) ? 1.0 : 0.0;
+        // Local part: fuzzy match
+        const localSimilarity = levenshteinSimilarity(thisLocal, otherLocal);
+
+        return (localSimilarity * 0.8) + (domainSimilarity * 0.2);
     }
+
+    // Deserialization: uses generic fallback in deserializeWithTypes (see AttributedTerm comment)
 }
 
 /**
@@ -2254,74 +1862,6 @@ class Address extends ComplexIdentifiers {
             fieldName,
             'processing_timestamp'
         );
-
-        return address;
-    }
-
-    /**
-     * Deserialize Address from JSON object
-     * Uses dynamic property iteration (like Entity.deserialize) to automatically
-     * handle new properties without requiring manual updates to this method.
-     * @param {Object} data - Serialized data
-     * @returns {Address} Reconstructed Address instance
-     */
-    static deserialize(data) {
-        if (data.type !== 'Address') {
-            throw new Error('Invalid Address serialization format');
-        }
-
-        const primaryAlias = ensureDeserialized(data.primaryAlias, AttributedTerm);
-        const address = new Address(primaryAlias);
-
-        // Type mappings for properties that need ensureDeserialized with specific types
-        const attributedTermProps = new Set([
-            'originalAddress', 'recipientDetails', 'streetNumber', 'streetName',
-            'streetType', 'city', 'state', 'zipCode', 'secUnitType', 'secUnitNum',
-            'isBlockIslandAddress', 'cityNormalized', 'processingSource', 'processingTimestamp'
-        ]);
-
-        // Iterate over all properties in serialized data
-        Object.keys(data).forEach(key => {
-            // Skip type marker and constructor param (already handled)
-            if (key === 'type' || key === 'primaryAlias') {
-                return;
-            }
-            // Skip function references that cannot be serialized
-            if (key === 'comparisonCalculator') {
-                return;
-            }
-            // Handle null/undefined
-            if (data[key] === null || data[key] === undefined) {
-                address[key] = null;
-                return;
-            }
-
-            // Handle comparison calculator name - resolve to function
-            if (key === 'comparisonCalculatorName') {
-                address.comparisonCalculatorName = data[key];
-                address.comparisonCalculator = window.resolveComparisonCalculator(data[key]);
-            }
-            // Handle alternatives (Aliases type)
-            else if (key === 'alternatives') {
-                address.alternatives = ensureDeserialized(data[key], Aliases);
-            }
-            // Handle biStreetName (StreetName type)
-            else if (key === 'biStreetName') {
-                address.biStreetName = ensureDeserialized(data[key], StreetName);
-            }
-            // Handle AttributedTerm properties
-            else if (attributedTermProps.has(key)) {
-                address[key] = ensureDeserialized(data[key], AttributedTerm);
-            }
-            // Handle comparisonWeights (plain object)
-            else if (key === 'comparisonWeights') {
-                address.comparisonWeights = data[key];
-            }
-            // All other properties - direct assignment (future-proofing)
-            else {
-                address[key] = data[key];
-            }
-        });
 
         return address;
     }

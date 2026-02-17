@@ -89,11 +89,11 @@ function validateAddressProcessing(address, originalProcessed) {
         results.tests.push('✅ Fire number test skipped (no street number in BI address)');
     }
 
-    // Test 5: Serialization/deserialization
+    // Test 5: Serialization/deserialization (generic round-trip via serializeWithTypes/deserializeWithTypes)
     results.total++;
     try {
-        const serialized = address.serialize();
-        const deserialized = Address.deserialize(serialized);
+        const serialized = serializeWithTypes(address);
+        const deserialized = deserializeWithTypes(serialized);
         if (deserialized instanceof Address && deserialized.toString() === address.toString()) {
             results.passed++;
             results.tests.push('✅ Serialization/deserialization working correctly');
