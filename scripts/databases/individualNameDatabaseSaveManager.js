@@ -97,6 +97,15 @@ async function saveIndividualNameDatabaseBulk(db = null) {
     console.log('=== BULK SAVE: IndividualNameDatabase ===');
     console.log(`Entries to save: ${db.entries.size}`);
 
+    // SAFETY: Automatic backup before overwriting bulk file
+    console.log('Backing up existing bulk file before save...');
+    const backupResult = await backupBulkFile();
+    if (backupResult.success) {
+        console.log('Pre-save backup successful');
+    } else {
+        console.warn('Pre-save backup failed: ' + backupResult.message + ' — proceeding with save anyway');
+    }
+
     // Serialize all entries
     const bulkData = {
         __format: 'IndividualNameDatabaseBulk',
@@ -225,13 +234,21 @@ async function saveDevBulkFile(db = null) {
 async function loadIndividualNameDatabaseFromBulk() {
     console.log('[IndividualNameSaveManager] Loading database from bulk file...');
 
-    // 1. Fetch bulk file from Google Drive
-    const response = await gapi.client.drive.files.get({
-        fileId: BULK_DATABASE_FILE_ID,
-        alt: 'media'
-    });
+    // 1. Fetch bulk file from Google Drive (raw fetch — gapi.client.drive is banned)
+    const response = await fetchWithTimeout(
+        `https://www.googleapis.com/drive/v3/files/${BULK_DATABASE_FILE_ID}?alt=media`,
+        {
+            method: 'GET',
+            headers: new Headers({
+                'Authorization': `Bearer ${gapi.client.getToken().access_token}`
+            })
+        }
+    );
+    if (!response.ok) {
+        throw new Error(`Failed to load bulk file: HTTP ${response.status}`);
+    }
 
-    const bulkData = JSON.parse(response.body);
+    const bulkData = await response.json();
 
     // 2. Validate format
     if (bulkData.__format !== 'IndividualNameDatabaseBulk') {
@@ -348,13 +365,21 @@ async function fileOutIndividualNames(options = {}) {
     // Index entries for updating
     const indexEntries = {};
 
-    // Load existing index if available
+    // Load existing index if available (raw fetch — gapi.client.drive is banned)
     try {
-        const indexResponse = await gapi.client.drive.files.get({
-            fileId: config.indexFileId,
-            alt: 'media'
-        });
-        const existingIndex = JSON.parse(indexResponse.body);
+        const indexResponse = await fetchWithTimeout(
+            `https://www.googleapis.com/drive/v3/files/${config.indexFileId}?alt=media`,
+            {
+                method: 'GET',
+                headers: new Headers({
+                    'Authorization': `Bearer ${gapi.client.getToken().access_token}`
+                })
+            }
+        );
+        if (!indexResponse.ok) {
+            throw new Error(`Index load failed: HTTP ${indexResponse.status}`);
+        }
+        const existingIndex = await indexResponse.json();
         if (existingIndex.entries) {
             Object.assign(indexEntries, existingIndex.entries);
         }
@@ -450,34 +475,43 @@ async function saveIndividualEntry(primaryKey, entry, indexEntries, folderId = I
             throw new Error(`Update failed: HTTP ${response.status}`);
         }
     } else {
-        // Create new file in specified folder
-        const createResponse = await gapi.client.drive.files.create({
-            resource: {
-                name: fileName,
-                mimeType: 'application/json',
-                parents: [folderId]
-            },
-            fields: 'id'
-        });
+        // Create new file with content in single multipart upload (raw fetch — gapi.client.drive is banned)
+        const metadata = {
+            name: fileName,
+            mimeType: 'application/json',
+            parents: [folderId]
+        };
+        const boundary = '-------314159265358979323846';
+        const delimiter = '\r\n--' + boundary + '\r\n';
+        const closeDelimiter = '\r\n--' + boundary + '--';
 
-        fileId = createResponse.result.id;
+        const multipartBody =
+            delimiter +
+            'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+            JSON.stringify(metadata) +
+            delimiter +
+            'Content-Type: application/json\r\n\r\n' +
+            jsonContent +
+            closeDelimiter;
 
-        // Upload content
-        const uploadResponse = await fetchWithTimeout(
-            `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+        const createResponse = await fetchWithTimeout(
+            'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
             {
-                method: 'PATCH',
+                method: 'POST',
                 headers: new Headers({
                     'Authorization': `Bearer ${gapi.client.getToken().access_token}`,
-                    'Content-Type': 'application/json'
+                    'Content-Type': `multipart/related; boundary=${boundary}`
                 }),
-                body: jsonContent
+                body: multipartBody
             }
         );
 
-        if (!uploadResponse.ok) {
-            throw new Error(`Upload failed: HTTP ${uploadResponse.status}`);
+        if (!createResponse.ok) {
+            throw new Error(`Create failed: HTTP ${createResponse.status}`);
         }
+
+        const createResult = await createResponse.json();
+        fileId = createResult.id;
     }
 
     // Update index entry
@@ -617,12 +651,43 @@ async function saveIndexFile(indexEntries, objectCount, indexFileId = INDIVIDUAL
 // =============================================================================
 
 /**
- * Check if this is a fresh run (no prior progress)
- * @returns {boolean} True if no prior progress exists
+ * Check if this is a genuine first run (no database exists anywhere).
+ * Returns false if a valid bulk file exists on Google Drive, even if
+ * localStorage progress was cleared. This prevents the Build/Resume
+ * button from triggering a fresh rebuild that overwrites good data.
+ * @returns {Promise<boolean>} True only if no valid bulk file exists
  */
-function isFirstRun() {
+async function isFirstRun() {
     const progress = loadFileOutProgress();
-    return progress.completed.length === 0;
+    if (progress.completed.length > 0) {
+        return false; // Has progress — definitely not first run
+    }
+
+    // No localStorage progress — check if a bulk file exists on Google Drive
+    try {
+        const response = await fetchWithTimeout(
+            `https://www.googleapis.com/drive/v3/files/${BULK_DATABASE_FILE_ID}?fields=size`,
+            {
+                method: 'GET',
+                headers: new Headers({
+                    'Authorization': `Bearer ${gapi.client.getToken().access_token}`
+                })
+            },
+            15000
+        );
+        if (response.ok) {
+            const metadata = await response.json();
+            if (metadata.size && parseInt(metadata.size) > 1000) {
+                console.log('[isFirstRun] No localStorage progress, but bulk file exists (' +
+                    metadata.size + ' bytes). This is NOT a first run.');
+                return false;
+            }
+        }
+    } catch (e) {
+        console.log('[isFirstRun] Could not check bulk file: ' + e.message);
+    }
+
+    return true;
 }
 
 /**
@@ -1044,15 +1109,21 @@ async function consistencyCheck(folderId = null, indexFileId = INDIVIDUALNAME_DA
         consistent: false
     };
 
-    // === STEP 1: Load bulk file from Google Drive ===
+    // === STEP 1: Load bulk file from Google Drive (raw fetch — gapi.client.drive is banned) ===
     let bulkKeys = new Set();
     try {
         const BULK_FILE_ID = '1r2G6Spg064KNbBzzKqIk131qAK0NDM9l';
-        const bulkResponse = await gapi.client.drive.files.get({
-            fileId: BULK_FILE_ID,
-            alt: 'media'
-        });
-        const bulkData = JSON.parse(bulkResponse.body);
+        const bulkResponse = await fetchWithTimeout(
+            `https://www.googleapis.com/drive/v3/files/${BULK_FILE_ID}?alt=media`,
+            {
+                method: 'GET',
+                headers: new Headers({
+                    'Authorization': `Bearer ${gapi.client.getToken().access_token}`
+                })
+            }
+        );
+        if (!bulkResponse.ok) throw new Error(`HTTP ${bulkResponse.status}`);
+        const bulkData = await bulkResponse.json();
         bulkKeys = new Set(Object.keys(bulkData.entries || {}));
         results.bulk = bulkKeys.size;
         console.log(`\n1. BULK FILE: ${results.bulk} entries`);
@@ -1066,14 +1137,20 @@ async function consistencyCheck(folderId = null, indexFileId = INDIVIDUALNAME_DA
         const folderFiles = [];
         let pageToken = null;
         do {
-            const response = await gapi.client.drive.files.list({
-                q: `'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
-                fields: 'nextPageToken, files(id, name, modifiedTime)',
-                pageSize: 1000,
-                pageToken
+            const query = encodeURIComponent(`'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`);
+            const fields = encodeURIComponent('nextPageToken, files(id, name, modifiedTime)');
+            let url = `https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}&pageSize=1000`;
+            if (pageToken) url += `&pageToken=${encodeURIComponent(pageToken)}`;
+            const response = await fetchWithTimeout(url, {
+                method: 'GET',
+                headers: new Headers({
+                    'Authorization': `Bearer ${gapi.client.getToken().access_token}`
+                })
             });
-            folderFiles.push(...response.result.files);
-            pageToken = response.result.nextPageToken;
+            if (!response.ok) throw new Error(`Folder list failed: HTTP ${response.status}`);
+            const data = await response.json();
+            folderFiles.push(...data.files);
+            pageToken = data.nextPageToken;
         } while (pageToken);
 
         // Group files by normalized name
@@ -1120,7 +1197,16 @@ async function consistencyCheck(folderId = null, indexFileId = INDIVIDUALNAME_DA
             for (const file of toDelete) {
                 console.log(`  DELETE: ${name} | ${file.modifiedTime}`);
                 try {
-                    await gapi.client.drive.files.delete({ fileId: file.id });
+                    const delResp = await fetchWithTimeout(
+                        `https://www.googleapis.com/drive/v3/files/${file.id}`,
+                        {
+                            method: 'DELETE',
+                            headers: new Headers({
+                                'Authorization': `Bearer ${gapi.client.getToken().access_token}`
+                            })
+                        }
+                    );
+                    if (!delResp.ok) throw new Error(`Delete failed: HTTP ${delResp.status}`);
                     deletedCount++;
                 } catch (e) {
                     console.error(`    ERROR: ${e.message}`);
@@ -1203,11 +1289,17 @@ async function consistencyCheck(folderId = null, indexFileId = INDIVIDUALNAME_DA
     let indexSize = 0;
     let indexKeys = [];
     try {
-        const indexResponse = await gapi.client.drive.files.get({
-            fileId: indexFileId,
-            alt: 'media'
-        });
-        const indexData = JSON.parse(indexResponse.body);
+        const indexResponse = await fetchWithTimeout(
+            `https://www.googleapis.com/drive/v3/files/${indexFileId}?alt=media`,
+            {
+                method: 'GET',
+                headers: new Headers({
+                    'Authorization': `Bearer ${gapi.client.getToken().access_token}`
+                })
+            }
+        );
+        if (!indexResponse.ok) throw new Error(`HTTP ${indexResponse.status}`);
+        const indexData = await indexResponse.json();
         indexKeys = Object.keys(indexData.entries || {});
         indexSize = indexKeys.length;
         results.index = indexSize;
@@ -1303,12 +1395,20 @@ async function backupBulkFile() {
     console.log('\n=== BACKING UP BULK FILE ===');
 
     try {
-        // Load bulk file content
-        const bulkResponse = await gapi.client.drive.files.get({
-            fileId: BULK_DATABASE_FILE_ID,
-            alt: 'media'
-        });
-        const bulkContent = bulkResponse.body;
+        // Load bulk file content (raw fetch — gapi.client.drive is banned)
+        const bulkResponse = await fetchWithTimeout(
+            `https://www.googleapis.com/drive/v3/files/${BULK_DATABASE_FILE_ID}?alt=media`,
+            {
+                method: 'GET',
+                headers: new Headers({
+                    'Authorization': `Bearer ${gapi.client.getToken().access_token}`
+                })
+            }
+        );
+        if (!bulkResponse.ok) {
+            throw new Error(`Failed to load bulk file: HTTP ${bulkResponse.status}`);
+        }
+        const bulkContent = await bulkResponse.text();
 
         // Write to backup file
         const backupResponse = await fetch(

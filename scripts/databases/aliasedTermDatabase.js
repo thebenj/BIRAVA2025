@@ -111,7 +111,8 @@ class AliasedTermDatabase {
 
     /**
      * Build the variation cache from all entries
-     * Maps all variations (primary + alternatives) to their primary key
+     * Maps verified variations (primary + homonyms + candidates) to their primary key
+     * Synonyms are EXCLUDED — they are unverified and may be false positives
      */
     _buildVariationCache() {
         this._variationCache.clear();
@@ -125,15 +126,15 @@ class AliasedTermDatabase {
                 this._variationCache.set(normalized, primaryKey);
             }
 
-            // Add alternatives (homonyms, synonyms, candidates)
+            // Add verified alternatives only (homonyms + candidates)
+            // Synonyms excluded: unverified staging area, not confirmed matches
             if (obj.alternatives) {
-                const allAlternatives = [
+                const verifiedAlternatives = [
                     ...(obj.alternatives.homonyms || []),
-                    ...(obj.alternatives.synonyms || []),
                     ...(obj.alternatives.candidates || [])
                 ];
 
-                for (const alt of allAlternatives) {
+                for (const alt of verifiedAlternatives) {
                     if (alt?.term) {
                         const normalized = this._normalizeKey(alt.term);
                         // Don't overwrite if already mapped (keeps first mapping)
@@ -472,7 +473,7 @@ class AliasedTermDatabase {
      * @param {string} primaryKey - Primary key of object to save
      * @returns {Promise<void>}
      */
-    async saveObject(primaryKey) {
+    async saveObject(primaryKey, { rebuildCache = false } = {}) {
         this._validateConfig();
 
         const normalized = this._normalizeKey(primaryKey);
@@ -487,6 +488,12 @@ class AliasedTermDatabase {
 
         // Update metadata
         entry.lastModified = new Date().toISOString();
+
+        // Rebuild variation cache if requested (e.g., after adding candidates/homonyms)
+        // For bulk operations, skip this and call _buildVariationCache() once at the end
+        if (rebuildCache) {
+            this._buildVariationCache();
+        }
 
         // Save the index
         await this._saveIndex();

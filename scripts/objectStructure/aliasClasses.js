@@ -1501,6 +1501,94 @@ class EmailTerm extends AttributedTerm {
 }
 
 /**
+ * PhoneTerm - AttributedTerm subclass for phone numbers.
+ * Provides normalization (strip formatting, pad 7-digit numbers),
+ * Block Island 466-exchange detection, and normalization-aware comparison.
+ */
+class PhoneTerm extends AttributedTerm {
+    constructor(term, source, index, identifier) {
+        super(term, source, index, identifier);
+    }
+
+    /**
+     * Normalize phone number to 10 digits.
+     * 1) Strip all non-digit characters
+     * 2) Remove leading country code '1' if 11 digits
+     * 3) 7-digit with 466 exchange → prepend '401'
+     * 4) 7-digit without 466 exchange → prepend '000'
+     * @returns {string} 10-digit normalized string
+     */
+    normalizePhone() {
+        if (!this.term || typeof this.term !== 'string') return '';
+
+        let digits = this.term.replace(/\D/g, '');
+
+        // Remove leading country code '1' if 11 digits
+        if (digits.length === 11 && digits.startsWith('1')) {
+            digits = digits.substring(1);
+        }
+
+        // Pad 7-digit numbers
+        if (digits.length === 7) {
+            if (digits.startsWith('466')) {
+                digits = '401' + digits;
+            } else {
+                digits = '000' + digits;
+            }
+        }
+
+        return digits;
+    }
+
+    /**
+     * Check if this is a Block Island 466-exchange number.
+     * @returns {boolean} True if normalized form has '466' as exchange (digits 3-5)
+     */
+    isIslandNumber() {
+        const normalized = this.normalizePhone();
+        return normalized.length >= 10 && normalized.substring(0, 3) === '401' && normalized.substring(3, 6) === '466';
+    }
+
+    /**
+     * Check if the term represents a valid phone number.
+     * Loose validation: non-empty and contains at least 7 digits.
+     * @returns {boolean} True if valid phone
+     */
+    isValidPhone() {
+        if (!this.term || typeof this.term !== 'string') return false;
+        const digits = this.term.replace(/\D/g, '');
+        return digits.length >= 7;
+    }
+
+    /**
+     * Normalization-aware phone comparison.
+     * Both PhoneTerm: normalize both, exact match → 1.0, else 0.0.
+     * Non-PhoneTerm: falls back to parent compareTo().
+     * @param {AttributedTerm} other - Other term to compare against
+     * @returns {number} Similarity score 0 or 1
+     */
+    compareTo(other) {
+        if (!other || !(other instanceof AttributedTerm)) {
+            throw new Error('Cannot compare PhoneTerm with non-AttributedTerm object');
+        }
+
+        if (!(other instanceof PhoneTerm)) {
+            return super.compareTo(other);
+        }
+
+        const thisNorm = this.normalizePhone();
+        const otherNorm = other.normalizePhone();
+
+        // Only match two valid 10-digit normalized numbers; blanks/short numbers return 0
+        if (thisNorm.length !== 10 || otherNorm.length !== 10) return 0.0;
+
+        return thisNorm === otherNorm ? 1.0 : 0.0;
+    }
+
+    // Deserialization: uses generic fallback in deserializeWithTypes (see AttributedTerm comment)
+}
+
+/**
  * Address class - subclass of ComplexIdentifiers for address data
  * Contains multiple properties, each holding AttributedTerm for different address components
  * Supports Block Island specific functionality with fire number detection
@@ -1936,6 +2024,7 @@ if (typeof window !== 'undefined') {
     window.FireNumberTerm = FireNumberTerm;
     window.AccountNumberTerm = AccountNumberTerm;
     window.EmailTerm = EmailTerm;
+    window.PhoneTerm = PhoneTerm;
     window.Aliases = Aliases;
     window.Aliased = Aliased;
     window.SimpleIdentifiers = SimpleIdentifiers;

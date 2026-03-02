@@ -778,12 +778,12 @@ function isBlockIslandCity(cityValue) {
  */
 function isBlockIslandStreet(streetValue) {
     if (!streetValue) return false;
-    if (typeof window === 'undefined' || !window.blockIslandStreets) return false;
+    if (typeof window === 'undefined' || !window.streetNameDatabase || !window.streetNameDatabase._isLoaded) return false;
 
     const term = streetValue.term !== undefined ? streetValue.term : streetValue;
     const normalized = String(term).toUpperCase().trim();
 
-    return window.blockIslandStreets.has(normalized);
+    return window.streetNameDatabase.has(normalized);
 }
 
 /**
@@ -1275,15 +1275,64 @@ function getEmailString(emailValue) {
 }
 
 /**
+ * Find the best phone match between two ContactInfo objects.
+ * Compares all phone slots (phone, islandPhone, additionalPhones) from both sides
+ * using PhoneTerm.compareTo() for normalized comparison.
+ * @param {ContactInfo} contactInfoA - First ContactInfo
+ * @param {ContactInfo} contactInfoB - Second ContactInfo
+ * @returns {{ bestScore: number, hasData: boolean, matchedPhoneA: PhoneTerm|null, matchedPhoneB: PhoneTerm|null }}
+ */
+function findBestPhoneMatch(contactInfoA, contactInfoB) {
+    // Gather PhoneTerms from A's phone slots
+    const aTerms = [];
+    if (contactInfoA.phone && contactInfoA.phone.primaryAlias) aTerms.push(contactInfoA.phone.primaryAlias);
+    if (contactInfoA.islandPhone && contactInfoA.islandPhone.primaryAlias) aTerms.push(contactInfoA.islandPhone.primaryAlias);
+    for (const p of (contactInfoA.additionalPhones || [])) {
+        if (p && p.primaryAlias) aTerms.push(p.primaryAlias);
+    }
+
+    // Gather PhoneTerms from B's phone slots
+    const bTerms = [];
+    if (contactInfoB.phone && contactInfoB.phone.primaryAlias) bTerms.push(contactInfoB.phone.primaryAlias);
+    if (contactInfoB.islandPhone && contactInfoB.islandPhone.primaryAlias) bTerms.push(contactInfoB.islandPhone.primaryAlias);
+    for (const p of (contactInfoB.additionalPhones || [])) {
+        if (p && p.primaryAlias) bTerms.push(p.primaryAlias);
+    }
+
+    if (aTerms.length === 0 || bTerms.length === 0) {
+        return { bestScore: 0, hasData: false, matchedPhoneA: null, matchedPhoneB: null };
+    }
+
+    let bestScore = 0;
+    let matchedPhoneA = null;
+    let matchedPhoneB = null;
+
+    for (const aPhone of aTerms) {
+        for (const bPhone of bTerms) {
+            const score = aPhone.compareTo(bPhone);
+            if (score > bestScore) {
+                bestScore = score;
+                matchedPhoneA = aPhone;
+                matchedPhoneB = bPhone;
+            }
+        }
+    }
+
+    return { bestScore, hasData: true, matchedPhoneA, matchedPhoneB };
+}
+
+/**
  * ContactInfo-specific weighted comparison calculator
  *
  * Logic:
- * 1. Primary address similarity: Best match comparing each primary to any address in other (0.6 weight)
- * 2. Secondary address similarity: Best match of remaining secondaries (0.2 weight)
- * 3. Email similarity: (0.2 weight)
- * 4. Phone: no weight
- * 5. Perfect match override: If any category is perfect (non-null match),
- *    that category gets 0.9 weight, others get 0.05 each
+ * 1. Primary address similarity: Best match comparing each primary to any address in other
+ * 2. Secondary address similarity: Best match of remaining secondaries
+ * 3. Email similarity: local part fuzzy + domain exact
+ * 3b. Phone similarity: Best match across all phone slots via findBestPhoneMatch()
+ * 4. Weighting (primary involved): address 0.60, email 0.20, phone 0.20
+ *    Weighting (secondary only):   address 0.48148, email 0.25926, phone 0.25926
+ * 5. Email/phone confirm-only: only contribute when perfect match
+ *    (email > 0.99, phone === 1.0); non-matches excluded, not penalized
  *
  * @param {ContactInfo} otherObject - The other ContactInfo to compare against
  * @param {boolean} detailed - If true, returns detailed breakdown object instead of number
@@ -1423,12 +1472,17 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
         }
     }
 
+    // Step 3b: Phone comparison — best match across all phone slots
+    const phoneResult = findBestPhoneMatch(thisCI, otherCI);
+    const phoneSimilarity = phoneResult.bestScore;
+
     // Step 4: Determine best address match and match type
     // Find the single best address match across all comparisons
     const hasAnyPrimaryMatch = primarySimilarity > 0;
     const hasSecondaryMatch = secondarySimilarity > 0;
     const hasAddressData = hasAnyPrimaryMatch || hasSecondaryMatch;
     const hasEmailData = thisEmail && otherEmail;
+    const hasPhoneData = phoneResult.hasData;
 
     // Determine best address similarity and whether it involved a primary address
     let bestAddressSimilarity = 0;
@@ -1445,12 +1499,17 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
     }
 
     // Step 5: Apply weighting based on match type
-    // Primary involved (primary vs primary OR primary vs secondary): address 0.75, email 0.25
-    // Secondary to secondary only: address 0.65, email 0.35
-    // Weights are normalized if either component is missing
+    // Primary involved: address 0.60, email 0.20, phone 0.20
+    // Secondary only:   address 0.48148, email 0.25926, phone 0.25926
+    // Weights are normalized if any component is missing
+    // Email/phone confirm-only: only perfect matches contribute (email > 0.99, phone === 1.0)
+    // Non-matches are excluded rather than penalizing — people use different contact info in different contexts
     const baseWeights = bestMatchType === 'secondary'
-        ? { address: 0.65, email: 0.35 }
-        : { address: 0.75, email: 0.25 };
+        ? { address: 0.48148, email: 0.25926, phone: 0.25926 }
+        : { address: 0.60, email: 0.20, phone: 0.20 };
+
+    const emailConfirmed = hasEmailData && emailSimilarity > 0.99;
+    const phoneConfirmed = hasPhoneData && phoneSimilarity === 1.0;
 
     let totalWeight = 0;
     let weightedSum = 0;
@@ -1459,9 +1518,13 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
         weightedSum += baseWeights.address * bestAddressSimilarity;
         totalWeight += baseWeights.address;
     }
-    if (hasEmailData) {
+    if (emailConfirmed) {
         weightedSum += baseWeights.email * emailSimilarity;
         totalWeight += baseWeights.email;
+    }
+    if (phoneConfirmed) {
+        weightedSum += baseWeights.phone * phoneSimilarity;
+        totalWeight += baseWeights.phone;
     }
 
     // If no components have data, return 0
@@ -1512,7 +1575,7 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
         weightedValueSum += weightedValue;
     }
 
-    if (hasEmailData) {
+    if (emailConfirmed) {
         const actualWeight = round10(baseWeights.email / totalWeight);
         const similarity = round10(emailSimilarity);
         const weightedValue = round10(actualWeight * similarity);
@@ -1523,6 +1586,21 @@ function contactInfoWeightedComparison(otherObject, detailed = false) {
             baseValue: thisEmail,
             targetValue: otherEmail,
             method: 'levenshtein'
+        };
+        weightedValueSum += weightedValue;
+    }
+
+    if (phoneConfirmed) {
+        const actualWeight = round10(baseWeights.phone / totalWeight);
+        const similarity = round10(phoneSimilarity);
+        const weightedValue = round10(actualWeight * similarity);
+        components.phone = {
+            actualWeight: actualWeight,
+            similarity: similarity,
+            weightedValue: weightedValue,
+            baseValue: phoneResult.matchedPhoneA ? phoneResult.matchedPhoneA.term : '',
+            targetValue: phoneResult.matchedPhoneB ? phoneResult.matchedPhoneB.term : '',
+            method: 'phoneTerm-normalized'
         };
         weightedValueSum += weightedValue;
     }

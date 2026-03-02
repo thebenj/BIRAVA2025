@@ -172,13 +172,8 @@ async function loadStreetNameBrowserDatabase() {
             await window.streetNameDatabase.loadFromDrive();
         }
 
-        // Set up backward compatibility aliases (same as loadBlockIslandStreetsFromDrive)
+        // Set backward-compatible alias for code using the old name
         window.blockIslandStreetDatabase = window.streetNameDatabase;
-        const variations = new Set();
-        for (const key of window.streetNameDatabase._variationCache.keys()) {
-            variations.add(key);
-        }
-        window.blockIslandStreets = variations;
 
         // Store reference in browser state
         streetNameBrowser.loadedDatabase = window.streetNameDatabase;

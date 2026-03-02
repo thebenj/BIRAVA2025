@@ -821,8 +821,13 @@
                 <div class="step-box">
                     <div class="step-label">Step A5: Process Bloomerang Data</div>
                     <div class="step-description">First export "all data.csv" from the Bloomerang application, then click to process. Creates Individual and AggregateHousehold entities with household information.</div>
-                    <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 8px; margin: 8px 0; font-size: 11px; font-weight: bold;">
-                        PREPROCESSING: 1) GET RID OF TOTAL ROW 2) REPLACE \n WITH SPACE 3) CHANGE COMMAS IN ADDRESS COLUMNS TO ^#C#^
+                    <div style="background-color: #fff3cd; border: 1px solid #ffc107; padding: 8px; margin: 8px 0; font-size: 11px; line-height: 1.6;">
+                        <strong>PREPROCESSING REQUIRED before processing:</strong><br>
+                        1) Eliminate the second row (the total row)<br>
+                        2) Format all numeric columns to not have commas or $ signs<br>
+                        3) Search and replace all commas with ^#C#^<br>
+                        4) Eliminate all \n characters (regex newlines embedded in fields)<br>
+                        <span style="color: #856404;">File must be saved as <strong>All Data.csv</strong> in servers/Results/</span>
                     </div>
                     <div class="step-buttons">
                         <button class="optBut" onclick="readBloomerangWithEntities(true)">Process Bloomerang CSV</button>
@@ -1525,6 +1530,31 @@
                 <div class="entity-browser-section" style="border-color: #1565c0;">
                     <h3 style="color: #1565c0;">Individual Name Browser - Name Alias Database Explorer</h3>
 
+            <!-- Quick Load Button -->
+            <div style="margin-bottom: 10px;">
+                <button class="action-button" style="background-color: #1565c0; padding: 8px 16px; font-weight: 600; color: white; border: none; border-radius: 4px; cursor: pointer;"
+                    onclick="(async () => {
+                        const btn = event.target;
+                        if (window.individualNameDatabase && window.individualNameDatabase._isLoaded && window.individualNameDatabase.entries.size > 0) {
+                            btn.textContent = 'Already loaded: ' + window.individualNameDatabase.entries.size + ' entries';
+                            setTimeout(() => { btn.textContent = 'Load Name Database'; }, 3000);
+                            return;
+                        }
+                        btn.textContent = 'Loading...';
+                        btn.disabled = true;
+                        try {
+                            await loadIndividualNameDatabaseFromBulk();
+                            btn.textContent = 'Loaded: ' + window.individualNameDatabase.entries.size + ' entries';
+                        } catch(e) {
+                            btn.textContent = 'Error: ' + e.message;
+                            console.error(e);
+                        }
+                        btn.disabled = false;
+                    })()"
+                >Load Name Database</button>
+                <span style="font-size: 11px; color: #666; margin-left: 8px;">Loads IndividualNameDatabase into memory (required by phonebook parser)</span>
+            </div>
+
             <!-- Process Description -->
             <div class="info-text" style="font-size: 12px; color: #6c757d; padding: 12px 15px; background-color: #e3f2fd; border-radius: 4px; margin-bottom: 15px; border-left: 4px solid #1565c0;">
                 <strong style="color: #1565c0;">Process Description</strong>
@@ -1993,6 +2023,8 @@
     <script type="text/javascript" src="./scripts/objectStructure/householdInformation.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/entityClasses.js"></script>
     <script type="text/javascript" src="./scripts/objectStructure/entityGroup.js"></script>
+    <script type="text/javascript" src="./scripts/databases/supplementalDataDatabase.js"></script>
+    <script type="text/javascript" src="./scripts/databases/phonebookDatabase.js"></script>
     <script type="text/javascript" src="./scripts/utils/classSerializationUtils.js"></script>
     <script type="text/javascript" src="./scripts/databases/aliasedTermDatabase.js"></script>
     <script type="text/javascript" src="./scripts/databases/streetNameDatabase.js"></script>
@@ -2053,9 +2085,9 @@
 
         // Initialize bypass button state on page load
         document.addEventListener('DOMContentLoaded', function() {
-            // Default to BYPASS ON (lookup disabled) for backward compatibility
+            // Default to BYPASS OFF (lookup enabled) — database is the production standard
             if (typeof window.BYPASS_INDIVIDUALNAME_LOOKUP === 'undefined') {
-                window.BYPASS_INDIVIDUALNAME_LOOKUP = true;
+                window.BYPASS_INDIVIDUALNAME_LOOKUP = false;
             }
             // Delay to ensure button exists
             setTimeout(updateBypassButtonState, 100);
@@ -2433,6 +2465,13 @@
 
     <!-- Entity Group Builder -->
     <script src="./scripts/matching/entityGroupBuilder.js"></script>
+
+    <!-- Phonebook Integration (split from monolithic phonebookMatcher.js, Session 126) -->
+    <script src="./scripts/matching/phonebookMatcher.js"></script>
+    <script src="./scripts/matching/phonebookDetection.js"></script>
+    <script src="./scripts/matching/phonebookPipeline.js"></script>
+    <script src="./scripts/matching/phonebookNameProcessing.js"></script>
+    <script src="./scripts/matching/phonebookAnnotationResolver.js"></script>
 
     <!-- EntityGroup Browser -->
     <script src="./scripts/entityGroupBrowser.js"></script>

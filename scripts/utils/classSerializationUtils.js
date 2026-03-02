@@ -33,6 +33,7 @@ const CLASS_REGISTRY = {
     'FireNumberTerm': typeof FireNumberTerm !== 'undefined' ? FireNumberTerm : null,
     'AccountNumberTerm': typeof AccountNumberTerm !== 'undefined' ? AccountNumberTerm : null,
     'EmailTerm': typeof EmailTerm !== 'undefined' ? EmailTerm : null,
+    'PhoneTerm': typeof PhoneTerm !== 'undefined' ? PhoneTerm : null,
     'Aliases': typeof Aliases !== 'undefined' ? Aliases : null,
     'Aliased': typeof Aliased !== 'undefined' ? Aliased : null,
     'SimpleIdentifiers': typeof SimpleIdentifiers !== 'undefined' ? SimpleIdentifiers : null,
@@ -64,6 +65,10 @@ const CLASS_REGISTRY = {
     // Database Classes
     'AliasedTermDatabase': typeof AliasedTermDatabase !== 'undefined' ? AliasedTermDatabase : null,
     'StreetNameDatabase': typeof StreetNameDatabase !== 'undefined' ? StreetNameDatabase : null,
+    'SupplementalDataEntry': typeof SupplementalDataEntry !== 'undefined' ? SupplementalDataEntry : null,
+    'SupplementalDataDatabase': typeof SupplementalDataDatabase !== 'undefined' ? SupplementalDataDatabase : null,
+    'PhonebookEntry': typeof PhonebookEntry !== 'undefined' ? PhonebookEntry : null,
+    'PhonebookDatabase': typeof PhonebookDatabase !== 'undefined' ? PhonebookDatabase : null,
 
     // EntityGroup Classes
     'EntityGroup': typeof EntityGroup !== 'undefined' ? EntityGroup : null,

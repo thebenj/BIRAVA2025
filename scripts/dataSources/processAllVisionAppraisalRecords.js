@@ -101,8 +101,9 @@ async function processAllVisionAppraisalRecordsWithAddresses(showDetailedResults
             console.warn('⚠️ Fire number collision database not loaded - collisions will not be persisted');
         }
 
-        // Load IndividualNameDatabase if lookup is enabled (BYPASS = false)
-        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+        // Load IndividualNameDatabase — lookup is ON by default (database is the production standard).
+        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = true to disable (exceptional use only).
+        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP !== true;
         if (lookupEnabled) {
             console.log('\n📚 IndividualName lookup is ON - checking database...');
             const dbLoaded = window.individualNameDatabase &&

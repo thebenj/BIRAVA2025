@@ -1376,6 +1376,9 @@ function openObjectExplorer(obj, title) {
     const tree = buildExplorerNode(obj, 0, new Set());
     content.appendChild(tree);
 
+    // Auto-expand the root node so user sees properties immediately
+    if (tree && tree.firstElementChild) tree.firstElementChild.click();
+
     // Add blinking animation for circular reference warnings
     const style = document.createElement('style');
     style.textContent = '@keyframes circularBlink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }';

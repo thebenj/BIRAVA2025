@@ -360,28 +360,28 @@ function createProcessedAddressObject(normalized, originalString, sourceType, fi
  * @returns {string|null} - Matched street name or null if no match
  */
 function findBlockIslandStreetMatch(streetChecks) {
-    if (!window.blockIslandStreets) {
+    const db = window.streetNameDatabase;
+    if (!db || !db._isLoaded) {
         return null;
     }
 
     let storedMatch = null;
 
-    // Check all Block Island street names to find longest match
-    for (const biStreetName of window.blockIslandStreets) {
+    // Check all StreetNameDatabase variations to find longest match
+    for (const variationKey of db._variationCache.keys()) {
         for (const checkStreet of streetChecks) {
-            // Trim database entry to handle trailing spaces
-            if (checkStreet.includes(biStreetName.trim())) {
+            if (checkStreet.includes(variationKey)) {
 
                 if (!storedMatch) {
-                    // First match found - store trimmed version
-                    storedMatch = biStreetName.trim();
+                    // First match found
+                    storedMatch = variationKey;
                 } else {
                     // Check if new match contains the stored match (is longer/more specific)
-                    if (biStreetName.includes(storedMatch)) {
-                        storedMatch = biStreetName.trim();  // Replace with longer match
+                    if (variationKey.includes(storedMatch)) {
+                        storedMatch = variationKey;  // Replace with longer match
                     }
                 }
-                break; // Move to next biStreetName
+                break; // Move to next variation
             }
         }
     }
@@ -549,10 +549,8 @@ function createBlockIslandAddress(parsed, originalString, sourceType, fieldName,
 
     // Branch 2: Use matched street from database detection (either as fallback or primary)
     // Check if the matched street (or its untrimmed version) exists in database
-    const hasMatch = matchedStreet && window.blockIslandStreets && (
-        window.blockIslandStreets.has(matchedStreet) ||
-        Array.from(window.blockIslandStreets).some(street => street.trim() === matchedStreet)
-    );
+    const hasMatch = matchedStreet && window.streetNameDatabase && window.streetNameDatabase._isLoaded &&
+        window.streetNameDatabase.has(matchedStreet);
 
     if (hasMatch) {
         // Use matched street from database detection
@@ -905,26 +903,16 @@ function deserializeStreetNameObject(data) {
 
 /**
  * Load Block Island streets database from Google Drive
- * Phase 6: Now uses the new individual-file StreetNameDatabase system
- * @returns {Promise<Set>} Set of Block Island street names (for backward compatibility)
+ * Uses the individual-file StreetNameDatabase system
+ * @returns {Promise<StreetNameDatabase>} The loaded StreetNameDatabase
  */
 async function loadBlockIslandStreetsFromDrive() {
     try {
         // Check if already loaded - skip redundant loading
         if (window.streetNameDatabase && window.streetNameDatabase._isLoaded) {
             console.log('[STREET DB] StreetNameDatabase already loaded, skipping reload');
-            // Still ensure backward compatibility aliases exist
-            if (!window.blockIslandStreetDatabase) {
-                window.blockIslandStreetDatabase = window.streetNameDatabase;
-            }
-            if (!window.blockIslandStreets) {
-                const variations = new Set();
-                for (const key of window.streetNameDatabase._variationCache.keys()) {
-                    variations.add(key);
-                }
-                window.blockIslandStreets = variations;
-            }
-            return window.blockIslandStreets;
+            window.blockIslandStreetDatabase = window.streetNameDatabase;
+            return window.streetNameDatabase;
         }
 
         // Load street type abbreviation table first (needed for address processing)
@@ -945,19 +933,11 @@ async function loadBlockIslandStreetsFromDrive() {
         // Set backward-compatible alias for any code still using the old name
         window.blockIslandStreetDatabase = window.streetNameDatabase;
 
-        // Build backward-compatible Set from all variations
-        // This ensures code using window.blockIslandStreets.has() continues to work
-        const variations = new Set();
-        for (const key of window.streetNameDatabase._variationCache.keys()) {
-            variations.add(key);
-        }
-        window.blockIslandStreets = variations;
-
         const streetCount = window.streetNameDatabase.entries.size;
-        const variationCount = variations.size;
+        const variationCount = window.streetNameDatabase._variationCache.size;
         console.log(`✅ Loaded ${streetCount} Block Island streets with ${variationCount} variations`);
 
-        return window.blockIslandStreets;
+        return window.streetNameDatabase;
 
     } catch (error) {
         console.error('❌ Failed to load Block Island streets:', error);
@@ -997,7 +977,7 @@ function enhanceAddressWithBlockIslandLogic(processedAddress, sourceType, fieldN
 
     // Rule 2: Complete missing fields if street database detected Block Island
     if (processedAddress.isBlockIslandAddress && processedAddress.needsBlockIslandForcing &&
-        processedAddress.blockIslandDetectionMethod === 'street' && window.blockIslandStreets && processedAddress.street) {
+        processedAddress.blockIslandDetectionMethod === 'street' && window.streetNameDatabase && window.streetNameDatabase._isLoaded && processedAddress.street) {
         const streetToCheck = processedAddress.street.toUpperCase().trim();
 
         // Build comprehensive street check list

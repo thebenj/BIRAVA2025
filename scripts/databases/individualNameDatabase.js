@@ -117,17 +117,16 @@ class IndividualNameDatabase extends AliasedTermDatabase {
      * @throws {Error} If database is not properly loaded
      */
     lookupExisting(term) {
-        // MIGRATION BYPASS: Control externally via window.BYPASS_INDIVIDUALNAME_LOOKUP
-        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = true to force legacy code path
-        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = false to enable actual lookup
-        const CODE_DEFAULT = true;  // Default if window variable not set
+        // IndividualName lookup: enabled by default now that the database is established.
+        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = true to force legacy code path (exceptional use only).
+        const CODE_DEFAULT = false;  // Default: lookup ON — database is the production standard
         const bypassValue = (typeof window !== 'undefined' && typeof window.BYPASS_INDIVIDUALNAME_LOOKUP === 'boolean')
             ? window.BYPASS_INDIVIDUALNAME_LOOKUP
             : CODE_DEFAULT;
 
         // Check bypass FIRST - if bypassing, return null without checking database
         if (bypassValue) {
-            return null; // Forces legacy code path for migration testing
+            return null; // Forces legacy code path (set window.BYPASS_INDIVIDUALNAME_LOOKUP = true)
         }
 
         if (!this.entries || this.entries.size === 0) {

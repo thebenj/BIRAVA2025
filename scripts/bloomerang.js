@@ -212,8 +212,9 @@ async function readBloomerangWithEntities(saveToGoogleDrive = false, batchId = n
     try {
         console.log('=== Starting Bloomerang Entity Processing ===');
 
-        // Load IndividualNameDatabase if lookup is enabled (BYPASS = false)
-        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+        // Load IndividualNameDatabase — lookup is ON by default (database is the production standard).
+        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = true to disable (exceptional use only).
+        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP !== true;
         if (lookupEnabled) {
             console.log('📚 IndividualName lookup is ON - checking database...');
             if (!window.individualNameDatabase || !window.individualNameDatabase._isLoaded ||
@@ -512,8 +513,9 @@ async function readBloomerangWithEntitiesQuiet(saveToGoogleDrive = false, batchI
         console.log('=== BLOOMERANG ENTITY CREATION (QUIET) ===');
         console.log('Processing all Bloomerang records with minimal output...');
 
-        // Load IndividualNameDatabase if lookup is enabled (BYPASS = false)
-        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+        // Load IndividualNameDatabase — lookup is ON by default (database is the production standard).
+        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = true to disable (exceptional use only).
+        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP !== true;
         if (lookupEnabled) {
             console.log('📚 IndividualName lookup is ON - checking database...');
             if (!window.individualNameDatabase || !window.individualNameDatabase._isLoaded ||
@@ -885,7 +887,11 @@ async function processRowToEntity(row, dataSource, households) {
         biStreet: 26,      // Field 27: BI Street (Block Island specific)
         biPoBox: 27,       // Field 28: BI PO Box (Block Island specific)
         householdName: 28, // Field 29: Household Name
-        isHeadOfHousehold: 29 // Field 30: Is Head of Household
+        isHeadOfHousehold: 29, // Field 30: Is Head of Household
+        primaryPhone: 30,  // Field 31: Primary Phone Number
+        homePhone: 31,     // Field 32: Home Phone Number
+        workPhone: 32,     // Field 33: Work Phone Number
+        mobilePhone: 33    // Field 34: Mobile Phone Number
     };
 
     // Removed detailed logging - only row number will be output for successful records
@@ -1783,7 +1789,11 @@ async function investigateRecord(recordNumber) {
             biStreet: 26,      // Field 27: BI Street (Block Island specific)
             biPoBox: 27,       // Field 28: BI PO Box (Block Island specific)
             householdName: 28, // Field 29: Household Name
-            isHeadOfHousehold: 29 // Field 30: Is Head of Household
+            isHeadOfHousehold: 29, // Field 30: Is Head of Household
+            primaryPhone: 30,  // Field 31: Primary Phone Number
+            homePhone: 31,     // Field 32: Home Phone Number
+            workPhone: 32,     // Field 33: Work Phone Number
+            mobilePhone: 33    // Field 34: Mobile Phone Number
         };
 
         console.log(`\n--- RECORD ${recordNumber} PARSED FIELDS ---`);
@@ -2321,6 +2331,63 @@ function createContactInfo(fields, fieldMap, rowIndex, accountNumber, dataSource
 }
 
 /**
+ * Process four phone CSV columns into categorized phone slots.
+ * Normalizes, deduplicates, then categorizes into Island + A/B/C/D.
+ *
+ * @param {Array} fields - CSV field values
+ * @param {Object} fieldMap - Field mapping with primaryPhone, homePhone, workPhone, mobilePhone
+ * @param {string} dataSource - Data source identifier
+ * @param {number} rowIndex - Row index for provenance
+ * @param {string} accountNumber - Account number for provenance
+ * @returns {Object} { islandPhone, phoneA, phoneB, phoneC, phoneD } — each SimpleIdentifiers or null
+ */
+function processPhoneFields(fields, fieldMap, dataSource, rowIndex, accountNumber) {
+    const result = { islandPhone: null, phoneA: null, phoneB: null, phoneC: null, phoneD: null };
+
+    // Collect raw values in priority order: primary, mobile, home, work
+    const rawEntries = [
+        { key: 'primary', value: (fields[fieldMap.primaryPhone] || '').trim() },
+        { key: 'mobile',  value: (fields[fieldMap.mobilePhone] || '').trim() },
+        { key: 'home',    value: (fields[fieldMap.homePhone] || '').trim() },
+        { key: 'work',    value: (fields[fieldMap.workPhone] || '').trim() }
+    ].filter(e => e.value !== '');
+
+    if (rawEntries.length === 0) return result;
+
+    // Create PhoneTerms and normalize
+    const phoneEntries = rawEntries.map(e => ({
+        key: e.key,
+        term: new PhoneTerm(e.value, dataSource, rowIndex, accountNumber),
+        normalized: new PhoneTerm(e.value, dataSource, rowIndex, accountNumber).normalizePhone()
+    }));
+
+    // Deduplicate by normalized form (keep first occurrence = highest priority)
+    const seen = new Set();
+    const unique = [];
+    for (const entry of phoneEntries) {
+        if (!seen.has(entry.normalized)) {
+            seen.add(entry.normalized);
+            unique.push(entry);
+        }
+    }
+
+    // Extract first Island number
+    const islandIndex = unique.findIndex(e => e.term.isIslandNumber());
+    if (islandIndex !== -1) {
+        const island = unique.splice(islandIndex, 1)[0];
+        result.islandPhone = new SimpleIdentifiers(island.term);
+    }
+
+    // Fill A, B, C, D from remaining (already in priority order)
+    const slots = ['phoneA', 'phoneB', 'phoneC', 'phoneD'];
+    for (let i = 0; i < unique.length && i < slots.length; i++) {
+        result[slots[i]] = new SimpleIdentifiers(unique[i].term);
+    }
+
+    return result;
+}
+
+/**
  * Enhanced ContactInfo Creation Using Generalized Address Architecture
  *
  * ARCHITECTURAL PURPOSE: This function implements the new address processing architecture
@@ -2352,6 +2419,23 @@ async function createContactInfoEnhanced(fields, fieldMap, rowIndex, accountNumb
         const emailTerm = new EmailTerm(email, dataSource, rowIndex, accountNumber);
         contactInfo.email = new SimpleIdentifiers(emailTerm);
         hasContactData = true;
+    }
+
+    // Process phone fields — normalize, deduplicate, categorize into Island + A/B/C/D
+    const phones = processPhoneFields(fields, fieldMap, dataSource, rowIndex, accountNumber);
+    if (phones.islandPhone) {
+        contactInfo.islandPhone = phones.islandPhone;
+        hasContactData = true;
+    }
+    if (phones.phoneA) {
+        contactInfo.phone = phones.phoneA;
+        hasContactData = true;
+    }
+    for (const extra of [phones.phoneB, phones.phoneC, phones.phoneD]) {
+        if (extra) {
+            contactInfo.additionalPhones.push(extra);
+            hasContactData = true;
+        }
     }
 
     const biPoBox = (fields[fieldMap.biPoBox] || '').trim();
@@ -2784,8 +2868,9 @@ async function inspectProcessedRecords(recordNumbers) {
     console.log(`Inspecting ${recordNumbers.length} records: [${recordNumbers.join(', ')}]`);
 
     try {
-        // Load IndividualNameDatabase if lookup is enabled (BYPASS = false)
-        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP === false;
+        // Load IndividualNameDatabase — lookup is ON by default (database is the production standard).
+        // Set window.BYPASS_INDIVIDUALNAME_LOOKUP = true to disable (exceptional use only).
+        const lookupEnabled = window.BYPASS_INDIVIDUALNAME_LOOKUP !== true;
         if (lookupEnabled) {
             console.log('📚 IndividualName lookup is ON - checking database...');
             if (!window.individualNameDatabase || !window.individualNameDatabase._isLoaded ||
@@ -2852,7 +2937,11 @@ async function inspectProcessedRecords(recordNumbers) {
             biStreet: 26,      // Field 27: BI Street (Block Island specific)
             biPoBox: 27,       // Field 28: BI PO Box (Block Island specific)
             householdName: 28, // Field 29: Household Name
-            isHeadOfHousehold: 29 // Field 30: Is Head of Household
+            isHeadOfHousehold: 29, // Field 30: Is Head of Household
+            primaryPhone: 30,  // Field 31: Primary Phone Number
+            homePhone: 31,     // Field 32: Home Phone Number
+            workPhone: 32,     // Field 33: Work Phone Number
+            mobilePhone: 33    // Field 34: Mobile Phone Number
         };
 
         const inspectionResults = [];

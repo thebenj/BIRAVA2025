@@ -178,9 +178,17 @@ class EntityGroup {
             allAddresses.push(...this._collectAddressesFromEntity(entity));
 
             if (entity.contactInfo) {
-                // Phone: SimpleIdentifiers from contactInfo.phone
+                // Phone: collect all phone slots (island, phone A, additional B/C/D)
+                if (entity.contactInfo.islandPhone) {
+                    allPhones.push(entity.contactInfo.islandPhone);
+                }
                 if (entity.contactInfo.phone) {
                     allPhones.push(entity.contactInfo.phone);
+                }
+                if (entity.contactInfo.additionalPhones) {
+                    for (const p of entity.contactInfo.additionalPhones) {
+                        if (p) allPhones.push(p);
+                    }
                 }
 
                 // PO Box: SimpleIdentifiers from contactInfo.poBox
@@ -1404,13 +1412,13 @@ class EntityGroupDatabase {
     }
 
     /**
-     * Build all consensus entities and member collections for groups with multiple members
+     * Build all consensus entities for groups with multiple members.
+     * Assumes buildMemberCollections() has already been called for all groups.
      * @param {Object} entityDatabase - The keyed entity database (unifiedEntityDatabase.entities)
      */
     buildAllConsensusEntities(entityDatabase) {
         for (const group of this.getAllGroups()) {
             if (group.hasMultipleMembers()) {
-                group.buildMemberCollections(entityDatabase);
                 group.buildConsensusEntity(entityDatabase);
             }
         }

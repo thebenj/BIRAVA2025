@@ -49,7 +49,7 @@ const PHONEBOOK_PARSER_CONFIG = {
         'Pawtucket', 'Providence', 'Mystic', 'Conn.', 'Connecticut',
         'Jamestown', 'Wickford', 'Galilee', 'Pt. Judith', 'Point Judith',
         'Chepachet', 'Richmond', 'Saunderstown', 'New London', 'West Warwick',
-        'West Kingston', 'Charlestown', 'Ridgefield', 'CT'
+        'West Kingston', 'West Kingstown', 'Charlestown', 'Ridgefield', 'CT', 'Warwick'
     ]
 };
 
@@ -60,31 +60,28 @@ const PHONEBOOK_PARSER_CONFIG = {
  */
 
 /**
- * Ensures Block Island street database is loaded
- * Uses Google Drive (same as addressProcessing.js) if not already loaded
- * @returns {Promise<Set>} Set of Block Island street names in uppercase
+ * Ensures StreetNameDatabase is loaded
+ * Uses window.streetNameDatabase (AliasedTermDatabase) instead of flat file
+ * @returns {Promise<StreetNameDatabase|null>} Loaded database or null
  */
 async function ensurePhonebookStreetsLoaded() {
-    // If already loaded by main application, use it
-    if (window.blockIslandStreets && window.blockIslandStreets.size > 0) {
-        console.log(`Using existing street database: ${window.blockIslandStreets.size} streets`);
-        return window.blockIslandStreets;
+    const db = window.streetNameDatabase;
+    if (!db) {
+        console.warn('[PhonebookParser] StreetNameDatabase not available on window');
+        return null;
     }
 
-    // Try to load from Google Drive (same method as addressProcessing.js)
-    try {
-        const response = await gapi.client.drive.files.get({
-            fileId: '1lsrd0alv9O01M_qlsiym3cB0TRIdgXI9',
-            alt: 'media'
-        });
+    if (db._isLoaded && db.entries.size > 0) {
+        console.log(`Using StreetNameDatabase: ${db.entries.size} streets, ${db._variationCache.size} variations`);
+        return db;
+    }
 
-        const content = response.body;
-        const streets = JSON.parse(content);
-        window.blockIslandStreets = new Set(streets.map(s => s.toUpperCase().trim()));
-        console.log(`Loaded ${streets.length} Block Island streets from Google Drive`);
-        return window.blockIslandStreets;
+    try {
+        await window.loadStreetNameDatabase();
+        console.log(`Loaded StreetNameDatabase: ${db.entries.size} streets, ${db._variationCache.size} variations`);
+        return db;
     } catch (error) {
-        console.warn('Could not load Block Island streets database:', error.message);
+        console.warn('Could not load StreetNameDatabase:', error.message);
         console.warn('Street validation will be skipped.');
         return null;
     }
@@ -111,12 +108,13 @@ function normalizeStreetForMatching(streetStr) {
 }
 
 /**
- * Finds the best matching Block Island street name
+ * Finds the best matching Block Island street name using StreetNameDatabase
  * @param {string} streetStr - The street string from phone book
  * @returns {object} - { matched: boolean, canonicalName: string|null, confidence: 'exact'|'partial'|null }
  */
 function findBIStreetMatch(streetStr) {
-    if (!window.blockIslandStreets || window.blockIslandStreets.size === 0) {
+    const db = window.streetNameDatabase;
+    if (!db || !db._isLoaded || db.entries.size === 0) {
         return { matched: false, canonicalName: null, confidence: null };
     }
 
@@ -124,26 +122,40 @@ function findBIStreetMatch(streetStr) {
         return { matched: false, canonicalName: null, confidence: null };
     }
 
-    const normalized = normalizeStreetForMatching(streetStr);
-    const streetsArray = Array.from(window.blockIslandStreets);
+    // Clean input: collapse multiple spaces, remove trailing period
+    const cleaned = streetStr.trim().replace(/\s+/g, ' ').replace(/\.$/, '');
 
-    // Try exact match first
-    for (const biStreet of streetsArray) {
-        const biNormalized = normalizeStreetForMatching(biStreet);
-        if (normalized === biNormalized) {
-            return { matched: true, canonicalName: biStreet.trim(), confidence: 'exact' };
-        }
+    // 1. Exact match via database variation cache (includes all homonyms/synonyms/candidates)
+    if (db.has(cleaned)) {
+        const result = db.lookup(cleaned);
+        return { matched: true, canonicalName: result.primaryAlias.term, confidence: 'exact' };
     }
 
-    // Try partial match - normalized contains a BI street name (longest match wins)
+    // 2. Try with abbreviation expansion (covers forms not stored in variation cache)
+    const expanded = normalizeStreetForMatching(streetStr);
+    if (db.has(expanded)) {
+        const result = db.lookup(expanded);
+        return { matched: true, canonicalName: result.primaryAlias.term, confidence: 'exact' };
+    }
+
+    // 3. Similarity-based lookup via database compareTo()
+    const similarResult = db.lookup(cleaned, 0.80);
+    if (similarResult) {
+        return { matched: true, canonicalName: similarResult.primaryAlias.term, confidence: 'partial' };
+    }
+
+    // 4. Partial match - input contains a known street name (longest match wins)
+    const cleanedUpper = cleaned.toUpperCase();
     let bestMatch = null;
     let bestLength = 0;
 
-    for (const biStreet of streetsArray) {
-        const biNormalized = normalizeStreetForMatching(biStreet);
-        if (normalized.includes(biNormalized) && biNormalized.length > bestLength) {
-            bestMatch = biStreet.trim();
-            bestLength = biNormalized.length;
+    for (const [variationKey, primaryKey] of db._variationCache) {
+        if (cleanedUpper.includes(variationKey) && variationKey.length > bestLength) {
+            const entry = db.entries.get(primaryKey);
+            if (entry) {
+                bestMatch = entry.object.primaryAlias.term;
+                bestLength = variationKey.length;
+            }
         }
     }
 
@@ -151,11 +163,15 @@ function findBIStreetMatch(streetStr) {
         return { matched: true, canonicalName: bestMatch, confidence: 'partial' };
     }
 
-    // Try reverse - BI street name contains our normalized string
-    for (const biStreet of streetsArray) {
-        const biNormalized = normalizeStreetForMatching(biStreet);
-        if (normalized.length >= 5 && biNormalized.includes(normalized)) {
-            return { matched: true, canonicalName: biStreet.trim(), confidence: 'partial' };
+    // 5. Reverse partial - a known street name contains our input
+    if (cleanedUpper.length >= 5) {
+        for (const [variationKey, primaryKey] of db._variationCache) {
+            if (variationKey.includes(cleanedUpper)) {
+                const entry = db.entries.get(primaryKey);
+                if (entry) {
+                    return { matched: true, canonicalName: entry.object.primaryAlias.term, confidence: 'partial' };
+                }
+            }
         }
     }
 
@@ -226,20 +242,13 @@ const PhonebookLineClassifier = {
      * Extracts Box/PO Box pattern from text
      */
     extractBox(text) {
-        const patterns = [
-            /,?\s*P\.?O\.?\s*Box\s+([A-Z0-9-]+)/i,
-            /,?\s*Box\s+([A-Z0-9-]+)/i
-        ];
-
-        for (const pattern of patterns) {
-            const match = text.match(pattern);
-            if (match) {
-                return {
-                    found: true,
-                    box: match[1],
-                    remaining: text.replace(match[0], '').trim()
-                };
-            }
+        const match = text.match(/,?\s*Box\s+(\d+|[A-Za-z]\d?)/i);
+        if (match) {
+            return {
+                found: true,
+                box: match[1],
+                remaining: text.replace(match[0], '').trim()
+            };
         }
         return { found: false, box: null, remaining: text };
     },
@@ -255,14 +264,41 @@ const PhonebookLineClassifier = {
     },
 
     /**
-     * Checks if text indicates off-island location
+     * Checks if text indicates off-island location.
+     * An off-island term is disqualified if the word immediately following it
+     * is a street type (e.g., "Connecticut Ave." is a BI street, not off-island).
      */
     isOffIslandLocation(text) {
         if (!text) return false;
         const upper = text.toUpperCase();
-        return PHONEBOOK_PARSER_CONFIG.offIslandLocations.some(
-            loc => upper.includes(loc.toUpperCase())
-        );
+        const mgr = typeof StreetTypeAbbreviationManager !== 'undefined' ? StreetTypeAbbreviationManager : null;
+
+        return PHONEBOOK_PARSER_CONFIG.offIslandLocations.some(loc => {
+            const locUpper = loc.toUpperCase();
+            const idx = upper.indexOf(locUpper);
+            if (idx === -1) return false;
+
+            // Word boundary check: term must not be a substring of a larger word
+            const charBefore = idx > 0 ? upper[idx - 1] : ' ';
+            const charAfter = idx + locUpper.length < upper.length ? upper[idx + locUpper.length] : ' ';
+            if (/[A-Z]/.test(charBefore) || /[A-Z]/.test(charAfter)) return false;
+
+            // Extract the word immediately following the off-island term
+            const afterTerm = upper.substring(idx + locUpper.length).trimStart();
+            if (afterTerm.length > 0 && mgr && mgr.isLoaded) {
+                const nextWord = afterTerm.split(/[\s,]+/)[0].replace(/\.$/, '');
+                if (nextWord && (mgr.hasAbbreviation(nextWord) || mgr.hasAbbreviation(nextWord + '.'))) {
+                    return false; // Followed by a street type — this is a street name, not off-island
+                }
+                // Also check if the next word is a full form (e.g., AVENUE, ROAD)
+                const fullForms = new Set(Object.values(mgr.abbreviations));
+                if (fullForms.has(nextWord)) {
+                    return false;
+                }
+            }
+
+            return true;
+        });
     },
 
     /**
@@ -285,19 +321,28 @@ const PhonebookLineClassifier = {
      * Returns position info to split name from address
      */
     scanForStreetInText(text) {
-        if (!window.blockIslandStreets || !text) {
+        const db = window.streetNameDatabase;
+        if (!db || !db._isLoaded || !text) {
             return { found: false };
         }
 
         const normalizedText = normalizeStreetForMatching(text);
 
-        // Sort streets by length descending to find longest match first
-        const streetsArray = Array.from(window.blockIslandStreets)
-            .sort((a, b) => b.length - a.length);
+        // Build variation list with normalized forms, sorted by length descending (longest match first)
+        const variations = [];
+        for (const [variationKey, primaryKey] of db._variationCache) {
+            const entry = db.entries.get(primaryKey);
+            if (entry) {
+                variations.push({
+                    normalized: normalizeStreetForMatching(variationKey),
+                    canonical: entry.object.primaryAlias.term
+                });
+            }
+        }
+        variations.sort((a, b) => b.normalized.length - a.normalized.length);
 
-        for (const street of streetsArray) {
-            const normalizedStreet = normalizeStreetForMatching(street);
-            const index = normalizedText.indexOf(normalizedStreet);
+        for (const v of variations) {
+            const index = normalizedText.indexOf(v.normalized);
 
             if (index !== -1) {
                 // Find comma before street to get name boundary
@@ -305,13 +350,13 @@ const PhonebookLineClassifier = {
                 const lastComma = textBeforeMatch.lastIndexOf(',');
 
                 if (lastComma !== -1) {
-                    const afterStreetStart = index + normalizedStreet.length;
+                    const afterStreetStart = index + v.normalized.length;
                     // Map back to original text position (approximate)
                     return {
                         found: true,
                         beforeStreet: text.substring(0, lastComma),
                         street: text.substring(lastComma + 1, afterStreetStart).trim(),
-                        canonicalName: street,
+                        canonicalName: v.canonical,
                         afterStreet: text.substring(afterStreetStart)
                     };
                 }
@@ -486,7 +531,7 @@ const PhonebookLineClassifier = {
                     streetConfidence: null,
                     isValidBIStreet: false,
                     box: data.boxAfterSep,
-                    town: data.afterBox || data.afterSeparator,
+                    town: data.hasBoxAfterSep ? (data.afterBox || null) : data.afterSeparator,
                     isOffIsland: true,
                     rawLine: data.rawLine
                 };
@@ -510,7 +555,7 @@ const PhonebookLineClassifier = {
                     skip: false,
                     phone: data.phone,
                     nameString: PhonebookLineClassifier.cleanNameString(data.beforeSeparator),
-                    street: data.afterBox || data.afterSeparator,
+                    street: data.hasBoxAfterSep ? (data.afterBox || null) : data.afterSeparator,
                     streetNormalized: null,
                     streetConfidence: null,
                     isValidBIStreet: false,
@@ -595,12 +640,12 @@ const PhonebookLineClassifier = {
                     skip: false,
                     phone: data.phone,
                     nameString: PhonebookLineClassifier.cleanNameString(data.beforeSeparator),
-                    street: data.isOffIsland ? null : (data.afterBox || data.afterSeparator),
+                    street: data.isOffIsland ? null : (data.hasBoxAfterSep ? (data.afterBox || null) : data.afterSeparator),
                     streetNormalized: null,
                     streetConfidence: null,
                     isValidBIStreet: false,
                     box: data.boxAfterSep,
-                    town: data.isOffIsland ? (data.afterBox || data.afterSeparator) : null,
+                    town: data.isOffIsland ? (data.hasBoxAfterSep ? (data.afterBox || null) : data.afterSeparator) : null,
                     isOffIsland: data.isOffIsland,
                     rawLine: data.rawLine
                 };
@@ -622,7 +667,7 @@ const PhonebookLineClassifier = {
                     skip: false,
                     phone: data.phone,
                     nameString: PhonebookLineClassifier.cleanNameString(data.beforeSeparator),
-                    street: data.hasStreetMatch ? (data.afterBox || data.afterSeparator) : null,
+                    street: data.hasStreetMatch ? (data.hasBoxAfterSep ? (data.afterBox || null) : data.afterSeparator) : null,
                     streetNormalized: data.streetCanonical,
                     streetConfidence: data.streetConfidence,
                     isValidBIStreet: data.hasStreetMatch,
@@ -729,7 +774,7 @@ const PhonebookLineClassifier = {
                     skip: false,
                     phone: null,
                     nameString: PhonebookLineClassifier.cleanNameString(data.beforeSeparator),
-                    street: data.hasStreetMatch ? (data.afterBox || data.afterSeparator) : null,
+                    street: data.hasStreetMatch ? (data.hasBoxAfterSep ? (data.afterBox || null) : data.afterSeparator) : null,
                     streetNormalized: data.streetCanonical,
                     streetConfidence: data.streetConfidence,
                     isValidBIStreet: data.hasStreetMatch,
@@ -1062,6 +1107,63 @@ function parseNameSimple(nameStr) {
  */
 
 /**
+ * Extract fire number from the street field and build the full address object.
+ * Fire numbers are the leading numeric token in BI street addresses (e.g., "123 Ocean View Road").
+ * Letter suffixes (e.g., "123A") indicate fire number collisions — multiple residences
+ * at the same base fire number. The suffix is stripped for normalized comparison but
+ * preserved in fireNumberRaw for collision detection.
+ *
+ * @param {Object} lineResult - The classified line result from PhonebookLineClassifier
+ * @returns {Object} Address object with fire number fields
+ */
+function extractAddressWithFireNumber(lineResult) {
+    const street = lineResult.street;
+
+    // Extract fire number from leading token of street field
+    let fireNumber = null;
+    let fireNumberRaw = null;
+    let hasCollisionSuffix = false;
+    let streetWithoutFireNumber = street || null;
+
+    if (street) {
+        const spaceIndex = street.indexOf(' ');
+        if (spaceIndex > 0) {
+            const leadingToken = street.substring(0, spaceIndex);
+            // Check if leading token starts with a digit
+            if (/^\d/.test(leadingToken)) {
+                fireNumberRaw = leadingToken;
+                fireNumber = leadingToken.replace(/\D/g, '');  // digits only
+                hasCollisionSuffix = fireNumberRaw !== fireNumber;  // true if letters were stripped
+                streetWithoutFireNumber = street.substring(spaceIndex + 1).trim();
+            }
+        } else {
+            // Single-token street field — could be just a number like "123"
+            if (/^\d/.test(street)) {
+                fireNumberRaw = street;
+                fireNumber = street.replace(/\D/g, '');
+                hasCollisionSuffix = fireNumberRaw !== fireNumber;
+                streetWithoutFireNumber = null;  // nothing left after fire number
+            }
+        }
+    }
+
+    return {
+        raw: street || lineResult.town || null,
+        street: street,
+        streetNormalized: lineResult.streetNormalized,
+        streetMatchConfidence: lineResult.streetConfidence,
+        isValidBIStreet: lineResult.isValidBIStreet,
+        box: lineResult.box,
+        town: lineResult.town || null,
+        isOffIsland: lineResult.isOffIsland,
+        fireNumber: fireNumber,
+        fireNumberRaw: fireNumberRaw,
+        hasCollisionSuffix: hasCollisionSuffix,
+        streetWithoutFireNumber: streetWithoutFireNumber
+    };
+}
+
+/**
  * Parses a single phone book line into a structured record
  * Uses the modular PhonebookLineClassifier architecture
  */
@@ -1095,17 +1197,8 @@ function parsePhonebookLine(line, lineNumber = 0) {
             entityType: nameResult.entityType
         },
 
-        // Address components
-        address: {
-            raw: lineResult.street || lineResult.town || null,
-            street: lineResult.street,
-            streetNormalized: lineResult.streetNormalized,
-            streetMatchConfidence: lineResult.streetConfidence,
-            isValidBIStreet: lineResult.isValidBIStreet,
-            box: lineResult.box,
-            town: lineResult.town || null,
-            isOffIsland: lineResult.isOffIsland
-        },
+        // Address components (with fire number extraction)
+        address: extractAddressWithFireNumber(lineResult),
 
         rawLine: lineResult.rawLine
     };
@@ -1134,7 +1227,7 @@ function parsePhonebook(text) {
         exactStreetMatch: 0,
         partialStreetMatch: 0,
         unvalidatedStreet: 0,
-        streetDbAvailable: window.blockIslandStreets ? window.blockIslandStreets.size : 0,
+        streetDbAvailable: window.streetNameDatabase && window.streetNameDatabase._isLoaded ? window.streetNameDatabase.entries.size : 0,
         // Line type distribution
         lineTypeCounts: {}
     };
@@ -1197,6 +1290,7 @@ function phonebookToCSV(records) {
         'Phone', 'LastName', 'FirstName', 'SecondName',
         'IsBusiness', 'IsCouple', 'NameCaseType', 'EntityType',
         'Street', 'StreetNormalized', 'IsValidBIStreet', 'StreetMatchConfidence',
+        'FireNumber', 'FireNumberRaw', 'HasCollisionSuffix', 'StreetWithoutFireNumber',
         'Box', 'Town', 'IsOffIsland'
     ];
 
@@ -1219,6 +1313,10 @@ function phonebookToCSV(records) {
             csvEscapePhonebook(record.address.streetNormalized || ''),
             record.address.isValidBIStreet ? 'TRUE' : 'FALSE',
             csvEscapePhonebook(record.address.streetMatchConfidence || ''),
+            csvEscapePhonebook(record.address.fireNumber || ''),
+            csvEscapePhonebook(record.address.fireNumberRaw || ''),
+            record.address.hasCollisionSuffix ? 'TRUE' : 'FALSE',
+            csvEscapePhonebook(record.address.streetWithoutFireNumber || ''),
             csvEscapePhonebook(record.address.box || ''),
             csvEscapePhonebook(record.address.town || ''),
             record.address.isOffIsland ? 'TRUE' : 'FALSE'
@@ -1246,6 +1344,15 @@ function csvEscapePhonebook(value) {
 
 async function processPhonebookFile() {
     try {
+        // Ensure IndividualNameDatabase is loaded (required by parsePhonebookNameWithCase31)
+        if (!window.individualNameDatabase || !window.individualNameDatabase._isLoaded || window.individualNameDatabase.entries.size === 0) {
+            console.log('IndividualNameDatabase not loaded. Loading from bulk file...');
+            await loadIndividualNameDatabaseFromBulk();
+            console.log('IndividualNameDatabase loaded: ' + window.individualNameDatabase.entries.size + ' entries');
+        } else {
+            console.log('IndividualNameDatabase already loaded: ' + window.individualNameDatabase.entries.size + ' entries');
+        }
+
         // Ensure Block Island streets database is loaded
         console.log('Loading Block Island street database...');
         await ensurePhonebookStreetsLoaded();

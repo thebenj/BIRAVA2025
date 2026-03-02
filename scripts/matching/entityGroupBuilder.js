@@ -123,6 +123,17 @@ async function buildEntityGroupDatabase(options = {}) {
     groupDb.constructionComplete = true;
     groupDb.updateStats();
 
+    // Build member collections for ALL groups (individualNames, blockIslandAddresses, etc.)
+    // MUST run unconditionally for ALL groups - phonebook matching (Phase B) needs to search
+    // every group's collections, including single-member groups
+    log('\n--- Building Member Collections ---');
+    let collectionsBuilt = 0;
+    for (const group of groupDb.getAllGroups()) {
+        group.buildMemberCollections(entityDb);
+        collectionsBuilt++;
+    }
+    log(`Built member collections for ${collectionsBuilt} groups`);
+
     // Build consensus entities if requested
     if (config.buildConsensus) {
         log('\n--- Building Consensus Entities ---');

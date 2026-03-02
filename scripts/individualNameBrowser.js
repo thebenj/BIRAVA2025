@@ -2166,8 +2166,8 @@ async function handleBuildRunResume() {
             entityGroupDb.groups &&
             Object.keys(entityGroupDb.groups).length > 0;
 
-        // 2. Determine if first run or resume
-        const firstRun = isFirstRun();
+        // 2. Determine if first run or resume (async — checks bulk file on Drive)
+        const firstRun = await isFirstRun();
         console.log(`[BuildRunResume] First run: ${firstRun}, Has EntityGroups: ${hasEntityGroups}`);
 
         if (firstRun) {

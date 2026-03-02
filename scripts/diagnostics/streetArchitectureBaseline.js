@@ -212,9 +212,8 @@ function isAddressBlockIsland(addr) {
 
     // Check if street is in BI database
     const streetName = getTermString(addr.streetName);
-    if (streetName && typeof streetName === 'string' && window.blockIslandStreets) {
-        const streetUpper = streetName.toUpperCase().trim();
-        if (window.blockIslandStreets.has(streetUpper)) {
+    if (streetName && typeof streetName === 'string' && window.streetNameDatabase && window.streetNameDatabase._isLoaded) {
+        if (window.streetNameDatabase.has(streetName)) {
             return true;
         }
     }
@@ -797,15 +796,15 @@ async function runBaselineCapture(options = {}) {
     }
 
     // Load Block Island streets database if not already loaded
-    if (!window.blockIslandStreets) {
-        console.log('[BASELINE] Block Island streets database not loaded. Loading now...');
+    if (!window.streetNameDatabase || !window.streetNameDatabase._isLoaded) {
+        console.log('[BASELINE] StreetNameDatabase not loaded. Loading now...');
         if (typeof loadBlockIslandStreetsFromDrive === 'function') {
             try {
                 await loadBlockIslandStreetsFromDrive();
-                console.log('[BASELINE] Block Island streets database loaded successfully.');
-                console.log(`[BASELINE] Streets count: ${window.blockIslandStreets ? window.blockIslandStreets.size : 0}`);
+                console.log('[BASELINE] StreetNameDatabase loaded successfully.');
+                console.log(`[BASELINE] Streets count: ${window.streetNameDatabase ? window.streetNameDatabase.entries.size : 0}`);
             } catch (error) {
-                console.error('[BASELINE] ERROR: Failed to load Block Island streets database:', error);
+                console.error('[BASELINE] ERROR: Failed to load StreetNameDatabase:', error);
                 console.error('[BASELINE] Street lookup capture will be incomplete.');
             }
         } else {
@@ -813,7 +812,7 @@ async function runBaselineCapture(options = {}) {
             console.error('[BASELINE] Street lookup capture will be incomplete.');
         }
     } else {
-        console.log(`[BASELINE] Block Island streets database already loaded (${window.blockIslandStreets.size} streets).`);
+        console.log(`[BASELINE] StreetNameDatabase already loaded (${window.streetNameDatabase.entries.size} streets).`);
     }
 
     // Enable instrumentation
@@ -879,15 +878,15 @@ async function captureStreetLookupBaseline() {
     }
 
     // Load Block Island streets database if not already loaded
-    if (!window.blockIslandStreets) {
-        console.log('[BASELINE] Block Island streets database not loaded. Loading now...');
+    if (!window.streetNameDatabase || !window.streetNameDatabase._isLoaded) {
+        console.log('[BASELINE] StreetNameDatabase not loaded. Loading now...');
         if (typeof loadBlockIslandStreetsFromDrive === 'function') {
             try {
                 await loadBlockIslandStreetsFromDrive();
-                console.log('[BASELINE] Block Island streets database loaded successfully.');
-                console.log(`[BASELINE] Streets count: ${window.blockIslandStreets ? window.blockIslandStreets.size : 0}`);
+                console.log('[BASELINE] StreetNameDatabase loaded successfully.');
+                console.log(`[BASELINE] Streets count: ${window.streetNameDatabase ? window.streetNameDatabase.entries.size : 0}`);
             } catch (error) {
-                console.error('[BASELINE] ERROR: Failed to load Block Island streets database:', error);
+                console.error('[BASELINE] ERROR: Failed to load StreetNameDatabase:', error);
                 return null;
             }
         } else {
@@ -895,7 +894,7 @@ async function captureStreetLookupBaseline() {
             return null;
         }
     } else {
-        console.log(`[BASELINE] Block Island streets database already loaded (${window.blockIslandStreets.size} streets).`);
+        console.log(`[BASELINE] StreetNameDatabase already loaded (${window.streetNameDatabase.entries.size} streets).`);
     }
 
     // Helper to extract string from AttributedTerm or plain string
@@ -937,10 +936,10 @@ async function captureStreetLookupBaseline() {
             let matchedCanonical = null;
 
             // Check against BI street database (same logic as findBlockIslandStreetMatch)
-            for (const biStreet of window.blockIslandStreets) {
-                if (streetUpper.includes(biStreet.trim())) {
-                    if (!matchedCanonical || biStreet.includes(matchedCanonical)) {
-                        matchedCanonical = biStreet.trim();
+            for (const variationKey of window.streetNameDatabase._variationCache.keys()) {
+                if (streetUpper.includes(variationKey)) {
+                    if (!matchedCanonical || variationKey.includes(matchedCanonical)) {
+                        matchedCanonical = variationKey;
                         matched = true;
                     }
                 }

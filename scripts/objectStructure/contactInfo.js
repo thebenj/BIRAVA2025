@@ -102,7 +102,9 @@ class ContactInfo extends Info {
 
         // Contact-related fields
         this.email = null;       // SimpleIdentifiers for email (no IndicativeData wrapper)
-        this.phone = null;       // SimpleIdentifiers for phone (no IndicativeData wrapper)
+        this.phone = null;       // SimpleIdentifiers for Phone A (best non-island phone)
+        this.islandPhone = null; // SimpleIdentifiers for 466-exchange Block Island phone
+        this.additionalPhones = []; // Array<SimpleIdentifiers> for Phones B, C, D
         this.poBox = null;       // SimpleIdentifiers for PO Box (no IndicativeData wrapper)
         this.primaryAddress = null;      // Address object for primary mailing address
         this.secondaryAddress = [];      // Array of Address objects for secondary addresses (home, vacation, work, etc.)
@@ -123,7 +125,7 @@ class ContactInfo extends Info {
             primaryAddress: 'conditional',
             secondaryAddress: 'conditional',
             email: 'conditional'
-            // phone has no weight
+            // phone: 0.20 primary / 0.25926 secondary (in contactInfoWeightedComparison)
         };
         this.comparisonCalculatorName = 'contactInfoWeightedComparison';
         this.comparisonCalculator = resolveComparisonCalculator(this.comparisonCalculatorName);
@@ -143,6 +145,22 @@ class ContactInfo extends Info {
      */
     setPhone(phoneSimpleIdentifiers) {
         this.phone = phoneSimpleIdentifiers;
+    }
+
+    /**
+     * Set island phone (466-exchange Block Island number)
+     * @param {SimpleIdentifiers} phoneSimpleIdentifiers - SimpleIdentifiers containing PhoneTerm
+     */
+    setIslandPhone(phoneSimpleIdentifiers) {
+        this.islandPhone = phoneSimpleIdentifiers;
+    }
+
+    /**
+     * Add an additional phone (Phone B, C, or D)
+     * @param {SimpleIdentifiers} phoneSimpleIdentifiers - SimpleIdentifiers containing PhoneTerm
+     */
+    addAdditionalPhone(phoneSimpleIdentifiers) {
+        this.additionalPhones.push(phoneSimpleIdentifiers);
     }
 
     /**
