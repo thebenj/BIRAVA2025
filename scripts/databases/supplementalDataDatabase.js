@@ -71,11 +71,13 @@ class SupplementalDataEntry {
 
     /**
      * Add a match association
-     * @param {Object} association - { groupIndex, entityKey, matchSource, matchConfidence, designation }
+     * Progressive model: Step 1 writes entityKey (groupIndex null), Step 3 fills in groupIndex.
+     * At least one of groupIndex or entityKey must be present.
+     * @param {Object} association - { groupIndex, entityKey, matchSource, matchType, ... }
      */
     addMatchAssociation(association) {
-        if (!association || association.groupIndex == null) {
-            throw new Error('Match association requires at least groupIndex');
+        if (!association || (association.groupIndex == null && !association.entityKey)) {
+            throw new Error('Match association requires at least groupIndex or entityKey');
         }
         this.matchAssociations.push(association);
     }

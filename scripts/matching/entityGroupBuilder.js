@@ -100,6 +100,29 @@ async function buildEntityGroupDatabase(options = {}) {
         groupDb.sampleMode = { enabled: false };
     }
 
+    // =========================================================================
+    // PHONEBOOK STEP 1: Pre-group entity matching
+    // Load PhonebookDatabase and IndividualNameDatabase, then run Step 1
+    // which matches phonebook records → existing entities and transfers
+    // phone numbers and name aliases. No entity creation here.
+    // =========================================================================
+    log('\n--- Loading PhonebookDatabase from Drive ---');
+    const phonebookDb = new PhonebookDatabase();
+    await phonebookDb.loadFromBulk();
+    log(`PhonebookDatabase loaded: ${phonebookDb.size} entries`);
+
+    log('\n--- Loading IndividualNameDatabase from Drive ---');
+    const indNameDb = await loadIndividualNameDatabaseFromBulk();
+    log(`IndividualNameDatabase loaded: ${indNameDb.entries.size} entries`);
+
+    log('\n--- Phonebook Step 1: Pre-Group Entity Matching ---');
+    const step1Result = phonebookStep1(phonebookDb, entityDb, indNameDb);
+    if (!step1Result) {
+        console.error('ERROR: phonebookStep1 failed. Aborting build.');
+        return null;
+    }
+    log(`Step 1 complete: ${step1Result.processed} processed, ${step1Result.fullMatches} full matches, ${step1Result.noClassifiedMatch} unmatched`);
+
     // Execute each phase - VisionAppraisal first (all types), then Bloomerang (all types)
     log('\n--- Phase 1: VisionAppraisal Households ---');
     executePhase2_VisionAppraisalHouseholds(groupDb, entityDb, log);
@@ -133,6 +156,47 @@ async function buildEntityGroupDatabase(options = {}) {
         collectionsBuilt++;
     }
     log(`Built member collections for ${collectionsBuilt} groups`);
+
+    // =========================================================================
+    // PHONEBOOK STEP 3: Post-group phonebook integration
+    // Fill in groupIndex on Step 1 matchAssociations, create phonebook-sourced
+    // entities for unmatched records, match them against existing groups,
+    // create single-entity groups for still-unmatched, apply name aliases,
+    // and run individual discovery on empty AggregateHouseholds.
+    // =========================================================================
+    log('\n--- Phonebook Step 3a: Fill GroupIndex on Step 1 Associations ---');
+    fillGroupIndex(phonebookDb, groupDb);
+
+    log('\n--- Phonebook Step 3b: Create Phonebook-Sourced Entities ---');
+    const step3bResult = createPhonebookEntities(phonebookDb, entityDb, indNameDb);
+    if (!step3bResult) {
+        console.error('ERROR: createPhonebookEntities failed. Aborting build.');
+        return null;
+    }
+
+    log('\n--- Phonebook Step 3c-couple: Forced Couple Placement ---');
+    placeCouplePhonebookEntities(phonebookDb, groupDb, entityDb);
+
+    log('\n--- Phonebook Step 3c/d/e: Group Matching + Single-Entity Groups + Aliases ---');
+    const step3cdeResult = matchPhonebookEntitiesToGroups(phonebookDb, groupDb, entityDb, indNameDb);
+    if (!step3cdeResult) {
+        console.error('ERROR: matchPhonebookEntitiesToGroups failed. Aborting build.');
+        return null;
+    }
+
+    log('\n--- Phonebook Step 3f: Individual Discovery ---');
+    tagIndividualDiscovery(phonebookDb, entityDb);
+    processIndividualDiscovery(phonebookDb, { entityDb: entityDb, indNameDb: indNameDb });
+
+    // Rebuild member collections for ALL groups after phonebook integration
+    // (new entities, new groups, and modified groups all need fresh collections)
+    log('\n--- Rebuilding Member Collections (post-phonebook) ---');
+    let collectionsRebuilt = 0;
+    for (const group of groupDb.getAllGroups()) {
+        group.buildMemberCollections(entityDb);
+        collectionsRebuilt++;
+    }
+    log(`Rebuilt member collections for ${collectionsRebuilt} groups`);
 
     // Build consensus entities if requested
     if (config.buildConsensus) {

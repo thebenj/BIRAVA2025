@@ -100,7 +100,7 @@ On a rebuild (Goal 2), the process is: run the algorithm, then apply stored incl
 
 ---
 
-## Phase 4: Name Variation Processing — 4.1–4.5 DONE, 4.6 PENDING
+## Phase 4: Name Variation Processing — 4.1–4.5 DONE, 4.6 CODED & TESTED
 
 **Goal**: Apply phonebook name forms as aliases on IndividualName entries and NonHumanName entities.
 
@@ -159,21 +159,48 @@ Processes person-classified phonebook records: resolves entityKey (handles synth
 
 **CRITICAL**: `tagIndividualDiscovery()` tags are NOT persisted to Drive. Must re-run after loading PhonebookDatabase from bulk.
 
-### 4.6 Entity-Level Phonebook Matching Helpers — PENDING
+### 4.6 Entity-Level Phonebook Matching Helpers — CODED & TESTED (Sessions 135-136)
 
 **Goal**: Build entity-level comparison helpers that Step 1 (pre-group matching) needs. These are modular functions that can be called by any orchestrator.
 
 **Rationale**: The current matching code (phonebookMatcher.js) compares phonebook records against EntityGroup **collections** (group.individualNames, group.blockIslandAddresses). Step 1 needs to compare against **individual entities** in the unified entity database. The comparison logic (name scoring, address matching) is the same — only the iteration target differs. Shared Layer 1 helpers (createPhonebookNameObjects, bestScoreFromFourScore) are already isolated and reusable.
 
-**New helpers needed:**
+**File**: `scripts/matching/phonebookEntityMatcher.js` — keeps entity-level matching separate from group-level matching (modular, not monolithic).
 
-1. **`lookupNameOnEntity(phonebookNames, entity)`** — Compare phonebook name objects against a single entity's IndividualName (or individuals[] array for AggregateHouseholds). Returns name hits with scores, analogous to `lookupNamesInGroup()` but operating on entity.name / entity.individuals[].name instead of group collections.
+**Components:**
 
-2. **`lookupAddressOnEntity(record, entity)`** — Compare phonebook address against a single entity's address. Extract fire number from entity's Address object and compare to phonebook record's fire number. Returns address hits, analogous to `lookupAddressInGroup()` but operating on entity.contactInfo.address instead of group.blockIslandAddresses.
+1. **`lookupNameOnEntity(phonebookNames, entity)`** — CODED & TESTED. Compare phonebook name objects against a single entity's IndividualName (or individuals[] array for AggregateHouseholds). Returns name hits with scores, analogous to `lookupNamesInGroup()` but operating on entity.name / entity.individuals[].name instead of group collections.
 
-3. **`lookupPOBoxOnEntity(record, entity)`** — Compare phonebook PO box against entity's PO box. Analogous to `lookupPOBoxInGroup()`.
+2. **`lookupAddressOnEntity(record, entity)`** — CODED & TESTED. Compare phonebook address against a single entity's Block Island addresses (primary + secondary). Includes `_isBlockIslandAddress()` gate that replicates exact entityGroup.js buildMemberCollections() BI detection logic (lines 371-373): `isBlockIslandAddress?.term === 'true' || === true || zipCode?.term === '02807'`. Without this gate, off-island entities with matching fire numbers (e.g., 335 Warhurst Ave, Swansea) produce false positives.
 
-**File**: New file `scripts/matching/phonebookEntityMatcher.js` — keeps entity-level matching separate from group-level matching (modular, not monolithic).
+3. **`lookupPOBoxOnEntity(record, entity)`** — CODED, NOT TESTED WITH REAL PO BOX DATA. Compare phonebook PO box against entity's PO box.
+
+4. **`classifyEntityMatchResult(matchResult)`** — CODED & TESTED (Session 136). Entity-level counterpart to `classifyPhonebookMatch()` in phonebookMatcher.js. Applies the same classification rules to entity-level hits. Without this, raw hits are dominated by streetOnly false positives (batch testing: 339 entities for Corn Neck Road, 84 for Spring Street). The classification rules replicated:
+
+   - **streetOnly rejection**: streetOnly address matches cannot stand alone. Need name corroboration (→ full match) or fireNumber/PO box (→ address-only match). This is the primary filter that prevents address-only explosion.
+   - **Variable name thresholds**: Uses `PHONEBOOK_CLASSIFICATION_THRESHOLDS` from phonebookMatcher.js: nameWithAddress=0.80 (non-collision), nameWithCollision=0.845, nameAlone=0.845.
+   - **Address-alone requires strong evidence**: Only fireNumber or PO box matches qualify. streetOnly never qualifies as standalone. Collision addresses also rejected without name.
+   - **Full matches kill all partials**: If any entity has a full match (name+address above threshold), discard all name-only and address-only matches for the entire record.
+   - **Couple Condition 2**: Both couple members match different names on the same entity with scores >= 0.845. Only applies to AggregateHouseholds with populated individuals[]. At entity level, "different names" means different individuals within the same household, identified by source string (not matchedGroupNameKey). Helper: `_checkEntityCoupleCondition2()`.
+
+   **Key difference from group-level**: Entity hits are already grouped by entity key (from `matchPhonebookRecordToEntities()`), so no grouping step is needed. Each entity's hit combination is classified independently.
+
+   **Session 136 test results**:
+   - Test A (Aldo Leone, fire#335): fullMatches:1, nameMatches:0, addressMatches:0 — correct full match.
+   - Test B (T. ROBINSON, OCEAN AVE — streetOnly): 69 raw entity hits → 0 classified — streetOnly rejection confirmed.
+   - Batch test (305 person records with no prior group-level match): 273 with raw hits, 0 classified matches. Expected — these records failed group-level matching (more context), so they also fail entity-level matching (less context).
+
+**Orchestration:**
+
+5. **`matchPhonebookRecordToEntities(record, entities)`** — CODED & TESTED. Iterates all entities, runs three lookup helpers, returns raw hits grouped by entity key. Feeds into `classifyEntityMatchResult()`.
+
+**Diagnostics (all coded):**
+- `testEntityMatch(firstName, lastName, fireNumber, poBox)` — synthetic record against all entities
+- `testEntityNameLookup(entityKey, firstName, lastName)` — single entity name comparison
+- `inspectEntityAddress(entityKey)` — entity address structure dump
+- `batchEntityMatch(db, limit)` — PhonebookDatabase entries through entity matcher with classification. Reports raw hits vs classified matches per record.
+
+**Critical lesson learned (Session 135)**: Group-level collections (group.blockIslandAddresses, group.individualNames) contain only qualifying items by construction — the filters are built into collection assembly. Entity-level code must explicitly replicate those filters. The `_isBlockIslandAddress()` gate and the classification rules are how entity-level code achieves the same filtering that group-level code gets for free from collection construction.
 
 ### Phase 3 Revision — DONE (Session 129)
 `tagIndividualDiscovery(db, entityDb)` in phonebookPipeline.js — post-processing pass tagging matchAssociations where destination is AggH with empty individuals. 39 tagged from fresh rebuild.
@@ -188,21 +215,25 @@ Cross-person false alias from matchAssociation pointing to wrong entity. Now tra
 
 ## Phase 5: Two-Step Phonebook Integration (REVISED Session 134)
 
-> **Architectural revision**: Phases 5 and 6 were completely redesigned in Session 134 based on a comprehensive accounting of all phonebook record fates. The old Phase 5 (phone number assignment as a separate step) and old Phase 6 (post-group-only integration) are replaced by a two-step pipeline that handles ALL phonebook cases including 108 non-person-entity matches and 285 unmatched person records.
+> **Architectural revision**: Phases 5 and 6 were completely redesigned in Session 134 based on a comprehensive accounting of all phonebook record fates. The old Phase 5 (phone number assignment as a separate step) and old Phase 6 (post-group-only integration) are replaced by a two-step pipeline that handles ALL phonebook cases.
 
-### Background: Complete Phonebook Fate Accounting (Session 134)
+### Background: Record Categories by Nature
 
-Every phonebook association was categorized:
+The pipeline categorizes each person-classified phonebook record by the **outcome of entity-level matching** — not by pre-assigned labels. Each record's category is discovered through matching, not known in advance. The categories are:
 
-| Category | Count | Handling |
-|----------|-------|----------|
-| Non-person classified | 120 | Phase 4.3 (nonhuman aliases) — DONE |
-| Person, unmatched (no associations) | 285 | **Step 1 + Step 3** — create entities, match to groups |
-| Person, resolved to IndividualName | 817 | Phase 4.1/4.4/4.5 (aliases) — DONE |
-| Person, matched to NonHumanName entity | 108 | **Step 1 + Step 3** — create entities, add to groups |
-| Person, Bloomerang key missing | 2 | Known edge cases |
+| Category (by nature) | Handling |
+|----------------------|----------|
+| Non-person classified | Phase 4.3 (nonhuman aliases) — DONE |
+| Person, full match to person entity | **Step 1** — record matchAssociation, transfer phone + name alias to matched entity. No new entity created. |
+| Person, address-only match to non-person entity | **Step 1** matchAssociation + phone transfer. **Step 3** creates phonebook-sourced Individual, runs group matching. |
+| Person, name-only match | **Step 1** matchAssociation (weaker evidence). **Step 3** may confirm via group-level matching. |
+| Person, address-only match to person entity | **Step 1** matchAssociation + phone transfer. |
+| Person, no classified entity-level match | **Step 3** — create phonebook-sourced Individual, run group matching (emulating VA/Bloomerang process). |
+| Person, Bloomerang key missing | Known edge cases (2 in inaugural build) |
 
-The 108 are person-classified phonebook records matched by address to properties owned by trusts, QPRTs, legal constructs, and businesses (100 LegalConstruct + 8 Business, all with NonHumanName). The 285 are person-classified records with no match at all.
+**Inaugural Build Results (Historical Reference)**: In the Session 134 inaugural build, these categories had counts: 120 non-person, 817 person-matched, 108 non-person-entity address matches (100 LegalConstruct + 8 Business), 285 unmatched person, 2 Bloomerang edge cases. These counts are specific to that dataset — the pipeline logic does not depend on them.
+
+**How the pipeline discovers categories**: For each person-classified phonebook record, Step 1 runs entity-level matching (`matchPhonebookRecordToEntities()` → `classifyEntityMatchResult()`). The classification outcome determines which category the record falls into. Records that receive a classified match get a matchAssociation immediately, with phone and name alias transfer to the matched entity. Records with no classified match receive no matchAssociation at Step 1 — they proceed to Step 3 for group-level matching after entity group creation. **No entities are created in Step 1** — entity creation for all unmatched records is deferred to Step 3 to avoid requiring modifications to the legacy entity group builder.
 
 ### Pipeline Design: Two-Step Phonebook Processing
 
@@ -220,93 +251,140 @@ Unified Entity DB created
    Save entity groups + IndividualNameDatabase
 ```
 
-**Why two steps**: Some phonebook matches require entity-group-level context (a phonebook name matches one entity while the address matches a different entity in the same group). These cross-entity matches can only be found after groups exist. But the 108 and 285 cases can be identified before groups exist and benefit from early entity creation.
+**Why two steps**: The information available differs at each stage. Step 1 has entities but no groups — it determines which entity each phonebook record corresponds to, records matchAssociations, and transfers phone/name info to matched entities. Step 3 has groups — it fills in groupIndex, creates phonebook-sourced entities for unmatched records, and runs those entities through group matching emulating the VA/Bloomerang process. Cross-entity matches (name on entity A + address on entity B in same group) require group context that doesn't exist in Step 1 — this is why entity creation is deferred to Step 3 rather than creating entities that might be duplicates of matches found later.
 
-**Critical constraint**: Entity group creation runs with UNCHANGED code AND UNCHANGED inputs. Phonebook-sourced entities are NOT added to the unified entity database before group creation. They are slotted into groups afterward.
+**Inaugural vs incremental**: The pipeline logic is identical for both. The only difference is skip optimization: if a record already has a matchAssociation with a valid entityKey (and that entity still exists in the current unified DB), skip re-matching. On an inaugural run, no records have stored matches, so every record runs through matching. On an incremental run after source data changes, records whose matched entities no longer exist get re-matched; new records get matched for the first time; unchanged records are skipped.
+
+**Critical constraint**: Entity group creation runs with UNCHANGED code AND UNCHANGED inputs. No phonebook-sourced entities are created before group creation. Step 1 only writes matchAssociations and transfers information to existing entities. Phonebook-sourced entities are created in Step 3 and then matched to groups afterward.
 
 ### 5.1 Step 1: Pre-Group Phonebook Entity Matching — PENDING
 
-**Goal**: Match phonebook records against individual entities in the unified entity database. Identify which records need new entities created. Create those entities. Transfer phone/contact info immediately on match.
+**Goal**: Match phonebook records against individual entities in the unified entity database. Record matchAssociations progressively. Transfer phone/contact info and name aliases immediately on match. **No entity creation in Step 1** — deferred to Step 3 to keep entity group creation inputs unchanged.
 
 **When it runs**: After unified entity database creation, before entity group creation.
 
+**Progressive matchAssociation model**: There is no separate "Step 1 results structure." The matchAssociation record on each PhonebookDatabase entry is the single record that accumulates information through the pipeline:
+- **Step 1 writes**: `entityKey`, `matchType`, `matchSource`, `bestNameScore`, `isCollision`, `isCoupleCondition2` — **`groupIndex` left null** (groups don't exist yet)
+- **Step 3 fills in**: `groupIndex` (by looking up which group the matched entity belongs to)
+- **For records unmatched at entity level**: Step 3 runs group-level matching and fills in both `entityKey` and `groupIndex`
+
 **Process**:
 1. Load PhonebookDatabase from Drive
-2. For each person-classified phonebook record, compare against all entities using Phase 4.6 helpers
-3. Record results in a Step 1 results structure:
-   - **Matched to person entity** (entityKey populated): Record match. Transfer phone number and contact info to the matched entity. Name alias processing deferred to Step 3 (needs IndividualNameDatabase context).
-   - **Matched to non-person entity** (the 108): Record match. Create a new phonebook-sourced Individual entity. Transfer phone/contact info to BOTH the matched non-person entity AND the new Individual.
-   - **Unmatched** (the 285): Record as unmatched. Create a new phonebook-sourced Individual entity with phone/contact info.
+2. For each person-classified phonebook record:
+   a. **Skip optimization**: If record already has a matchAssociation with a valid entityKey (and that entity still exists in the current unified DB), skip re-matching (incremental optimization).
+   b. Run entity-level matching: `matchPhonebookRecordToEntities()` → `classifyEntityMatchResult()`. Only classified full/name/address matches proceed — raw hits are not actionable.
+   c. Based on classification outcome:
+      - **Full match to person entity**: Write matchAssociation (`entityKey`, `matchType='full'`, `groupIndex=null`). Transfer phone number via `transferPhonebookPhone()`. Apply name alias to matched entity's IndividualName.
+      - **Address-only match to non-person entity**: Write matchAssociation (`matchType='address'`). Transfer phone to matched non-person entity. Entity creation deferred to Step 3.
+      - **Name-only match**: Write matchAssociation (`matchType='name'`). Weaker evidence — may benefit from group-level confirmation in Step 3.
+      - **Address-only match to person entity**: Write matchAssociation (`matchType='address'`). Transfer phone to matched entity.
+      - **No classified match**: No matchAssociation written. No entity created. Record proceeds to Step 3 for group-level matching.
+3. Apply user inclusions (override algorithm misses — read from PhonebookDatabase)
+4. Apply user exclusions (prevent known false matches — read from PhonebookDatabase)
 
-**Entity creation from phonebook data**: Each new Individual is constructed with:
-- **IndividualName**: Built from phonebook name fields (firstName, lastName). Couples produce two Individuals sharing a phone number.
-- **ContactInfo**: PhoneTerm from the phonebook phone number.
-- **Address**: Full Block Island address from the phonebook record (these are BI phonebook entries, so addresses are BI unless specifically flagged otherwise).
+**No entity creation in Step 1**: All phonebook-sourced entity creation is deferred to Step 3 (after legacy entity group creation). This architectural decision ensures the entity group builder receives unchanged inputs, avoiding the need to modify existing group creation code with phonebook-aware filters. See Session 137 discussion for full rationale.
 
-**Phone/contact info transfer**: Happens immediately on match recognition, not deferred. When a phonebook record matches an entity, the phone number is applied to that entity's ContactInfo (creates PhoneTerm, applies as islandPhone or additionalPhone). For the 108, both the matched non-person entity and the new Individual receive the phone.
+**Phone/contact info transfer**: Happens immediately on match recognition via `transferPhonebookPhone()`. When a phonebook record matches an entity, the phone number is applied to that entity's ContactInfo as a SimpleIdentifiers-wrapped PhoneTerm. If the phone already exists on the entity, the existing record is replaced with a PHONEBOOK_DATABASE-sourced version (confirmation, not duplication). Source attribution: `PhoneTerm(phoneStr, 'PHONEBOOK_DATABASE', phoneStr, 'phonebookStep1')`.
 
-**Output**: A Step 1 results structure recording:
-- Which phonebook records matched which entities
-- Which new phonebook-sourced entities were created
-- Which records remain unmatched (for Step 3)
+**Name alias transfer**: When a phonebook record's name matches an entity, the phonebook name is applied as an alias to the matched entity's IndividualName via IndividualNameDatabase lookup. This happens at Step 1 for entity-level matches and at Step 3 for group-level matches.
 
-### 5.2 Phonebook Entity Key Format — PENDING
+### 5.2 Phonebook Entity Key Format — CODED & TESTED (Session 139)
 
-**Pattern**: `phonebook:<phoneNumber>:<disambiguator>`
+**Pattern**: `phonebook:<phoneNumber>:SimpleIdentifiers:<disambiguator>:<headStatus>`
 
 Following the rationale of existing key conventions:
-- **VisionAppraisal**: Property-centric → keyed by location (fire number)
-- **Bloomerang**: Account-centric → keyed by account number
-- **Phonebook**: Phone-centric → keyed by phone number
+- **VisionAppraisal**: Property-centric → `visionAppraisal:<locationType>:<locationValue>`
+- **Bloomerang**: Account-centric → `bloomerang:<accountNumber>:<locationType>:<locationValue>:<headStatus>`
+- **Phonebook**: Phone-centric → `phonebook:<phoneNumber>:SimpleIdentifiers:<disambiguator>:<headStatus>`
 
-**Disambiguator logic** (emulating Bloomerang's approach to households):
-- Single person: `phonebook:<phoneNumber>:<firstName>` (e.g., `phonebook:4014665859:ROBERT`)
-- Couple, person 1: `phonebook:<phoneNumber>:<firstName>` (e.g., `phonebook:4014665859:ROBERT`)
-- Couple, person 2: `phonebook:<phoneNumber>:<secondName>` (e.g., `phonebook:4014665859:MARGARET`)
-- If firstName unavailable: `phonebook:<phoneNumber>:na`
-- AggregateHousehold (if couples warrant): `phonebook:<phoneNumber>AH:<disambiguator>`
+Phonebook keys follow Bloomerang's structural pattern. The `SimpleIdentifiers` slot corresponds to the locationIdentifier class type (phonebook entities use SimpleIdentifiers, not FireNumber). The disambiguator slot uses firstName (where Bloomerang uses address) — address is not needed for phonebook key uniqueness since the phone number is already globally unique. The headStatus slot uses the same `head`/`member`/`na` convention as Bloomerang.
 
-**Key generation**: New function in `unifiedDatabasePersistence.js` alongside existing VA and Bloomerang generators, or in the new `phonebookEntityMatcher.js`.
+**Key format by scenario:**
 
-### 5.3 Step 3: Post-Group Phonebook Integration — PENDING
+| Scenario | Key | Example |
+|----------|-----|---------|
+| Single person | `phonebook:<phone>:SimpleIdentifiers:<firstName>:na` | `phonebook:4014665859:SimpleIdentifiers:ROBERT:na` |
+| Couple, both unmatched — AH | `phonebook:<phone>AH:SimpleIdentifiers:<lastName>:na` | `phonebook:4014665859AH:SimpleIdentifiers:SMITH:na` |
+| Couple, both unmatched — head (person 1) | `phonebook:<phone>:SimpleIdentifiers:<headFirstName>:head` | `phonebook:4014665859:SimpleIdentifiers:ROBERT:head` |
+| Couple, both unmatched — member (person 2) | `phonebook:<phone>:SimpleIdentifiers:<memberFirstName>:member` | `phonebook:4014665859:SimpleIdentifiers:MARGARET:member` |
+| Couple, one unmatched — standalone individual | `phonebook:<phone>:SimpleIdentifiers:<firstName>:na` | `phonebook:4014665859:SimpleIdentifiers:MARGARET:na` |
+| No firstName available | `phonebook:<phone>:SimpleIdentifiers:na:na` | `phonebook:4014665859:SimpleIdentifiers:na:na` |
 
-**Goal**: After entity groups are built, slot phonebook-sourced entities into groups, match remaining unmatched records, and apply name aliases for group-level matches.
+**Head assignment**: For couples, the first individual in the phonebook record (`firstName`) is arbitrarily designated head; the second (`secondName`) is member. This mirrors Bloomerang's arbitrary head/member designation.
+
+**AH creation rule**: An AggregateHousehold entity is created only when BOTH members of a phonebook couple are unmatched after Step 1 entity-level matching. When only one member is unmatched, that member is created as a standalone Individual (headStatus `na`) — see Phase 5.3 couple-aware group placement for how that individual is placed.
+
+**Collision detection**: The key generation function must check for key collisions. If a generated key already exists, throw an error, skip the colliding record, and continue processing. Collisions should not occur in practice.
+
+**Key generation**: New function `buildPhonebookEntityKey()` in `phonebookEntityMatcher.js`, near the Step 1/Step 3 infrastructure helpers.
+
+### 5.3 Step 3: Post-Group Phonebook Integration — CODED+TESTED (Session 142)
+
+**Goal**: After entity groups are built, fill in groupIndex on Step 1 matchAssociations, create phonebook-sourced entities for unmatched records, run those entities through group matching (emulating the VA/Bloomerang entity-to-group process), and apply name aliases.
 
 **When it runs**: After entity group creation, before saving.
 
+**Architectural principle**: Phonebook entity creation and group matching in Step 3 emulates the existing VA/Bloomerang process for consistency. New phonebook entities are created first, then matched against existing groups using standard MATCH_CRITERIA thresholds — the same path Bloomerang entities follow. During entity creation, names are looked up in IndividualNameDatabase (same as VA/Bloomerang entity construction). Recognized names get the database's IndividualName object with the phonebook name added as an alias. This gives phonebook entities the same "smart comparison" advantage that VA/Bloomerang entities have. See Session 137 discussion for full rationale.
+
 **Process (ordered — each sub-step feeds the next)**:
 
-**5.3a — Slot matched phonebook entities into existing groups**:
-For each phonebook entity created in Step 1 that matched an existing entity: look up which group the matched entity belongs to. Add the phonebook entity to that group as a new member. (Every entity is in a group — including single-member groups — so this always succeeds.)
+**5.3a — Fill in groupIndex on Step 1 matchAssociations**:
+For each phonebook entry whose matchAssociation has an entityKey but no groupIndex: look up which group the matched entity belongs to. Fill in the `groupIndex` on the matchAssociation. (Every entity is in a group — including single-member groups — so this always succeeds.) No entity creation here — Step 1 only wrote matchAssociations and transferred info to existing entities.
 
-**5.3b — Match previously-unmatched records against enriched groups**:
-The 285 unmatched records could not be matched to individual entities in Step 1. Now that groups exist (and are enriched with the Step 1 entities from 5.3a), re-attempt matching using the existing group-level matcher (phonebookMatcher.js — `lookupNamesInGroup`, `lookupAddressInGroup`, etc.). This captures cross-entity matches that entity-level matching cannot find. Records that match: slot their phonebook-sourced Individual into the matched group.
+**5.3b — Create phonebook-sourced entities for unmatched records**:
+For records with no matchAssociation after Step 1 (no entity-level match found), AND for address-only-to-non-person records (which need a new person entity): create phonebook-sourced entities. During creation:
+- Build IndividualName from phonebook name fields (firstName, lastName).
+- Look up name in IndividualNameDatabase. If recognized, use the database's IndividualName object with phonebook name added as alias.
+- Build ContactInfo with PhoneTerm from phonebook phone number.
+- Build Address from phonebook record's Block Island address.
+- Entity key format: `phonebook:<phoneNumber>:SimpleIdentifiers:<disambiguator>:<headStatus>` (see Phase 5.2).
+These entities exist but are NOT yet in any group.
 
-**5.3c — Create new single-entity groups for still-unmatched**:
-Records that still don't match after 5.3b: their phonebook-sourced Individual (created in Step 1) becomes a new single-entity EntityGroup. These represent people who exist in the phonebook but have no corresponding entity in VA or Bloomerang data.
+**Couple handling in entity creation** (follows Bloomerang household model):
+- **Both couple members unmatched**: Create two Individual entities (head + member) AND one AggregateHousehold entity that holds them, following the same pattern Bloomerang uses for households. Head is arbitrarily person 1 (firstName), member is person 2 (secondName). Three keys generated (see Phase 5.2 table).
+- **One couple member unmatched, one matched**: Create one standalone Individual entity (headStatus `na`) for the unmatched member only. No AH created. See 5.3c-couple for forced group placement.
+- **Both couple members matched**: No entity creation. Both were consumed by existing entities in Step 1. See 5.3-audit for cross-group audit category.
 
-**5.3d — Apply name aliases and phone numbers for group-level matches**:
-For records that were matched in Step 1 to person entities (the 817-equivalent cases that matched at entity level), apply name aliases via the existing Phase 4 logic (IndividualNameDatabase lookup, add as homonym or candidate). For records matched in 5.3b (group-level matches), apply the same. Phone/contact info was already transferred in Step 1, so this step focuses on name alias processing.
+**5.3c-couple — Couple-aware forced group placement** (Session 139 specification):
+When a phonebook couple record has one member matched in Step 1 and the other unmatched (newly created in 5.3b as a standalone Individual), the unmatched member MUST be placed in the same entity group as the matched member. This is a deterministic placement — we know exactly where the entity belongs — so it happens BEFORE general similarity matching. This requires:
+1. Identify that the newly-created entity came from a couple record where the other member was consumed.
+2. Find which entity the consumed member matched to (from Step 1 matchAssociation).
+3. Find which entity group that matched entity belongs to. Note: the matched entity may be directly in a group, OR it may be an individual held in the `.individuals[]` array of a VA AggregateHousehold — in which case the AH's group must be found.
+4. Place the newly-created entity in that group.
+This ensures couple members from the same phonebook record end up in the same entity group regardless of whether similarity thresholds would have found the match. The exact implementation approach for steps 1–4 needs further design.
 
-**5.3e — Phase 4.5 Individual Discovery (existing)**:
-Run `tagIndividualDiscovery()` and `processIndividualDiscovery()` as before. These handle AggregateHouseholds with empty individuals[] — a different case from the 108/285. No overlap expected (108 are NonHumanName entities, Phase 4.5 handles AggH with HouseholdName).
+**5.3c — Run remaining phonebook entities through group matching**:
+Match phonebook entities that were NOT placed by 5.3c-couple against existing groups, emulating the VA/Bloomerang entity-to-group matching process. Use standard MATCH_CRITERIA thresholds (same as entityGroupBuilder phases). Entities whose names were resolved via IndividualNameDatabase benefit from richer name comparison (known homonyms/variations). Matched entities: add as group member via `addMemberToGroup()`, write/update matchAssociation (both `entityKey` and `groupIndex`), transfer phone/contact info to matched group members as appropriate.
+
+**5.3d — Create single-entity groups for still-unmatched**:
+Phonebook entities that don't match any group after 5.3c-couple/5.3c: create new single-entity EntityGroup for each. These represent people who exist in the phonebook but have no corresponding entity in VA or Bloomerang data. Write matchAssociation with both `entityKey` and `groupIndex`.
+
+**5.3-audit — Couple cross-group audit category** (Session 139 specification):
+When both members of a phonebook couple were matched to existing entities in Step 1 (both consumed, no entity creation needed), the audit system should flag cases where entities sharing the same phone number end up in different entity groups. This is a new audit category for `reference_auditReportPlan.md`: "Entities with same phonebook phone number in different entity groups." This is an analysis flag (not an error) — it may reveal legitimate cases or grouping problems worth reviewing.
+
+**5.3e — Apply name aliases for group-level matches**:
+For records matched in 5.3c (group-level matches), apply name aliases via IndividualNameDatabase lookup (add as homonym or candidate). Note: Step 1 already applied name aliases for entity-level matches, so this step handles only the group-level matches. Phone/contact info was already transferred in Step 1 for entity-level matches.
+
+**5.3f — Phase 4.5 Individual Discovery (existing)**:
+Run `tagIndividualDiscovery()` and `processIndividualDiscovery()` as before. These handle AggregateHouseholds with empty individuals[] — a different case from address-only-to-non-person-entity or no-match records. No overlap expected (address-only-to-non-person matches involve NonHumanName entities, Phase 4.5 handles AggH with HouseholdName).
 
 ### 5.4 Testing Strategy
 
 **Key principle**: Group creation is unchanged, but downstream group membership changes. Testing must anticipate and validate these changes rather than treating them as regressions.
 
 **Test approach**:
-1. Run Step 1 against current data. Verify it identifies the 108 non-person matches and 285 unmatched.
-2. Verify entity creation produces well-formed Individuals with correct keys, names, addresses, phones.
-3. Run entity group creation. Verify identical results to current (same code, same inputs).
-4. Run Step 3. Verify 108 entities are slotted into correct groups. Verify some 285 match enriched groups. Verify remaining 285 get new single-entity groups.
-5. Verify final entity group count = original count + new single-entity groups created.
-6. Verify IndividualNameDatabase correctly receives entries for new phonebook-sourced names.
-7. Run consistency checks on all saved data.
+1. Run Step 1 against current data. Verify each person-classified record is categorized by nature: full match to person entity, address-only match to non-person entity, name-only match, address-only match to person entity, or no classified match. Verify counts are reasonable (compare against inaugural build historical reference as a sanity check, not as exact targets).
+2. Verify matchAssociations are written correctly: entityKey populated for matched records, groupIndex null (to be filled in Step 3). Verify no entities were created in Step 1.
+3. Verify phone transfer occurred for matched entities (source attribution shows PHONEBOOK_DATABASE). Verify name aliases applied for entity-level matches.
+4. Run entity group creation. Verify identical results to current (same code, same inputs — no phonebook entities in the input).
+5. Run Step 3. Verify groupIndex is filled in for entity-level-matched records. Verify phonebook-sourced entities created with IndividualNameDatabase lookup. Verify some phonebook entities match existing groups via standard thresholds. Verify remaining unmatched get new single-entity groups.
+6. Verify final entity group count = original count + new single-entity groups created.
+7. Verify IndividualNameDatabase correctly receives entries for new phonebook-sourced names.
+8. Run consistency checks on all saved data.
 
 ---
 
-## Phase 6: Automated Pipeline Integration (REVISED Session 134)
+## Phase 6: Automated Pipeline Integration — CODED+TESTED (Session 142)
 
 **Goal**: Wire the two-step phonebook integration into the automated rebuild pipeline so it runs on every entity group build.
 
@@ -319,25 +397,27 @@ The full automated pipeline becomes:
 2. Build unified entity database
 3. Load PhonebookDatabase from Drive
 4. STEP 1: Pre-group phonebook entity matching (Phase 5.1)
-   - Match phonebook → entities
-   - Create phonebook-sourced entities for 108/285 cases
-   - Transfer phone/contact info on match
-5. Build entity groups (unchanged algorithm)
+   - Match phonebook → entities, write matchAssociations (entityKey, groupIndex=null)
+   - Transfer phone/contact info and name aliases on match
+   - NO entity creation (deferred to Step 3)
+5. Build entity groups (unchanged algorithm, unchanged inputs)
 6. STEP 3: Post-group phonebook integration (Phase 5.3)
-   - 5.3a: Slot matched phonebook entities into groups
-   - 5.3b: Match unmatched records against enriched groups
-   - 5.3c: Create single-entity groups for still-unmatched
-   - 5.3d: Apply name aliases
-   - 5.3e: Phase 4.5 individual discovery
+   - 5.3a: Fill in groupIndex on Step 1 matchAssociations
+   - 5.3b: Create phonebook-sourced entities for unmatched records (with IndividualNameDatabase lookup)
+   - 5.3c-couple: Deterministic couple-aware forced group placement
+   - 5.3c: Run remaining phonebook entities through group matching (emulating VA/Bloomerang process)
+   - 5.3d: Create single-entity groups for still-unmatched
+   - 5.3e: Apply name aliases for group-level matches
+   - 5.3f: Phase 4.5 individual discovery
 7. Save entity groups to Drive
 8. Save IndividualNameDatabase to Drive
 ```
 
 ### 6.2 Integration Functions
 
-- **`phonebookStep1(phonebookDb, entityDb)`** — orchestrates pre-group matching and entity creation. Returns Step 1 results structure.
-- **`phonebookStep3(phonebookDb, groupDb, entityDb, indNameDb, step1Results)`** — orchestrates post-group integration. Consumes Step 1 results.
-- Both called from the main pipeline (or from `buildEntityGroupDatabase()` if wired in directly).
+- **`phonebookStep1(phonebookDb, entityDb)`** — orchestrates pre-group matching. Writes matchAssociations on PhonebookDatabase entries (entityKey populated, groupIndex null). Transfers phone and name aliases to matched entities. No entity creation.
+- **`phonebookStep3(phonebookDb, groupDb, entityDb, indNameDb)`** — orchestrates post-group integration. Fills in groupIndex on Step 1 matchAssociations. Creates phonebook-sourced entities for unmatched records (with IndividualNameDatabase lookup). Runs new entities through group matching emulating VA/Bloomerang process. Creates single-entity groups for still-unmatched.
+- Both called from the main pipeline (or from `buildEntityGroupDatabase()` if wired in directly). No separate "results structure" is passed between steps — the PhonebookDatabase entries ARE the shared state.
 
 ### 6.3 Production Detection (Completion Gate 1)
 
@@ -460,6 +540,7 @@ Database management activity must be tracked with the same rigor as entity match
 | `scripts/matching/phonebookPipeline.js` | 1,024 | EntityKey extraction + pipeline orchestration |
 | `scripts/matching/phonebookNameProcessing.js` | 662 | Phase 4 name variation processing |
 | `scripts/matching/phonebookAnnotationResolver.js` | 359 | One-time annotation resolution (name→entityKey) |
+| `scripts/matching/phonebookEntityMatcher.js` | ~596 | Entity-level matching helpers + classification (Phase 4.6) |
 
 ### Deleted Files
 5 temporary console scripts (Session 123, harvested to permanent code), annotation resolver script (Session 123, deleted prematurely — lesson captured in `reference_supplementalDatabaseReuseLessons.md` Lesson 6), 4 backfill scripts (Session 126).

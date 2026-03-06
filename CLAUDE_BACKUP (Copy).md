@@ -5,8 +5,8 @@
 read_order: [ROOT_CAUSE_DEBUGGING_RULE, COMPLETION_VERIFICATION_RULE, DATA_QUALITY_MANAGEMENT_RULE, CURRENT_WORK_CONTEXT, TERMINOLOGY, MANDATORY_COMPARETO_ARCHITECTURE]
 focus_section: ROOT_CAUSE_DEBUGGING_RULE_then_COMPLETION_VERIFICATION_RULE_then_DATA_QUALITY_MANAGEMENT_RULE_then_CURRENT_WORK_CONTEXT
 processing_directive: ignore_visual_formatting_process_semantic_content_only
-last_updated: 2026-03-05
-version: 236.0_SESSION141_PHASE5.3b_CODED_TESTED
+last_updated: 2026-03-02
+version: 234.0_SESSION138_PHASE5.1_CODED_TESTED
 ```
 
 ---
@@ -151,29 +151,26 @@ PERMANENCE_RULE:
 
 ## CURRENT_WORK_CONTEXT
 ```yaml
-# QUICK START: Phases 5.3a-5.3f + Phase 6 CODED & TESTED. Full pipeline wired into buildEntityGroupDatabase().
+# QUICK START: Phase 5.1 CODED & TESTED. Phase 5.2 (entity key format) then 5.3 (post-group) next.
 # Plan: reference_phonebookDatabasePlan.md | History: reference_sessionHistory_2026_March.md
 
-immediate_status: PHASE_6_PIPELINE_INTEGRATION_CODED_TESTED
-current_focus: Phase 7 (PhonebookBrowser maintenance tool) or other remaining work
+immediate_status: PHASE_5.1_CODED_TESTED_PHASE_5.2_NEXT
+current_focus: Phase 5.2 (phonebook entity key format) then Phase 5.3 (post-group integration)
 
 current_project:
   name: Task 3 Section 4 — Phonebook/Email Integration
-  status: IN_PROGRESS (Phases 1-6 coded+tested, Phase 7 PhonebookBrowser next)
+  status: IN_PROGRESS (Phase 4.1–4.6 done, Phase 5.1 coded+tested, Phase 5.2-5.3 next)
   reference: reference_phonebookDatabasePlan.md, reference_phase4_5_individualDiscoveryPlan.md
   context: |
-    Session 142: All Step 3 sub-phases coded+tested + Phase 6 pipeline integration.
-    5.3c-couple: 1 placement (TED into group 1156).
-    5.3c/d/e: 11 AH matched, 34 individuals matched, 44 household groups, 196 single-entity groups.
-    5.3f: 35 households, 54 individuals (same as prior testing).
-    Phase 6: All phonebook functions standardized to take .entities (not wrapper).
-    buildEntityGroupDatabase() now loads PhonebookDb + IndNameDb, runs Step 1 pre-group,
-    runs Step 3 post-group (5.3a-5.3f), rebuilds collections, then CollectiveContactInfo.
-    Full automated build tested successfully.
-    matchType inconsistency fixed: Step 1 writes 'address-only'/'name-only' (matching original pipeline).
-    Unmatched couple household fix: couples stay together in household groups (not broken apart).
-    PhonebookDatabase NOT saved to Drive (testing only).
+    Session 137-138: Phase 5.1 phonebookStep1() fully coded+tested.
+    All helpers: transferPhonebookPhone(), transferPhonebookNameAlias(), shouldSkipPhonebookRecord().
+    Bug found+fixed: shouldSkipPhonebookRecord() synthetic individual key resolution.
+    Test run (incremental path): 832 skipped, 287 processed, 2 new full matches, 285 unmatched.
+    The 285 unmatched are candidates for Step 3 group-level matching.
+    PhonebookDatabase NOT saved to Drive (only 2 new associations, not worth risk during testing).
     User inclusions/exclusions (plan 5.1 steps 3-4) not yet implemented — may defer to Phase 7.
+    Next: Phase 5.2 (entity key format phonebook:<phone>:<disambiguator>), then Phase 5.3 (post-group).
+    CRITICAL: tagIndividualDiscovery() tags NOT persisted — re-run after loading PhonebookDatabase.
 
 ```
 
@@ -309,7 +306,7 @@ PRIMARY_DOCUMENTATION:
   reference_collectiveContactInfo.md: ALL PHASES CODED AND TESTED (v4.0) - CollectiveContactInfo class hierarchy + override infrastructure/UI
   reference_serializationMigrationPlan.md: USER_VERIFIED_COMPLETE - Removed ~34 custom deserialize methods, all classes use generic deserializeWithTypes() fallback
   reference_phonebookIntegration.md: IN_PROGRESS - Supplemental Data Integration (v5.0 — architectural revision Session 117)
-  reference_phonebookDatabasePlan.md: IN_PROGRESS - 8-phase PhonebookDatabase implementation plan (Phases 1-6 coded+tested, Phase 7 next)
+  reference_phonebookDatabasePlan.md: IN_PROGRESS - 8-phase PhonebookDatabase implementation plan (Phase 4.1-4.5 done, 4.6 in progress)
   reference_phase4_5_individualDiscoveryPlan.md: TESTED_WITH_ISSUES - Individual discovery in 39 empty AggH (plan + test results + 6 data quality issues)
   reference_saveInfrastructureLessons.md: UI workflow packaging lessons (8 lessons for Phases 6-7)
   reference_supplementalDatabaseReuseLessons.md: Lessons for building next supplemental database (8 lessons + checklist)
@@ -321,7 +318,7 @@ PRIMARY_DOCUMENTATION:
   reference_fireNumberCollisionArchitecture.md: Fire number collision system (COMPLETE)
   reference_aliasedTermDatabasePlan.md: AliasedTermDatabase class architecture (COMPLETE)
   reference_codeQualityRoadmap.md: Code improvements (CQ-1 COMPLETE, see doc for future tasks)
-  reference_auditReportPlan.md: FUTURE - System-wide audit report for highlighting questionable data (3 categories identified, not part of current work plan)
+  reference_auditReportPlan.md: FUTURE - System-wide audit report for highlighting questionable data (not part of current work plan)
 
 HISTORICAL_DOCUMENTATION:
   reference_phase5_streetNameComparison.md: Phase 5 comparison design (historical)
@@ -365,12 +362,11 @@ completed_projects: # See reference docs for details
 
 active_project:
   name: Task 3 Section 4 — Phonebook/Email Integration
-  status: IN_PROGRESS (Phases 1-6 coded+tested, Phase 7 PhonebookBrowser next)
+  status: IN_PROGRESS (Phase 4.1–4.6 done, Phase 5.1 coded+tested, Phase 5.2-5.3 next)
   plan_file: reference_phonebookDatabasePlan.md, reference_phase4_5_individualDiscoveryPlan.md
-  next_action: Phase 7 (PhonebookBrowser maintenance tool)
+  next_action: Phase 5.2 (entity key format) then Phase 5.3 (post-group integration)
   phonebook_db_stats: 1239 entries (1113 person, 126 nonhuman, 853 matched, 386 unmatched)
   phonebook_record_categories: Described by nature (full-match, address-only-to-non-person, no-match), not by count
-  phase_6_pipeline_results: Step1 (2 full matches, 285 unmatched), 5.3b (396 entities), 5.3c-couple (1 placement), 5.3c/d/e (67 placed + 44 household + 196 single groups), 5.3f (35 households, 54 individuals)
 
 current_system_state:
   entity_groups: 1877
@@ -434,11 +430,11 @@ MANDATORY_BACKUP:
 
 ## SESSION_METADATA
 ```yaml
-last_updated: March_5_2026
-document_version: 237.0_SESSION142_PHASE6_PIPELINE_INTEGRATION
-previous_version: 236.0_SESSION141_PHASE5.3b_CODED_TESTED
+last_updated: March_2_2026
+document_version: 234.0_SESSION138_PHASE5.1_CODED_TESTED
+previous_version: 233.0_SESSION137_PHASE5.1_IN_PROGRESS
 
-version_notes: "Session 142 — Phases 5.3c-couple through 5.3f coded+tested. Phase 6 pipeline integration coded+tested. matchType inconsistency fixed. entityDb parameter standardized to .entities across all phonebook functions. buildEntityGroupDatabase() now runs full phonebook integration (Step 1 pre-group, Step 3 post-group). Unmatched couples kept as household groups. Full automated build tested. Next: Phase 7 PhonebookBrowser."
+version_notes: "Session 138 — Phase 5.1 phonebookStep1() fully coded+tested. All helpers built: transferPhonebookNameAlias(), shouldSkipPhonebookRecord(), phonebookStep1() orchestrator. Bug found+fixed: shouldSkipPhonebookRecord() didn't resolve synthetic :individual:N keys to parent — 312 valid associations wrongly cleared as stale. Fix: parent key resolution. Re-run: 832 skipped, 287 processed, 2 full matches, 285 unmatched (candidates for Step 3). PhonebookDatabase not saved (testing only). Next: Phase 5.2 (entity key format) then Phase 5.3 (post-group integration)."
 
 working_directory: /home/robert-benjamin/RPBprojects/VisionAppraisal/BIRAVA2025
 platform: linux

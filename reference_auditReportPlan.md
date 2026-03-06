@@ -16,7 +16,10 @@ Review all candidate values in aliases across different data types. Highlight th
 ### 2. ERRONEOUS-Tagged First Names
 Flag all records where the first name holds the ERRONEOUS tag (from Phase 4.5 individual discovery). These represent names that couldn't be parsed and need human review.
 
-### 3. *(More categories to be added as we identify them during development)*
+### 3. Same-Phone Entities in Different Entity Groups
+When both members of a phonebook couple are matched to existing entities in Step 1 (both consumed, no new entity creation), check whether those entities ended up in different entity groups. Entities sharing the same phonebook phone number in different groups may indicate a grouping problem or may be legitimate (e.g., divorced couple). Analysis flag for human review. (Session 139 specification, see also reference_phonebookDatabasePlan.md Phase 5.3-audit.)
+
+### 4. *(More categories to be added as we identify them during development)*
 
 ## Design Principles
 
